@@ -1,211 +1,194 @@
-BetterMe
+# BetterMe
 
-BetterMe is a modern Android application that helps users build and maintain positive daily habits.
+BetterMe is a modern Android application that helps users build and maintain positive daily habits.  
 The application is developed using Kotlin and follows Clean Architecture combined with the MVVM pattern to ensure scalability, maintainability, and clear separation of concerns.
 
 The goal of BetterMe is to support users in improving their lifestyle through habit tracking, goal setting, and motivational progress monitoring.
 
-Project Overview
+---
+
+## Project Overview
 
 BetterMe focuses on:
 
-Building positive daily habits
-
-Tracking progress over time
-
-Providing motivation and structured habit management
-
-Supporting long-term personal growth
+- Building positive daily habits  
+- Tracking progress over time  
+- Providing motivation and structured habit management  
+- Supporting long-term personal growth  
 
 This project is designed with production-level architecture suitable for graduation projects and real-world applications.
 
-Technology Stack
-Language
+---
 
-Kotlin
+## Technology Stack
 
-UI
+### Language
+- Kotlin
 
-Jetpack Compose
-Custom Material Theme
+### UI
+- Jetpack Compose  
+- Custom Material Theme  
 
-Architecture
+### Architecture
+- Clean Architecture  
+- MVVM (Model - View - ViewModel)
 
-Clean Architecture
-MVVM (Model - View - ViewModel)
+### Dependency Injection
+- Koin
 
-Dependency Injection
+### Local Database
+- Room
 
-Koin
+### Networking
+- Retrofit
 
-Local Database
+### Image Loading
+- Coil
 
-Room
+### Navigation
+- Navigation Compose
 
-Networking
+### Language Support
+- Vietnamese  
+- Vietnamese + English  
 
-Retrofit
+---
 
-Image Loading
-
-Coil
-
-Navigation
-
-Navigation Compose
-
-Language Support
-
-Vietnamese or Vietnamese + English
-
-Architecture
+## Architecture
 
 The project follows Clean Architecture principles with three main layers:
 
-1. Presentation Layer
+### 1. Presentation Layer
+- Jetpack Compose UI  
+- ViewModel (MVVM)  
+- Navigation  
+- UI State management  
+- StateFlow / LiveData  
 
-Jetpack Compose UI
+### 2. Domain Layer
+- Business logic  
+- Use cases  
+- Repository interfaces  
+- Domain models  
 
-ViewModel (MVVM)
-
-Navigation
-
-UI State management
-
-StateFlow / LiveData
-
-2. Domain Layer
-
-Business logic
-
-Use cases
-
-Repository interfaces
-
-Domain models
-
-3. Data Layer
-
-Room database
-
-Retrofit API services
-
-Repository implementations
-
-DTO and entity mapping
+### 3. Data Layer
+- Room database  
+- Retrofit API services  
+- Repository implementations  
+- DTO and entity mapping  
 
 This separation ensures:
 
-High testability
+- High testability  
+- Clear business logic isolation  
+- Easy scalability  
+- Long-term maintainability  
 
-Clear business logic isolation
+---
 
-Easy scalability
-
-Long-term maintainability
-
-MVVM Pattern
+## MVVM Pattern
 
 The application uses MVVM architecture to maintain a clear separation between UI and business logic.
 
 Each screen contains:
 
-View: Jetpack Compose UI
+- View: Jetpack Compose UI  
+- ViewModel: Handles state and business interaction  
+- Model: Data models and domain entities  
 
-ViewModel: Handles state and business interaction
+### Application Flow
 
-Model: Data models and domain entities
+User Action  
+→ View  
+→ ViewModel  
+→ UseCase  
+→ Repository  
+→ Update State  
+→ UI Recomposition  
 
-Flow:
+---
 
-User Action → View → ViewModel → UseCase → Repository → Update State → UI Recomposition
+## Features
 
-Features (Planned and Implemented)
-Core Features
+### Core Features
+- Create and manage habits  
+- Daily habit tracking  
+- Streak tracking  
+- Progress statistics  
+- Local data persistence with Room  
 
-Create and manage habits
+### Extended Features
+- Reminder system  
+- Motivation quotes  
+- Habit categories  
+- Analytics and charts  
+- Sync with remote API (optional future)  
 
-Daily habit tracking
+---
 
-Streak tracking
-
-Progress statistics
-
-Local data persistence with Room
-
-Extended Features
-
-Reminder system
-
-Motivation quotes
-
-Habit categories
-
-Analytics and charts
-
-Sync with remote API (optional future)
-
-Folder Structure
+## Folder Structure
 data/
-  local/
-  remote/
-  repository/
+local/
+remote/
+repository/
 
 domain/
-  model/
-  repository/
-  usecase/
+model/
+repository/
+usecase/
 
 presentation/
-  ui/
-  navigation/
-  theme/
-  viewmodel/
+ui/
+navigation/
+theme/
+viewmodel/
 
 di/
-  Koin modules
-  
-Setup Instructions
+Koin modules
+
+
+---
+
+## Setup Instructions
 
 Clone the repository:
-
 git clone https://github.com/your-username/BetterMe.git
 
-Open the project in Android Studio
-Sync Gradle
-Run on emulator or real device
+Open the project in Android Studio  
+Sync Gradle  
+Run on emulator or real device  
 
 Minimum SDK: 24+
 
-Design Principles
+---
 
-Single Responsibility Principle
+## Design Principles
 
-Separation of Concerns
+- Single Responsibility Principle  
+- Separation of Concerns  
+- Unidirectional Data Flow  
+- Immutable UI State  
+- Dependency Injection  
 
-Unidirectional Data Flow
+---
 
-Immutable UI State
+## Future Improvements
 
-Dependency Injection
+- Cloud synchronization  
+- User authentication  
+- AI-powered habit suggestions  
+- Smart analytics  
+- Multi-device sync  
 
-Future Improvements
+---
 
-Cloud synchronization
-
-User authentication
-
-AI-powered habit suggestions
-
-Smart analytics
-
-Multi-device sync
-
-License
+## License
 
 This project is developed for educational and personal development purposes.
 
-Author
+---
 
-Tran Hai Dang
+## Author
+
+**Tran Hai Dang**  
 Email: trandang211@gmail.com
