@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun WelcomeScreen(
-    navigateToSignIn: () -> Unit
+    navigateToOnboarding: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -24,8 +24,8 @@ fun WelcomeScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Button(onClick = navigateToSignIn) {
-            Text("Go to Sign In")
+        Button(onClick = navigateToOnboarding) {
+            Text("Go to onboarding")
         }
     }
 }
@@ -34,6 +34,6 @@ fun WelcomeScreen(
 @Composable
 fun WelcomeScreenPreview() {
     WelcomeScreen(
-        navigateToSignIn = {}
+        navigateToOnboarding = {}
     )
 }

@@ -20,6 +20,9 @@ sealed interface Destination : NavKey {
 
     @Serializable
     data object Main : Destination
+    @Serializable
+    data object Settings : Destination
+
 }
 
 /*
