@@ -55,4 +55,17 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    // Navigation
+    implementation(libs.navigation.compose)
+
+    // Image loading
+    implementation(libs.coil.compose)
+
+    // Splash screen
+    implementation(libs.core.splashscreen)
+
+    // Extra UI support
+    implementation(libs.androidx.foundation.layout)
+    implementation(libs.androidx.runtime)
+    implementation(libs.androidx.ui.text.google.fonts)
 }
