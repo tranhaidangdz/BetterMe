@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.android)
 }
 
 android {
@@ -34,6 +36,9 @@ android {
     buildFeatures {
         compose = true
     }
+    kotlinOptions {
+        jvmTarget = "11"
+    }
 }
 
 dependencies {
@@ -63,9 +68,6 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
-    // Image loading
-    implementation(libs.coil.compose)
-
     // Splash screen
     implementation(libs.core.splashscreen)
 
@@ -73,4 +75,27 @@ dependencies {
     implementation(libs.androidx.foundation.layout)
     implementation(libs.androidx.runtime)
     implementation(libs.androidx.ui.text.google.fonts)
+
+    // Koin (Dependency Injection)
+    implementation(libs.koin.android)
+    implementation(libs.koin.androidx.compose)
+    implementation(libs.koin.core)
+
+    // Datastore
+    implementation(libs.androidx.datastore.preferences)
+
+    // Room
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+
+    // Work Manager
+    implementation(libs.androidx.work.runtime.ktx)
+
+    // Firebase (BOM)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth.ktx)
+    implementation(libs.firebase.firestore.ktx)
+    implementation(libs.firebase.database.ktx)
+    implementation(libs.firebase.functions.ktx)
 }
