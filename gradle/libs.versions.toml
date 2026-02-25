@@ -15,8 +15,6 @@ coreSplashscreen = "1.0.1"
 foundationLayout = "1.6.8"
 runtime = "1.6.8"
 uiTextGoogleFonts = "1.6.8"
-navigation3Runtime = "1.0.1"
-navigation3Ui = "1.0.1"
 
 # Navigation 3
 navigation3Runtime = "1.0.1"
@@ -50,8 +48,6 @@ core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = 
 androidx-foundation-layout = { module = "androidx.compose.foundation:foundation-layout", version.ref = "foundationLayout" }
 androidx-runtime = { module = "androidx.compose.runtime:runtime", version.ref = "runtime" }
 androidx-ui-text-google-fonts = { module = "androidx.compose.ui:ui-text-google-fonts", version.ref = "uiTextGoogleFonts" }
-androidx-navigation3-runtime = { group = "androidx.navigation3", name = "navigation3-runtime", version.ref = "navigation3Runtime" }
-androidx-navigation3-ui = { group = "androidx.navigation3", name = "navigation3-ui", version.ref = "navigation3Ui" }
 
 # Navigation 3
 androidx-navigation3-runtime = { group = "androidx.navigation3", name = "navigation3-runtime", version.ref = "navigation3Runtime" }
