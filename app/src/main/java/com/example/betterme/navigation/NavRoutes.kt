@@ -1,4 +1,4 @@
-package com.example.betterme.presentation.navigation
+package com.example.betterme.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
@@ -36,6 +36,9 @@ fun NavRoutes()
                     },
                     navigateToMain = {
                         backStack.replaceTop(Destination.Main)
+                    },
+                    navigateToSignIn = {
+                        backStack.replaceTop(Destination.SignIn)
                     }
                 )
             }

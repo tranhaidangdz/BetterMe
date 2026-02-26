@@ -11,7 +11,8 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SplashScreen(
     navigateToWelcome: () -> Unit,
-    navigateToMain: () -> Unit
+    navigateToMain: () -> Unit,
+    navigateToSignIn: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -43,6 +44,7 @@ fun SpashScreenPreview()
 {
     SplashScreen(
         navigateToWelcome = {},
-        navigateToMain = {}
+        navigateToMain = {},
+        navigateToSignIn = {}
     )
 }

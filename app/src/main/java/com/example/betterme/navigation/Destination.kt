@@ -1,4 +1,4 @@
-package com.example.betterme.presentation.navigation
+package com.example.betterme.navigation
 
 import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
