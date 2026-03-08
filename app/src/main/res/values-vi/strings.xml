@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">BetterMe</string>
+    <string name="upload_image">Tải lên hình ảnh</string>
+    <string name="get_started">Bắt đầu</string>
+    <string name="sign_in_with_google">Đăng nhập với Google</string>
 </resources>
