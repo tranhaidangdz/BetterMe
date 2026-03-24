@@ -12,4 +12,13 @@
 
     <!--Upload-->
     <string name="upload_image">Upload image</string>
+
+    <!--Onboarding-->
+    <string name="onboarding_title_1">Start your journey to a better life every day</string>
+    <string name="onboarding_title_2">AI supporting your habits</string>
+    <string name="onboarding_title_3">Maintain discipline – level up yourself</string>
+    <string name="onboarding_description_3">Timely reminders and progress tracking help you achieve long-term goals.</string>
+    <string name="onboarding_description_2">AI analyzes your habits, suggests what to do, and gives advice.</string>
+    <string name="onboarding_description_1">Build positive habits step by step, improving yourself sustainably.</string>
+    <string name="button_continue">Continue</string>
 </resources>
