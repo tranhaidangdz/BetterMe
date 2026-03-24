@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.example.betterme.data.local.datastore.DataStoreManager
 import com.example.betterme.data.local.datastore.DataStoreManagerImpl
+import com.example.betterme.presentation.onboarding.OnboardingViewModel
 import com.example.betterme.presentation.splash.SplashViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -39,4 +40,5 @@ val appModule = module {
 }
 val viewModelModule = module {
     viewModelOf(::SplashViewModel)
+    viewModelOf(::OnboardingViewModel)
 }
