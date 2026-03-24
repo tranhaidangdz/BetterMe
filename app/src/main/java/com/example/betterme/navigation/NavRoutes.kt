@@ -9,7 +9,6 @@ import androidx.navigation3.ui.NavDisplay
 import com.example.betterme.presentation.main.MainScreen
 import com.example.betterme.presentation.onboarding.OnboardingScreen
 import com.example.betterme.presentation.onboarding.WelcomeScreen
-import com.example.betterme.presentation.settings.SettingsScreen
 import com.example.betterme.presentation.signin.SignInScreen
 import com.example.betterme.presentation.splash.SplashScreen
 import com.example.betterme.utils.ext.replaceTop
@@ -75,16 +74,6 @@ fun NavRoutes()
                 )
             }
 
-            entry<Destination.Settings> {
-                SettingsScreen(
-                    navigateBack = {
-                        backStack.removeLastOrNull()
-                    },
-                    logout = {
-                        backStack.add(Destination.SignIn)
-                    }
-                )
-            }
         }
     )
 }

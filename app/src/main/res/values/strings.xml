@@ -8,6 +8,9 @@
     <string name="get_started">Get started</string>
 
     <!--SignIn-->
+    <string name="sign_in_with_google">Sign in with Google</string>
 
+    <!--Upload-->
+    <string name="upload_image">Upload image</string>
 
 </resources>

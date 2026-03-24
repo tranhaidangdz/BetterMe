@@ -9,10 +9,10 @@ import org.koin.core.context.GlobalContext.startKoin
 class KoinApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        FirebaseApp.initializeApp(this@KoinApp)
         startKoin {
             androidContext(this@KoinApp)
-            modules(appModule)
+            modules(appModule, viewModelModule)
         }
-        FirebaseApp.initializeApp(this@KoinApp)
     }
 }
