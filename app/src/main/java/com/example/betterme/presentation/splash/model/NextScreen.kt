@@ -1,4 +1,4 @@
-package com.utc.driverxy.presentation.splash.model
+package com.example.betterme.presentation.splash.model
 
 enum class NextScreen {
     WELCOME,

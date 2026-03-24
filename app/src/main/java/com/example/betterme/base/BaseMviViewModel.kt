@@ -1,4 +1,4 @@
-package com.utc.driverxy.base
+package com.example.betterme.base
 
 import androidx.annotation.CallSuper
 import androidx.lifecycle.ViewModel

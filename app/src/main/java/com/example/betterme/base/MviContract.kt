@@ -1,4 +1,4 @@
-package com.utc.driverxy.base
+package com.example.betterme.base
 
 interface MviViewState
 interface MviIntent

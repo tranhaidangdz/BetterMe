@@ -1,9 +1,10 @@
 package com.example.betterme.presentation.splash
 
-import com.utc.driverxy.base.MviIntent
-import com.utc.driverxy.base.MviSingleEvent
-import com.utc.driverxy.base.MviViewState
-import com.utc.driverxy.presentation.splash.model.NextScreen
+import com.example.betterme.base.MviIntent
+import com.example.betterme.base.MviSingleEvent
+import com.example.betterme.base.MviViewState
+import com.example.betterme.presentation.splash.model.NextScreen
+
 
 data class SplashState(
     val isSignedIn: Boolean = false,

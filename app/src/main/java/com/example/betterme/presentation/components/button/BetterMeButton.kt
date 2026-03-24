@@ -17,7 +17,7 @@ import com.example.betterme.presentation.theme.BetterMeShapes
 import com.example.betterme.presentation.theme.BetterMeTypography
 
 @Composable
-fun DriverXyButton(
+fun BetterMeButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     shape: Shape = BetterMeShapes.extraLarge,
@@ -52,8 +52,8 @@ fun DriverXyButton(
 
 @Preview(showBackground = true)
 @Composable
-private fun DriverXyButtonPreview() {
-    DriverXyButton(
+private fun BetterMeButtonPreview() {
+    BetterMeButton(
         onClick = {}
     )
 }

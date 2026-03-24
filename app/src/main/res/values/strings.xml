@@ -1,7 +1,13 @@
 <resources>
     <string name="app_name">BetterMe</string>
     <string name="betterme_preferences" translatable="false">betterme_preferences</string>
-    <string name="upload_image">Upload Image</string>
+
+    <!--Welcome-->
+    <string name="welcome_title">Welcome</string>
+    <string name="welcome_description">Focus on building good habits. Let BetterMe help you!</string>
     <string name="get_started">Get started</string>
-    <string name="sign_in_with_google">Sign in with Google</string>
+
+    <!--SignIn-->
+
+
 </resources>
