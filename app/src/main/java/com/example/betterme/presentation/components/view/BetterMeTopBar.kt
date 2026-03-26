@@ -79,7 +79,7 @@ fun BetterMeTopBar(
 
 @Preview(showBackground = true)
 @Composable
-private fun DriverXyTopBarPreview() {
+private fun BetterMeTopBarPreview() {
     BetterMeTopBar(
         leadingIconRes = R.drawable.ic_arrow_left,
         trailingIconRes = null,

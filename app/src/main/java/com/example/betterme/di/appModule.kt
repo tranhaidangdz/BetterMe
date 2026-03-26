@@ -19,7 +19,7 @@ val appModule = module {
     // DataStore
     single<DataStore<Preferences>> {
         PreferenceDataStoreFactory.create(
-            produceFile = { get<Context>().preferencesDataStoreFile("driverxy_preferences") }
+            produceFile = { get<Context>().preferencesDataStoreFile("betterme_preferences") }
         )
     }
     single<DataStoreManager> {
