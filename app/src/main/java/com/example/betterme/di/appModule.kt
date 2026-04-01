@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.example.betterme.data.local.datastore.DataStoreManager
 import com.example.betterme.data.local.datastore.DataStoreManagerImpl
+import com.example.betterme.data.local.room.database.BetterMeDatabase
 import com.example.betterme.presentation.onboarding.OnboardingViewModel
 import com.example.betterme.presentation.splash.SplashViewModel
 import com.google.firebase.auth.FirebaseAuth
@@ -37,6 +38,23 @@ val appModule = module {
             firestoreSettings = settings
         }
     }
+}
+
+val roomModule = module {
+    // Database
+    single {
+        BetterMeDatabase.getDatabase(get())
+    }
+    // DAO
+    single { get<BetterMeDatabase>().habitDao() }
+    single { get<BetterMeDatabase>().habitLogDao() }
+    single { get<BetterMeDatabase>().categoryDao() }
+    single { get<BetterMeDatabase>().reminderDao() }
+    single { get<BetterMeDatabase>().challengeDao() }
+    single { get<BetterMeDatabase>().userChallengeDao() }
+    single { get<BetterMeDatabase>().achievementDao() }
+    single { get<BetterMeDatabase>().userAchievementDao() }
+    single { get<BetterMeDatabase>().aiChatDao() }
 }
 val viewModelModule = module {
     viewModelOf(::SplashViewModel)

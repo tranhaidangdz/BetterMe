@@ -12,7 +12,9 @@ class KoinApp : Application() {
         FirebaseApp.initializeApp(this@KoinApp)
         startKoin {
             androidContext(this@KoinApp)
-            modules(appModule, viewModelModule)
+            modules(appModule,
+                viewModelModule,
+                roomModule)
         }
     }
 }
