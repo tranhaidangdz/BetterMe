@@ -14,7 +14,8 @@ class KoinApp : Application() {
             androidContext(this@KoinApp)
             modules(appModule,
                 viewModelModule,
-                roomModule)
+                roomModule,
+                repositoryModule)
         }
     }
 }
