@@ -6,7 +6,8 @@ import androidx.room.Entity
 @Entity(tableName = "categories")
 data class CategoryEntity(
     @PrimaryKey(autoGenerate = true)
-    val id: Int,
+    val id: Int = 0,
     val name: String,
-    val icon: Int
+    val icon: String,
+    val description: String
 )
