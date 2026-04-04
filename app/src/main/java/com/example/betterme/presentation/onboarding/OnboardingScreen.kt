@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -46,7 +47,7 @@ import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun OnboardingScreen(
-    navigateToSignIn: () -> Unit,
+    navigateToHabitSelection: () -> Unit,
     viewModel: OnboardingViewModel = koinViewModel()
 ) {
     val pages = getOnboardingPages()
@@ -55,7 +56,7 @@ fun OnboardingScreen(
     LaunchedEffect(Unit) {
         viewModel.singleEvent.collectLatest { event ->
             when (event) {
-                OnboardingEvent.NavigateToSignIn -> navigateToSignIn()
+                OnboardingEvent.NavigateToHabitSelection -> navigateToHabitSelection()
             }
         }
     }
@@ -103,6 +104,7 @@ fun OnboardingContent(
                         contentScale = ContentScale.FillHeight,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .fillMaxHeight(0.7f)
                             .weight(1f)
                     )
 
@@ -114,7 +116,7 @@ fun OnboardingContent(
                         color = BetterMeColors.Text.TextPrimary,
                         textAlign = TextAlign.Center,
                         modifier = Modifier
-                            .padding(horizontal = 40.dp)
+                            .padding(horizontal = 20.dp)
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -125,7 +127,7 @@ fun OnboardingContent(
                         color = BetterMeColors.Text.TextTertiary,
                         textAlign = TextAlign.Center,
                         modifier = Modifier
-                            .padding(horizontal = 40.dp)
+                            .padding(horizontal = 20.dp)
                     )
                 }
             }
@@ -168,7 +170,7 @@ fun OnboardingContent(
                         pagerState.animateScrollToPage(pagerState.currentPage + 1)
                     }
                 } else {
-                    onIntent(OnboardingIntent.NavigateToSignIn)
+                    onIntent(OnboardingIntent.NavigateToHabitSelection)
                 }
             },
             modifier = Modifier

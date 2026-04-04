@@ -22,4 +22,12 @@
     <string name="onboarding_description_1">Xây dựng thói quen tích cực từng bước nhỏ, cải thiện bản thân một cách bền vững.</string>
     <string name="button_continue">Tiếp tục</string>
 
+    <!-- Onboarding - Habit Screen -->
+    <string name="onboarding_habit_title">Bạn muốn cải thiện điều gì?</string>
+    <string name="onboarding_habit_subtitle">Chọn những lĩnh vực bạn quan tâm để AI gợi ý thói quen phù hợp</string>
+    <string name="onboarding_selected_count">Đã chọn: %1$d/6</string>
+
+    <!-- Common -->
+    <string name="common_continue">Tiếp tục</string>
+
 </resources>

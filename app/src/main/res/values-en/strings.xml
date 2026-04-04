@@ -21,4 +21,12 @@
     <string name="onboarding_description_2">AI analyzes your habits, suggests what to do, and gives advice.</string>
     <string name="onboarding_description_1">Build positive habits step by step, improving yourself sustainably.</string>
     <string name="button_continue">Continue</string>
+
+    <!-- Onboarding - Habit Screen -->
+    <string name="onboarding_habit_title">What do you want to improve?</string>
+    <string name="onboarding_habit_subtitle">Choose areas you care about so AI can suggest suitable habits</string>
+    <string name="onboarding_selected_count">Selected: %1$d/3</string>
+
+    <!-- Common -->
+    <string name="common_continue">Continue</string>
 </resources>

@@ -32,6 +32,7 @@ fun WelcomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .fillMaxHeight(0.7f)
                 .weight(1f),
             verticalArrangement = Arrangement.Center
         ) {
@@ -41,6 +42,7 @@ fun WelcomeScreen(
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .fillMaxHeight(0.7f)
                     .size(600.dp)
                     .padding(start = 12.dp, end = 36.dp)
             )
