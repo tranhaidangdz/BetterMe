@@ -28,23 +28,21 @@ fun WelcomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(BetterMeColors.BackGround.BackgroundPrimary)
+            .systemBarsPadding() // 👈 FIX tràn status + nav bar
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.7f)
                 .weight(1f),
             verticalArrangement = Arrangement.Center
         ) {
             Image(
                 painter = painterResource(R.drawable.img_welcome),
                 contentDescription = null,
-                contentScale = ContentScale.Fit,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(0.7f)
-                    .size(600.dp)
-                    .padding(start = 12.dp, end = 36.dp)
+                    .padding(horizontal = 24.dp)
             )
         }
 
@@ -84,7 +82,8 @@ fun WelcomeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(56.dp)
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = 20.dp)
+                .navigationBarsPadding(), // 👈 FIX bị đè nút,
             style = BetterMeTypography.Title.Large.SemiBold.copy(
                 color = Color.White
             )

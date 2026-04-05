@@ -7,11 +7,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -80,7 +80,8 @@ fun OnboardingContent(
         modifier = Modifier
             .fillMaxSize()
             .background(BetterMeColors.BackGround.BackgroundPrimary)
-            .statusBarsPadding(),
+            .statusBarsPadding()
+            .navigationBarsPadding(),
         verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -95,20 +96,28 @@ fun OnboardingContent(
                     .fillMaxWidth()
             ) { page ->
                 Column(
+                    modifier = Modifier
+                        .fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Image(
-                        painter = painterResource(id = pages[page].imageResource),
-                        contentDescription = null,
-                        alignment = Alignment.TopCenter,
-                        contentScale = ContentScale.FillHeight,
+                    // ===== IMAGE =====
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .fillMaxHeight(0.7f)
-                            .weight(1f)
-                    )
+                            .weight(1.2f), // 👈 ảnh chiếm nhiều hơn
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            painter = painterResource(id = pages[page].imageResource),
+                            contentDescription = null,
+                            contentScale = ContentScale.Fit, // 👈 FIX quan trọng
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 24.dp)
+                        )
+                    }
 
-                    Spacer(modifier = Modifier.height(48.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
                     Text(
                         text = stringResource(pages[page].title),
@@ -134,7 +143,7 @@ fun OnboardingContent(
 
             Row(
                 modifier = Modifier
-                    .padding(bottom = 148.dp)
+                    .padding(bottom = 180.dp)
                     .height(20.dp)
                     .background(
                         BetterMeColors.BackGround.BackgroundOnboardingDots,

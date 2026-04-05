@@ -13,10 +13,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.example.betterme.R
 import com.example.betterme.presentation.components.button.BetterMeButton
 import com.example.betterme.presentation.onboarding.model.CategoryUiModel
@@ -89,18 +91,24 @@ fun HabitSelectionContent(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            modifier = Modifier.align(Alignment.CenterHorizontally),
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.CenterHorizontally),
             text = stringResource(R.string.onboarding_habit_title),
-            style = BetterMeTypography.Headline.Small.Bold
+            style = BetterMeTypography.Headline.Small.Bold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            modifier = Modifier.align(Alignment.CenterHorizontally),
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.CenterHorizontally),
             text = stringResource(R.string.onboarding_habit_subtitle),
             style = BetterMeTypography.Body.Medium,
-            color = BetterMeColors.Text.TextTertiary
+            color = BetterMeColors.Text.TextTertiary,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -108,7 +116,9 @@ fun HabitSelectionContent(
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(8.dp),
+            modifier = Modifier.clipToBounds()
         ) {
             items(state.categories) { item ->
                 CategoryItem(
@@ -140,9 +150,7 @@ fun HabitSelectionContent(
             },
             text = stringResource(R.string.common_continue),
             containerColor = buttonColor,
-            shape = BetterMeShapes.large,
-            modifier = Modifier.height(56.dp),
-            isFillMaxWidth = true
+            modifier = Modifier.heightIn(min = 56.dp)
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -182,9 +190,11 @@ fun CategoryItem(
         modifier = Modifier
             .fillMaxWidth()
             .height(140.dp)
+            .zIndex(if (item.isSelected) 1f else 0f)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
+                clip = false
             }
             .clickable { onClick() },
         shape = BetterMeShapes.large,
