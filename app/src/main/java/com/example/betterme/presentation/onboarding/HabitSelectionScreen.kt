@@ -1,7 +1,7 @@
 package com.example.betterme.presentation.onboarding
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,8 +14,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -181,44 +181,50 @@ fun CategoryItem(
         label = ""
     )
 
-    val scale by animateFloatAsState(
-        if (item.isSelected) 1.04f else 1f,
+    val elevation by animateDpAsState(
+        targetValue = if (item.isSelected) 6.dp else 0.dp,
         label = ""
     )
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(140.dp)
+            .height(150.dp)
             .zIndex(if (item.isSelected) 1f else 0f)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                clip = false
-            }
             .clickable { onClick() },
         shape = BetterMeShapes.large,
         colors = CardDefaults.cardColors(containerColor = background),
-        border = BorderStroke(1.dp, border)
+        border = BorderStroke(1.dp, border),
+        elevation = CardDefaults.cardElevation(defaultElevation = elevation)
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
 
-            Text(item.icon, style = BetterMeTypography.Title.Large.SemiBold)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = item.icon,
+                    style = BetterMeTypography.Title.Large.SemiBold
+                )
+                Text(
+                    text = item.name,
+                    style = BetterMeTypography.Title.Small.Bold
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                item.name,
-                style = BetterMeTypography.Title.Small.SemiBold
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                item.description,
-                style = BetterMeTypography.Body.Small.Medium,
+                text = item.description,
+                style = BetterMeTypography.Body.Small.SemiBold,
                 color = BetterMeColors.Text.TextTertiary,
-                maxLines = 2
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
