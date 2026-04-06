@@ -32,7 +32,7 @@ import org.koin.androidx.compose.koinViewModel
 // =========================
 @Composable
 fun HabitSelectionScreen(
-    navigateToSignIn: () -> Unit,
+    navigateToHabitSuggestion: () -> Unit,
     viewModel: HabitSelectionViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -46,7 +46,7 @@ fun HabitSelectionScreen(
                 }
 
                 is HabitSelectionEvent.NavigateNext -> {
-                    navigateToSignIn()
+                    navigateToHabitSuggestion()
                 }
             }
         }

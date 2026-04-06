@@ -19,6 +19,9 @@ sealed interface Destination : NavKey {
     data object HabitSelection : Destination
 
     @Serializable
+    data object HabitSuggestion : Destination
+
+    @Serializable
     data object SignIn : Destination
 
     @Serializable

@@ -27,6 +27,7 @@ import com.example.betterme.domain.repository.ReminderRepository
 import com.example.betterme.domain.repository.UserAchievementRepository
 import com.example.betterme.domain.repository.UserChallengeRepository
 import com.example.betterme.presentation.onboarding.HabitSelectionViewModel
+import com.example.betterme.presentation.onboarding.HabitSuggestionViewModel
 import com.example.betterme.presentation.onboarding.OnboardingViewModel
 import com.example.betterme.presentation.splash.SplashViewModel
 import com.google.firebase.auth.FirebaseAuth
@@ -118,4 +119,5 @@ val viewModelModule = module {
     viewModelOf(::SplashViewModel)
     viewModelOf(::OnboardingViewModel)
     viewModelOf(::HabitSelectionViewModel)
+    viewModelOf(::HabitSuggestionViewModel)
 }

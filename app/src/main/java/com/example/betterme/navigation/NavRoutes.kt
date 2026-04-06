@@ -8,6 +8,7 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.example.betterme.presentation.main.MainScreen
 import com.example.betterme.presentation.onboarding.HabitSelectionScreen
+import com.example.betterme.presentation.onboarding.HabitSuggestionScreen
 import com.example.betterme.presentation.onboarding.OnboardingScreen
 import com.example.betterme.presentation.onboarding.WelcomeScreen
 import com.example.betterme.presentation.signin.SignInScreen
@@ -61,6 +62,14 @@ fun NavRoutes()
 
             entry<Destination.HabitSelection> {
                 HabitSelectionScreen(
+                    navigateToHabitSuggestion = {
+                        backStack.replaceTop(Destination.HabitSuggestion)
+                    }
+                )
+            }
+
+            entry<Destination.HabitSuggestion> {
+                HabitSuggestionScreen(
                     navigateToSignIn = {
                         backStack.replaceTop(Destination.SignIn)
                     }
