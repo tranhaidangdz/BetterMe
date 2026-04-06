@@ -105,4 +105,7 @@ dependencies {
     implementation(libs.firebase.firestore.ktx)
     implementation(libs.firebase.database.ktx)
     implementation(libs.firebase.functions.ktx)
+
+    //LottieAnimation
+    implementation(libs.lottie.compose)
 }

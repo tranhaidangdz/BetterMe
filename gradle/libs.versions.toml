@@ -46,6 +46,9 @@ material3 = "1.4.0"
 animation = "1.10.6"
 foundationLayoutVersion = "1.10.6"
 
+#LottieAnimation
+lottieVersion = "6.4.0"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -110,6 +113,10 @@ androidx-compose-foundation-layout = { group = "androidx.compose.foundation", na
 
 # Material Icons Extended (cho Icons.Default.*)
 androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+
+#LottieAnimation
+lottie-compose = { group = "com.airbnb.android", name = "lottie-compose", version.ref = "lottieVersion"}
+lottie = { group = "com.airbnb.android", name = "lottie", version.ref = "lottieVersion" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
