@@ -62,14 +62,15 @@ fun NavRoutes()
 
             entry<Destination.HabitSelection> {
                 HabitSelectionScreen(
-                    navigateToHabitSuggestion = {
-                        backStack.replaceTop(Destination.HabitSuggestion)
+                    navigateToHabitSuggestion = { ids ->
+                        backStack.replaceTop(Destination.HabitSuggestion(ids))
                     }
                 )
             }
 
-            entry<Destination.HabitSuggestion> {
+            entry<Destination.HabitSuggestion> { destination ->
                 HabitSuggestionScreen(
+                    selectedCategoryIds = destination.selectedCategoryIds,
                     navigateToSignIn = {
                         backStack.replaceTop(Destination.SignIn)
                     }

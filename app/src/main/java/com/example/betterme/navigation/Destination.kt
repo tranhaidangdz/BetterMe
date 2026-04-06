@@ -19,7 +19,7 @@ sealed interface Destination : NavKey {
     data object HabitSelection : Destination
 
     @Serializable
-    data object HabitSuggestion : Destination
+    data class HabitSuggestion(val selectedCategoryIds: List<Int>) : Destination
 
     @Serializable
     data object SignIn : Destination
