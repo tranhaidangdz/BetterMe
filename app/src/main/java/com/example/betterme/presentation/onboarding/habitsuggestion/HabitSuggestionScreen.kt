@@ -1,4 +1,4 @@
-package com.example.betterme.presentation.onboarding
+package com.example.betterme.presentation.onboarding.habitsuggestion
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween

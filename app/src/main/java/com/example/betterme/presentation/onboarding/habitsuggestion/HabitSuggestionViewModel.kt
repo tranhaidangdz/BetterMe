@@ -1,4 +1,4 @@
-package com.example.betterme.presentation.onboarding
+package com.example.betterme.presentation.onboarding.habitsuggestion
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

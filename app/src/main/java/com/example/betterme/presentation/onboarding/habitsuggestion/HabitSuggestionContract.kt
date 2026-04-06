@@ -1,4 +1,4 @@
-package com.example.betterme.presentation.onboarding
+package com.example.betterme.presentation.onboarding.habitsuggestion
 
 import com.example.betterme.base.MviIntent
 import com.example.betterme.base.MviSingleEvent
