@@ -1,3 +1,33 @@
 <resources>
     <string name="app_name">BetterMe</string>
+    <string name="betterme_preferences" translatable="false">betterme_preferences</string>
+
+    <!--Welcome-->
+    <string name="get_started">Bắt đầu</string>
+    <string name="welcome_title">Chào mừng</string>
+    <string name="welcome_description">Hãy tập trung xây dựng thói quen tốt. Hãy để BetterMe giúp bạn!</string>
+
+    <!--SignIn-->
+    <string name="sign_in_with_google">Đăng nhập bằng Google</string>
+
+    <!--Upload-->
+    <string name="upload_image">Tải ảnh lên</string>
+
+    <!--Onboarding-->
+    <string name="onboarding_title_1">Bắt đầu hành trình sống tốt hơn mỗi ngày</string>
+    <string name="onboarding_title_2">AI đồng hành cùng thói quen của bạn</string>
+    <string name="onboarding_title_3">Duy trì kỷ luật – nâng cấp chính mình</string>
+    <string name="onboarding_description_3">Nhắc nhở đúng lúc, theo dõi tiến trình  giúp bạn đạt mục tiêu dài hạn.</string>
+    <string name="onboarding_description_2">AI phân tích thói quen, gợi ý việc cần làm  và đưa ra lời khuyên .</string>
+    <string name="onboarding_description_1">Xây dựng thói quen tích cực từng bước nhỏ, cải thiện bản thân một cách bền vững.</string>
+    <string name="button_continue">Tiếp tục</string>
+
+    <!-- Onboarding - Habit Screen -->
+    <string name="onboarding_habit_title">Bạn muốn cải thiện điều gì?</string>
+    <string name="onboarding_habit_subtitle">Chọn những lĩnh vực bạn quan tâm để AI gợi ý thói quen phù hợp</string>
+    <string name="onboarding_selected_count">Đã chọn: %1$d/6</string>
+
+    <!-- Common -->
+    <string name="common_continue">Tiếp tục</string>
+
 </resources>

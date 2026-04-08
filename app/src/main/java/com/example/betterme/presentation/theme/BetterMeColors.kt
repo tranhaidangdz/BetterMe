@@ -12,7 +12,7 @@ object BetterMeColors {
     val Green = Color(0xFF34C759)
 
     object Primary {
-        val Primary = Color(0xFF4894FE)
+        val Primary = Color(0xFF0077FF)
         val PrimaryBackground = Color(0xFFF0F8FF)
     }
 
