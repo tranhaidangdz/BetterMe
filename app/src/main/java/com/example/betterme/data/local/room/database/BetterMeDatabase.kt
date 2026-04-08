@@ -14,6 +14,7 @@ import com.example.betterme.data.local.room.dao.HabitLogDao
 import com.example.betterme.data.local.room.dao.ReminderDao
 import com.example.betterme.data.local.room.dao.UserAchievementDao
 import com.example.betterme.data.local.room.dao.UserChallengeDao
+import com.example.betterme.data.local.room.dao.UserDao
 import com.example.betterme.data.local.room.entities.AIChatEntity
 import com.example.betterme.data.local.room.entities.AchievementEntity
 import com.example.betterme.data.local.room.entities.CategoryEntity
@@ -38,7 +39,7 @@ import com.example.betterme.data.local.room.entities.UserEntity
         UserAchievementEntity::class,
         AIChatEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -54,6 +55,7 @@ abstract class BetterMeDatabase : RoomDatabase() {
     abstract fun achievementDao(): AchievementDao
     abstract fun userAchievementDao(): UserAchievementDao
     abstract fun aiChatDao(): AIChatDao
+    abstract fun userDao(): UserDao
 
     companion object {
 

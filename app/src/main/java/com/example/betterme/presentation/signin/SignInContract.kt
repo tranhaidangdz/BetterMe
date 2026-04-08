@@ -11,6 +11,7 @@ data class SignInState(
 
 sealed class SignInIntent : MviIntent {
     data class SignInWithGoogle(val activity: Activity) : SignInIntent()
+    data object SkipSignIn : SignInIntent()
 }
 
 sealed class SignInEvent : MviSingleEvent {

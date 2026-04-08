@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface HabitRepository {
 
-    fun getHabits(userId: Int): Flow<List<HabitEntity>>
+    fun getHabits(userId: String): Flow<List<HabitEntity>>
 
     suspend fun getHabitById(id: Int): HabitEntity?
 

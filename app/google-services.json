@@ -12,7 +12,20 @@
           "package_name": "com.example.betterme"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "520303057459-kdbmb6p13ch85208bf8fecsaf94qqoh4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.betterme",
+            "certificate_hash": "7f448c0761f3717d94918d84cba7d1c626f7eb70"
+          }
+        },
+        {
+          "client_id": "520303057459-789065v0s2rshjngundehmukl2deeeru.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyD7enYlLGxvRCOjWcmq-E7I0Jdv2Cw0KxM"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "520303057459-789065v0s2rshjngundehmukl2deeeru.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

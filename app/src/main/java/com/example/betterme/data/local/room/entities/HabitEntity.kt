@@ -26,7 +26,7 @@ import androidx.room.PrimaryKey
 data class HabitEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
-    val user_id: Int,
+    val user_id: String,
     val category_id: Int?,
     val title: String,
     val description: String?,
