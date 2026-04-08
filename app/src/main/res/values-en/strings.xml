@@ -9,6 +9,14 @@
 
     <!--SignIn-->
     <string name="sign_in_with_google">Sign in with Google</string>
+    <!-- Sign In Screen -->
+    <string name="sign_in_motivation">Let’s get started! We will help you improve yourself every day.</string>
+    <string name="sign_in_google">Sign in with Google</string>
+    <string name="sign_in_skip">Continue without signing in</string>
+    <string name="sign_in_error">Sign in failed. Please try again.</string>
+
+    <!--web client ID-->
+    <string name="default_web_client_id" translatable="false">520303057459-kdbmb6p13ch85208bf8fecsaf94qqoh4.apps.googleusercontent.com</string>
 
     <!--Upload-->
     <string name="upload_image">Upload image</string>

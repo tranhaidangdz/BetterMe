@@ -8,6 +8,7 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import com.example.betterme.data.local.datastore.DataStoreManager
 import com.example.betterme.data.local.datastore.DataStoreManagerImpl
 import com.example.betterme.data.local.room.database.BetterMeDatabase
+import com.example.betterme.data.provider.GoogleAuthClient
 import com.example.betterme.data.repository.AIChatRepositoryImpl
 import com.example.betterme.data.repository.AchievementRepositoryImpl
 import com.example.betterme.data.repository.CategoryRepositoryImpl
@@ -17,6 +18,7 @@ import com.example.betterme.data.repository.HabitRepositoryImpl
 import com.example.betterme.data.repository.ReminderRepositoryImpl
 import com.example.betterme.data.repository.UserAchievementRepositoryImpl
 import com.example.betterme.data.repository.UserChallengeRepositoryImpl
+import com.example.betterme.data.repository.UserRepositoryImpl
 import com.example.betterme.domain.repository.AIChatRepository
 import com.example.betterme.domain.repository.AchievementRepository
 import com.example.betterme.domain.repository.CategoryRepository
@@ -26,8 +28,13 @@ import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.domain.repository.ReminderRepository
 import com.example.betterme.domain.repository.UserAchievementRepository
 import com.example.betterme.domain.repository.UserChallengeRepository
-import com.example.betterme.presentation.onboarding.HabitSelectionViewModel
+import com.example.betterme.domain.repository.UserRepository
+import com.example.betterme.domain.usecase.user.GetUserUseCase
+import com.example.betterme.domain.usecase.user.SaveUserUseCase
+import com.example.betterme.presentation.onboarding.habitselection.HabitSelectionViewModel
+import com.example.betterme.presentation.onboarding.habitsuggestion.HabitSuggestionViewModel
 import com.example.betterme.presentation.onboarding.OnboardingViewModel
+import com.example.betterme.presentation.signin.SignInViewModel
 import com.example.betterme.presentation.splash.SplashViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -57,6 +64,9 @@ val appModule = module {
             firestoreSettings = settings
         }
     }
+
+    // Google Auth
+    single { GoogleAuthClient(get()) }
 }
 
 val roomModule = module {
@@ -74,6 +84,7 @@ val roomModule = module {
     single { get<BetterMeDatabase>().achievementDao() }
     single { get<BetterMeDatabase>().userAchievementDao() }
     single { get<BetterMeDatabase>().aiChatDao() }
+    single { get<BetterMeDatabase>().userDao() }
 }
 
 val repositoryModule = module {
@@ -113,9 +124,21 @@ val repositoryModule = module {
     single<AIChatRepository> {
         AIChatRepositoryImpl(get())
     }
+
+    single<UserRepository> {
+        UserRepositoryImpl(get())
+    }
 }
+
+val useCaseModule = module {
+    factory { GetUserUseCase(get()) }
+    factory { SaveUserUseCase(get(), get()) }
+}
+
 val viewModelModule = module {
     viewModelOf(::SplashViewModel)
     viewModelOf(::OnboardingViewModel)
     viewModelOf(::HabitSelectionViewModel)
+    viewModelOf(::HabitSuggestionViewModel)
+    viewModelOf(::SignInViewModel)
 }

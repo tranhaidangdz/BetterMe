@@ -20,7 +20,7 @@ import androidx.room.PrimaryKey
 data class UserChallengeEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
-    val user_id: Int,
+    val user_id: String,
     val challenge_id: Int,
     val progress: Int,
     val start_date: Long,

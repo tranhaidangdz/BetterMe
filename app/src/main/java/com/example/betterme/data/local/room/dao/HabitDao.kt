@@ -29,7 +29,7 @@ interface HabitDao {
 
     // READ
     @Query("SELECT * FROM habits WHERE user_id = :userId")
-    fun getHabitsByUser(userId: Int): Flow<List<HabitEntity>>
+    fun getHabitsByUser(userId: String): Flow<List<HabitEntity>>
 
     @Query("SELECT * FROM habits WHERE id = :habitId")
     suspend fun getHabitById(habitId: Int): HabitEntity?

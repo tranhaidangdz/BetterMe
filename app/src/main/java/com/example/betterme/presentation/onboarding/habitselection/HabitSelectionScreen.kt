@@ -1,4 +1,4 @@
-package com.example.betterme.presentation.onboarding
+package com.example.betterme.presentation.onboarding.habitselection
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -32,7 +33,7 @@ import org.koin.androidx.compose.koinViewModel
 // =========================
 @Composable
 fun HabitSelectionScreen(
-    navigateToSignIn: () -> Unit,
+    navigateToHabitSuggestion: (List<Int>) -> Unit,
     viewModel: HabitSelectionViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -46,7 +47,7 @@ fun HabitSelectionScreen(
                 }
 
                 is HabitSelectionEvent.NavigateNext -> {
-                    navigateToSignIn()
+                    navigateToHabitSuggestion(event.selectedIds.toList())
                 }
             }
         }
@@ -96,7 +97,7 @@ fun HabitSelectionContent(
                 .align(Alignment.CenterHorizontally),
             text = stringResource(R.string.onboarding_habit_title),
             style = BetterMeTypography.Headline.Small.Bold,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            textAlign = TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -108,7 +109,7 @@ fun HabitSelectionContent(
             text = stringResource(R.string.onboarding_habit_subtitle),
             style = BetterMeTypography.Body.Medium,
             color = BetterMeColors.Text.TextTertiary,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            textAlign = TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(24.dp))

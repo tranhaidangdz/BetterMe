@@ -12,6 +12,6 @@ data class UserAchievementEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
     val achievement_id: Int,
-    val user_id: Int,
+    val user_id: String,
     val achieved_at: Long
 )

@@ -9,6 +9,14 @@
 
     <!--SignIn-->
     <string name="sign_in_with_google">Đăng nhập bằng Google</string>
+    <!-- Sign In Screen -->
+    <string name="sign_in_motivation">Bắt đầu thôi! Chúng tôi sẽ giúp bạn phát triển bản thân để tốt hơn mỗi ngày.</string>
+    <string name="sign_in_google">Đăng nhập với Google</string>
+    <string name="sign_in_skip">Tiếp tục mà không cần đăng nhập</string>
+    <string name="sign_in_error">Đăng nhập thất bại. Vui lòng thử lại.</string>
+
+    <!--web client ID-->
+    <string name="default_web_client_id" translatable="false">520303057459-kdbmb6p13ch85208bf8fecsaf94qqoh4.apps.googleusercontent.com</string>
 
     <!--Upload-->
     <string name="upload_image">Tải ảnh lên</string>

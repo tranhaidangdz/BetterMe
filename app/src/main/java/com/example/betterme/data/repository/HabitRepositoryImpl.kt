@@ -8,7 +8,7 @@ class HabitRepositoryImpl(
     private val dao: HabitDao
 ) : HabitRepository {
 
-    override fun getHabits(userId: Int) = dao.getHabitsByUser(userId)
+    override fun getHabits(userId: String) = dao.getHabitsByUser(userId)
 
     override suspend fun getHabitById(id: Int) = dao.getHabitById(id)
 

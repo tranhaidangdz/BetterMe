@@ -29,4 +29,10 @@ interface CategoryDao {
 
     @Query("SELECT * FROM categories WHERE id = :id")
     suspend fun getById(id: Int): CategoryEntity?
+
+    @Query("UPDATE categories SET isSelected = CASE WHEN id IN (:selectedIds) THEN 1 ELSE 0 END")
+    suspend fun updateSelections(selectedIds: List<Int>)
+
+    @Query("UPDATE categories SET isSelected = 0")
+    suspend fun clearAllSelections()
 }

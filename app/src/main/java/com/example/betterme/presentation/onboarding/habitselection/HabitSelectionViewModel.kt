@@ -1,8 +1,9 @@
-package com.example.betterme.presentation.onboarding
+package com.example.betterme.presentation.onboarding.habitselection
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.betterme.data.local.fake.fakeCategories
+import com.example.betterme.data.local.room.entities.CategoryEntity
 import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.presentation.onboarding.model.CategoryUiModel
 import kotlinx.coroutines.flow.*
@@ -44,7 +45,7 @@ class HabitSelectionViewModel(
         }
     }
 
-    private fun updateState(list: List<com.example.betterme.data.local.room.entities.CategoryEntity>) {
+    private fun updateState(list: List<CategoryEntity>) {
         val uiList = list.map {
             CategoryUiModel(
                 id = it.id,

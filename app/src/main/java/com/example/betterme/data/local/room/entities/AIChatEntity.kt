@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 data class AIChatEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
-    val user_id: Int,
+    val user_id: String,
     val message: String,
     val response: String,
     val created_at: Long

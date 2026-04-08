@@ -16,4 +16,10 @@ interface CategoryRepository {
     suspend fun delete(category: CategoryEntity)
 
     suspend fun getById(id: Int): CategoryEntity?
+
+    /** Lưu danh sách id được chọn, các id không có trong list sẽ được bỏ chọn */
+    suspend fun saveSelections(selectedIds: Set<Int>)
+
+    /** Xóa toàn bộ trạng thái chọn (dùng khi reset) */
+    suspend fun clearAllSelections()
 }
