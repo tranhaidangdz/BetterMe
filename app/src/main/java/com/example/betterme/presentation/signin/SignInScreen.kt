@@ -44,6 +44,7 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun SignInScreen(
     navigateToMain: () -> Unit,
+    navigateToHabitSelection: () -> Unit,
     viewModel: SignInViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
@@ -55,6 +56,7 @@ fun SignInScreen(
         viewModel.singleEvent.collect { event ->
             when (event) {
                 SignInEvent.NavigateToHome -> navigateToMain()
+                SignInEvent.NavigateToHabitSelection -> navigateToHabitSelection()
                 SignInEvent.LoginError -> {
                     Toast.makeText(
                         context,

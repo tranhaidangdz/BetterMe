@@ -16,5 +16,6 @@ sealed class SignInIntent : MviIntent {
 
 sealed class SignInEvent : MviSingleEvent {
     data object NavigateToHome : SignInEvent()
+    data object NavigateToHabitSelection : SignInEvent()
     data object LoginError : SignInEvent()
 }

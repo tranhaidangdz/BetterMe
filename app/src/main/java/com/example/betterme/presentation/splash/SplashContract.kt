@@ -19,4 +19,5 @@ sealed class SplashEvent : MviSingleEvent {
     data object NavigateToWelcome : SplashEvent()
     data object NavigateToMain : SplashEvent()
     data object NavigateToSignIn : SplashEvent()
+    data object NavigateToHabitSelection : SplashEvent()
 }

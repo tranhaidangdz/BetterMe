@@ -60,6 +60,43 @@ class DataStoreManagerImpl(
             preferences.remove(DataStoreKey.USER_EMAIL)
             preferences.remove(DataStoreKey.USER_PHOTO_URL)
             preferences.remove(DataStoreKey.USER_RANK_ID)
+            preferences.remove(DataStoreKey.IS_GUEST)
+            preferences.remove(DataStoreKey.HAS_SELECTED_HABITS)
         }
+    }
+
+    override suspend fun saveGuestUser(guestId: String) {
+        dataStore.edit { preferences ->
+            preferences[DataStoreKey.USER_ID] = guestId
+            preferences[DataStoreKey.USER_NAME] = "Guest"
+            preferences[DataStoreKey.USER_EMAIL] = ""
+            preferences[DataStoreKey.USER_PHOTO_URL] = ""
+            preferences[DataStoreKey.USER_RANK_ID] = "a1"
+            preferences[DataStoreKey.IS_GUEST] = true
+        }
+    }
+
+    override fun isGuestUser(): Flow<Boolean> {
+        return dataStore.data
+            .map { preferences -> preferences[DataStoreKey.IS_GUEST] ?: false }
+            .catch { emit(false) }
+    }
+
+    override fun getCurrentUserId(): Flow<String?> {
+        return dataStore.data
+            .map { preferences -> preferences[DataStoreKey.USER_ID] }
+            .catch { emit(null) }
+    }
+
+    override suspend fun setHasSelectedHabits() {
+        dataStore.edit { preferences ->
+            preferences[DataStoreKey.HAS_SELECTED_HABITS] = true
+        }
+    }
+
+    override fun hasSelectedHabits(): Flow<Boolean> {
+        return dataStore.data
+            .map { preferences -> preferences[DataStoreKey.HAS_SELECTED_HABITS] ?: false }
+            .catch { emit(false) }
     }
 }

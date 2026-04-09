@@ -14,14 +14,14 @@ class OnboardingViewModel(
 
     override fun processIntent(intent: OnboardingIntent) {
         when (intent) {
-            OnboardingIntent.NavigateToHabitSelection -> handleNavigateToHabitSelection()
+            OnboardingIntent.NavigateToSignIn -> handleNavigateToSignIn()
         }
     }
 
-    private fun handleNavigateToHabitSelection() {
+    private fun handleNavigateToSignIn() {
         viewModelScope.launch {
             dataStoreManager.setDoneFirstTime()
-            sendEvent(OnboardingEvent.NavigateToHabitSelection)
+            sendEvent(OnboardingEvent.NavigateToSignIn)
         }
     }
 }

@@ -40,6 +40,9 @@ fun NavRoutes()
                     },
                     navigateToSignIn = {
                         backStack.replaceTop(Destination.SignIn)
+                    },
+                    navigateToHabitSelection = {
+                        backStack.replaceTop(Destination.HabitSelection)
                     }
                 )
             }
@@ -54,6 +57,17 @@ fun NavRoutes()
 
             entry<Destination.Onboarding> {
                 OnboardingScreen(
+                    navigateToSignIn = {
+                        backStack.replaceTop(Destination.SignIn)
+                    }
+                )
+            }
+
+            entry<Destination.SignIn> {
+                SignInScreen(
+                    navigateToMain = {
+                        backStack.replaceTop(Destination.Main)
+                    },
                     navigateToHabitSelection = {
                         backStack.replaceTop(Destination.HabitSelection)
                     }
@@ -71,14 +85,6 @@ fun NavRoutes()
             entry<Destination.HabitSuggestion> { destination ->
                 HabitSuggestionScreen(
                     selectedCategoryIds = destination.selectedCategoryIds,
-                    navigateToSignIn = {
-                        backStack.replaceTop(Destination.SignIn)
-                    }
-                )
-            }
-
-            entry<Destination.SignIn> {
-                SignInScreen(
                     navigateToMain = {
                         backStack.replaceTop(Destination.Main)
                     }

@@ -29,6 +29,7 @@ fun SplashScreen(
     navigateToWelcome: () -> Unit,
     navigateToMain: () -> Unit,
     navigateToSignIn: () -> Unit,
+    navigateToHabitSelection: () -> Unit,
     viewModel: SplashViewModel = koinViewModel()
 ) {
     LaunchedEffect(Unit) {
@@ -48,6 +49,10 @@ fun SplashScreen(
 
                 SplashEvent.NavigateToSignIn -> {
                     navigateToSignIn()
+                }
+
+                SplashEvent.NavigateToHabitSelection -> {
+                    navigateToHabitSelection()
                 }
             }
         }

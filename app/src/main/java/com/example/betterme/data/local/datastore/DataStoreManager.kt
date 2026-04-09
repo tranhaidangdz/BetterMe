@@ -9,4 +9,9 @@ interface DataStoreManager {
     suspend fun saveUserInfo(user: User)
     fun getUserInfo(): Flow<User?>
     suspend fun clearUserInfo()
+    suspend fun saveGuestUser(guestId: String)
+    fun isGuestUser(): Flow<Boolean>
+    fun getCurrentUserId(): Flow<String?>
+    suspend fun setHasSelectedHabits()
+    fun hasSelectedHabits(): Flow<Boolean>
 }

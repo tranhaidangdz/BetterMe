@@ -10,7 +10,10 @@ import com.example.betterme.data.provider.GoogleAuthClient
 import com.example.betterme.domain.model.User
 import com.example.betterme.domain.usecase.user.GetUserUseCase
 import com.example.betterme.domain.usecase.user.SaveUserUseCase
+import com.example.betterme.data.local.room.entities.UserEntity
+import com.example.betterme.domain.repository.UserRepository
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 class SignInViewModel(
     private val googleAuthClient: GoogleAuthClient,
@@ -18,6 +21,7 @@ class SignInViewModel(
     private val firebaseAuth: FirebaseAuth,
     private val getUserUseCase: GetUserUseCase,
     private val dataStoreManager: DataStoreManager,
+    private val userRepository: UserRepository,
 ) : BaseMviViewModel<SignInIntent, SignInState, SignInEvent>() {
     override fun initState(): SignInState = SignInState()
 
@@ -27,7 +31,7 @@ class SignInViewModel(
                 handleSignInWithGoogle(intent.activity)
             }
             is SignInIntent.SkipSignIn -> {
-                sendEvent(SignInEvent.NavigateToHome)
+                handleSkipSignIn()
             }
         }
     }
@@ -54,7 +58,7 @@ class SignInViewModel(
 
                 result.onSuccess { existingUser ->
                     if (existingUser == null) {
-                        // User mới → tạo và lưu
+                        // User mới → tạo và lưu → navigate tới HabitSelection
                         val newUser = User(
                             id = currentUser.uid,
                             name = currentUser.displayName.orEmpty(),
@@ -63,11 +67,12 @@ class SignInViewModel(
                             rankId = "a1"
                         )
                         saveUserUseCase(newUser)
+                        sendEvent(SignInEvent.NavigateToHabitSelection)
                     } else {
-                        // User đã tồn tại → lưu vào DataStore
+                        // User đã tồn tại → lưu vào DataStore → navigate tới Home
                         dataStoreManager.saveUserInfo(existingUser)
+                        sendEvent(SignInEvent.NavigateToHome)
                     }
-                    sendEvent(SignInEvent.NavigateToHome)
                 }.onFailure {
                     Log.d("SignIn", "Get user failed: ${it.message}")
                     sendEvent(SignInEvent.LoginError)
@@ -77,6 +82,38 @@ class SignInViewModel(
                 e.printStackTrace()
                 sendEvent(SignInEvent.LoginError)
                 googleAuthClient.signOut()
+            } finally {
+                updateState { copy(isLoading = false) }
+            }
+        }
+    }
+
+    private fun handleSkipSignIn() {
+        viewModelScope.launch {
+            updateState { copy(isLoading = true) }
+            try {
+                // Tạo guest userId riêng
+                val guestId = "guest_${UUID.randomUUID()}"
+
+                // Tạo record trong bảng users để đảm bảo ForeignKey constraint
+                val guestEntity = UserEntity(
+                    id = guestId,
+                    name = "Guest",
+                    email = "",
+                    photoUrl = "",
+                    rankId = "a1",
+                    created_at = System.currentTimeMillis()
+                )
+                userRepository.insertUser(guestEntity)
+
+                // Lưu guest info vào DataStore
+                dataStoreManager.saveGuestUser(guestId)
+
+                // Navigate tới HabitSelection
+                sendEvent(SignInEvent.NavigateToHabitSelection)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                sendEvent(SignInEvent.LoginError)
             } finally {
                 updateState { copy(isLoading = false) }
             }

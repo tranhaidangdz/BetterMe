@@ -3,6 +3,7 @@ package com.example.betterme.presentation.splash.model
 enum class NextScreen {
     WELCOME,
     MAIN,
-    SIGN_IN
+    SIGN_IN,
+    HABIT_SELECTION
 }
 

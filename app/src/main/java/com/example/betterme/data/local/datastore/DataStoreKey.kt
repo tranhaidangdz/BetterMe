@@ -10,4 +10,6 @@ object DataStoreKey {
     val USER_EMAIL = stringPreferencesKey("user_email")
     val USER_PHOTO_URL = stringPreferencesKey("user_photo_url")
     val USER_RANK_ID = stringPreferencesKey("user_rank_id")
+    val IS_GUEST = booleanPreferencesKey("is_guest")
+    val HAS_SELECTED_HABITS = booleanPreferencesKey("has_selected_habits")
 }

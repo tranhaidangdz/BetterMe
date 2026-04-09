@@ -9,9 +9,9 @@ data class OnboardingState(
 ) : MviViewState
 
 sealed class OnboardingIntent : MviIntent {
-    data object NavigateToHabitSelection : OnboardingIntent()
+    data object NavigateToSignIn : OnboardingIntent()
 }
 
 sealed class OnboardingEvent : MviSingleEvent {
-    data object NavigateToHabitSelection : OnboardingEvent()
+    data object NavigateToSignIn : OnboardingEvent()
 }

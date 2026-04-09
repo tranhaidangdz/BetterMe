@@ -35,7 +35,7 @@ import org.koin.core.parameter.parametersOf
 @Composable
 fun HabitSuggestionScreen(
     selectedCategoryIds: List<Int>,
-    navigateToSignIn: () -> Unit,
+    navigateToMain: () -> Unit,
     viewModel: HabitSuggestionViewModel = koinViewModel(
         parameters = { parametersOf(selectedCategoryIds) }
     )
@@ -46,7 +46,7 @@ fun HabitSuggestionScreen(
     LaunchedEffect(Unit) {
         viewModel.event.collect { event ->
             when (event) {
-                HabitSuggestionEvent.NavigateToSignIn -> navigateToSignIn()
+                HabitSuggestionEvent.NavigateToMain -> navigateToMain()
                 is HabitSuggestionEvent.ShowError -> snackbarHostState.showSnackbar(event.message)
             }
         }
@@ -64,23 +64,36 @@ fun HabitSuggestionScreen(
         )
     }
 
-    // Repeat Picker Dialog
-    if (state.showRepeatPicker) {
+    // === HABIT SETTINGS DIALOG ===
+    val editingHabit = state.editingHabit
+    if (editingHabit != null && !state.showReminderPicker && !state.showRepeatPicker) {
+        HabitSettingsDialog(
+            habit = editingHabit,
+            repeatOptions = viewModel.repeatOptions,
+            onSetReminder = { viewModel.onIntent(HabitSuggestionIntent.ShowReminderPicker(editingHabit.id)) },
+            onSetRepeat = { viewModel.onIntent(HabitSuggestionIntent.ShowRepeatPicker(editingHabit.id)) },
+            onConfirm = { viewModel.onIntent(HabitSuggestionIntent.ConfirmHabitSettings(editingHabit.id)) },
+            onDismiss = { viewModel.onIntent(HabitSuggestionIntent.DismissHabitSettings(editingHabit.id)) }
+        )
+    }
+
+    // === REPEAT PICKER DIALOG ===
+    if (state.showRepeatPicker && editingHabit != null) {
         RepeatPickerDialog(
             options = viewModel.repeatOptions,
-            selected = state.repeatLabel,
-            onSelect = { viewModel.onIntent(HabitSuggestionIntent.SetRepeat(it)) },
+            selected = editingHabit.repeatLabel,
+            onSelect = { viewModel.onIntent(HabitSuggestionIntent.SetRepeat(editingHabit.id, it)) },
             onDismiss = { viewModel.onIntent(HabitSuggestionIntent.DismissRepeatPicker) }
         )
     }
 
-    // Reminder Time Picker Dialog
-    if (state.showReminderPicker) {
+    // === REMINDER TIME PICKER DIALOG ===
+    if (state.showReminderPicker && editingHabit != null) {
         ReminderTimePickerDialog(
-            currentHour = state.reminderHour,
-            currentMinute = state.reminderMinute,
+            currentHour = editingHabit.reminderHour,
+            currentMinute = editingHabit.reminderMinute,
             onConfirm = { hour, minute ->
-                viewModel.onIntent(HabitSuggestionIntent.SetReminderTime(hour, minute))
+                viewModel.onIntent(HabitSuggestionIntent.SetReminderTime(editingHabit.id, hour, minute))
             },
             onDismiss = { viewModel.onIntent(HabitSuggestionIntent.DismissReminderPicker) }
         )
@@ -118,7 +131,7 @@ fun HabitSuggestionContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Chọn những thói quen phù hợp với bạn. Bỏ tích nếu không cần.",
+            text = "Chọn thói quen bạn muốn rèn luyện. Mỗi thói quen sẽ có giờ nhắc và lịch lặp riêng.",
             style = BetterMeTypography.Body.Medium,
             color = BetterMeColors.Text.TextTertiary,
             textAlign = TextAlign.Center,
@@ -160,25 +173,6 @@ fun HabitSuggestionContent(
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // ===== SETTINGS =====
-        SettingRow(
-            icon = "⏰",
-            label = "Nhắc nhở lúc:",
-            value = state.reminderTimeFormatted,
-            onClick = { onIntent(HabitSuggestionIntent.ShowReminderPicker) }
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        SettingRow(
-            icon = "📊",
-            label = "Lặp lại:",
-            value = state.repeatLabel,
-            onClick = { onIntent(HabitSuggestionIntent.ShowRepeatPicker) }
-        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -264,24 +258,47 @@ fun HabitCheckItem(
         label = ""
     )
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(BetterMeShapes.medium)
             .background(backgroundColor)
             .border(1.dp, borderColor, BetterMeShapes.medium)
             .clickable { onToggle() }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
-        AnimatedCheckbox(isChecked = habit.isChecked)
-        Text(
-            text = habit.title,
-            style = BetterMeTypography.Body.Medium,
-            color = BetterMeColors.Text.TextPrimary,
-            modifier = Modifier.weight(1f)
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            AnimatedCheckbox(isChecked = habit.isChecked)
+            Text(
+                text = habit.title,
+                style = BetterMeTypography.Body.Medium,
+                color = BetterMeColors.Text.TextPrimary,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Hiện thông tin reminder nếu đã tích
+        if (habit.isChecked) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.padding(start = 36.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "⏰ ${habit.reminderTimeFormatted}",
+                    style = BetterMeTypography.Body.Small.Medium,
+                    color = BetterMeColors.Primary.Primary
+                )
+                Text(
+                    text = "📊 ${habit.repeatLabel}",
+                    style = BetterMeTypography.Body.Small.Medium,
+                    color = BetterMeColors.Primary.Primary
+                )
+            }
+        }
     }
 }
 
@@ -318,6 +335,77 @@ fun AnimatedCheckbox(isChecked: Boolean) {
             )
         }
     }
+}
+
+// =========================
+// HABIT SETTINGS DIALOG
+// =========================
+@Composable
+fun HabitSettingsDialog(
+    habit: SuggestedHabitUiModel,
+    repeatOptions: List<String>,
+    onSetReminder: () -> Unit,
+    onSetRepeat: () -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "⚙️ Cài đặt thói quen",
+                style = BetterMeTypography.Title.Medium.SemiBold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Tên thói quen
+                Text(
+                    text = habit.title,
+                    style = BetterMeTypography.Body.Medium,
+                    color = BetterMeColors.Text.TextPrimary
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Giờ nhắc nhở
+                SettingRow(
+                    icon = "⏰",
+                    label = "Nhắc nhở lúc:",
+                    value = habit.reminderTimeFormatted,
+                    onClick = onSetReminder
+                )
+
+                // Lịch lặp
+                SettingRow(
+                    icon = "📊",
+                    label = "Lặp lại:",
+                    value = habit.repeatLabel,
+                    onClick = onSetRepeat
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    text = "Xác nhận",
+                    style = BetterMeTypography.Body.Medium,
+                    color = BetterMeColors.Primary.Primary
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "Huỷ",
+                    style = BetterMeTypography.Body.Medium,
+                    color = BetterMeColors.Text.TextTertiary
+                )
+            }
+        },
+        shape = BetterMeShapes.large,
+        containerColor = BetterMeColors.BackGround.BackgroundPrimary
+    )
 }
 
 // =========================
@@ -429,7 +517,7 @@ fun RepeatPickerDialog(
 }
 
 // =========================
-// REMINDER TIME PICKER DIALOG (Material3 TimePicker)
+// REMINDER TIME PICKER DIALOG
 // =========================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -506,24 +594,23 @@ private fun HabitSuggestionPreview() {
                 CategoryWithHabits(
                     categoryName = "Vận động & thể chất",
                     categoryIcon = "🏃",
+                    categoryId = 1,
                     habits = listOf(
-                        SuggestedHabitUiModel(1, "Đi bộ 10.000 bước mỗi ngày", true),
-                        SuggestedHabitUiModel(2, "Tập Gym 30 phút", true),
+                        SuggestedHabitUiModel(1, "Đi bộ 10.000 bước mỗi ngày", true, 7, 0, "Hàng ngày"),
+                        SuggestedHabitUiModel(2, "Tập Gym 30 phút", true, 18, 0, "Các ngày trong tuần"),
                         SuggestedHabitUiModel(3, "Dãn cơ 15 phút mỗi sáng", false),
                     )
                 ),
                 CategoryWithHabits(
                     categoryName = "Tinh thần & sức khỏe tâm lý",
                     categoryIcon = "🧠",
+                    categoryId = 3,
                     habits = listOf(
-                        SuggestedHabitUiModel(4, "Thiền 10 phút mỗi sáng", true),
-                        SuggestedHabitUiModel(5, "Viết nhật ký trước khi ngủ", true),
+                        SuggestedHabitUiModel(4, "Thiền 10 phút mỗi sáng", true, 6, 30, "Hàng ngày"),
+                        SuggestedHabitUiModel(5, "Viết nhật ký trước khi ngủ", false),
                     )
                 )
-            ),
-            reminderHour = 7,
-            reminderMinute = 0,
-            repeatLabel = "Hàng ngày"
+            )
         ),
         repeatOptions = listOf("Hàng ngày", "Các ngày trong tuần", "Cuối tuần"),
         onIntent = {}

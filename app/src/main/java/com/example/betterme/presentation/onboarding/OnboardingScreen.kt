@@ -47,7 +47,7 @@ import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun OnboardingScreen(
-    navigateToHabitSelection: () -> Unit,
+    navigateToSignIn: () -> Unit,
     viewModel: OnboardingViewModel = koinViewModel()
 ) {
     val pages = getOnboardingPages()
@@ -56,7 +56,7 @@ fun OnboardingScreen(
     LaunchedEffect(Unit) {
         viewModel.singleEvent.collectLatest { event ->
             when (event) {
-                OnboardingEvent.NavigateToHabitSelection -> navigateToHabitSelection()
+                OnboardingEvent.NavigateToSignIn -> navigateToSignIn()
             }
         }
     }
@@ -179,7 +179,7 @@ fun OnboardingContent(
                         pagerState.animateScrollToPage(pagerState.currentPage + 1)
                     }
                 } else {
-                    onIntent(OnboardingIntent.NavigateToHabitSelection)
+                    onIntent(OnboardingIntent.NavigateToSignIn)
                 }
             },
             modifier = Modifier
