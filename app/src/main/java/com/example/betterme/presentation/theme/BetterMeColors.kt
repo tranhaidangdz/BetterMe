@@ -18,7 +18,7 @@ object BetterMeColors {
 
     object BackGround {
         val BackgroundPrimary = White
-        val BackgroundSecondary = Color(0xFFFAFAFA)
+        val BackgroundSecondary = Color(0xFFF2F8FF)
         val BackgroundOnboardingDots = Color(0xFFF5F5F5)
         val BackgroundLightBlue = Color(0xFFF2F8FF)
     }

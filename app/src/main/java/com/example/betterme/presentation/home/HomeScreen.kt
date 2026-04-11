@@ -75,7 +75,7 @@ fun HomeContent(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(BetterMeColors.BackGround.BackgroundPrimary)
+            .background(BetterMeColors.BackGround.BackgroundSecondary)
             .statusBarsPadding()
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
