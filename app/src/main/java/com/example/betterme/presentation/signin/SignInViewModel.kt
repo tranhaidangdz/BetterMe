@@ -63,8 +63,7 @@ class SignInViewModel(
                             id = currentUser.uid,
                             name = currentUser.displayName.orEmpty(),
                             photoUrl = currentUser.photoUrl?.toString().orEmpty(),
-                            email = currentUser.email.orEmpty(),
-                            rankId = "a1"
+                            email = currentUser.email.orEmpty()
                         )
                         saveUserUseCase(newUser)
                         sendEvent(SignInEvent.NavigateToHabitSelection)
@@ -101,7 +100,6 @@ class SignInViewModel(
                     name = "Guest",
                     email = "",
                     photoUrl = "",
-                    rankId = "a1",
                     created_at = System.currentTimeMillis()
                 )
                 userRepository.insertUser(guestEntity)

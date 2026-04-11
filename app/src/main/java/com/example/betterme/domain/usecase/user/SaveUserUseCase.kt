@@ -16,7 +16,6 @@ class SaveUserUseCase(
                 name = user.name,
                 email = user.email,
                 photoUrl = user.photoUrl,
-                rankId = user.rankId,
                 created_at = System.currentTimeMillis()
             )
             userRepository.insertUser(entity)

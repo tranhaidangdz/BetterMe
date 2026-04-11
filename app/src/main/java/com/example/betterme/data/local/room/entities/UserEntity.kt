@@ -10,6 +10,5 @@ data class UserEntity(
     val name: String,
     val email: String,
     val photoUrl: String,
-    val rankId: String,
     val created_at: Long
 )

@@ -14,8 +14,7 @@ class GetUserUseCase(
                     id = it.id,
                     name = it.name,
                     email = it.email,
-                    photoUrl = it.photoUrl,
-                    rankId = it.rankId
+                    photoUrl = it.photoUrl
                 )
             }
             Result.success(user)

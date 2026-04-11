@@ -23,4 +23,10 @@ class HabitRepositoryImpl(
 
     override suspend fun deleteHabitById(id: Int) =
         dao.deleteHabitById(id)
+
+    override suspend fun getHabitCountByCategory(categoryId: Int) =
+        dao.getHabitCountByCategory(categoryId)
+
+    override suspend fun deleteAllByUserId(userId: String) =
+        dao.deleteAllByUserId(userId)
 }

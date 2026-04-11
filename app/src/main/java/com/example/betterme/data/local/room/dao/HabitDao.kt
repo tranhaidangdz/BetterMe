@@ -36,4 +36,10 @@ interface HabitDao {
 
     @Query("SELECT * FROM habits WHERE category_id = :categoryId")
     fun getHabitsByCategory(categoryId: Int): Flow<List<HabitEntity>>
+
+    @Query("SELECT COUNT(*) FROM habits WHERE category_id = :categoryId")
+    suspend fun getHabitCountByCategory(categoryId: Int): Int
+
+    @Query("DELETE FROM habits WHERE user_id = :userId")
+    suspend fun deleteAllByUserId(userId: String)
 }

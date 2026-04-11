@@ -16,4 +16,8 @@ interface HabitRepository {
     suspend fun deleteHabit(habit: HabitEntity)
 
     suspend fun deleteHabitById(id: Int)
+
+    suspend fun getHabitCountByCategory(categoryId: Int): Int
+
+    suspend fun deleteAllByUserId(userId: String)
 }

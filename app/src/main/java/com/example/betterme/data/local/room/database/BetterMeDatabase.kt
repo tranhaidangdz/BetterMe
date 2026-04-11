@@ -39,7 +39,7 @@ import com.example.betterme.data.local.room.entities.UserEntity
         UserAchievementEntity::class,
         AIChatEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

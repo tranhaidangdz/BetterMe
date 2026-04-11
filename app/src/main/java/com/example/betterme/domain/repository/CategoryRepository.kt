@@ -22,4 +22,7 @@ interface CategoryRepository {
 
     /** Xóa toàn bộ trạng thái chọn (dùng khi reset) */
     suspend fun clearAllSelections()
+
+    /** Lấy danh sách categories đã được chọn */
+    fun getSelectedCategories(): Flow<List<CategoryEntity>>
 }

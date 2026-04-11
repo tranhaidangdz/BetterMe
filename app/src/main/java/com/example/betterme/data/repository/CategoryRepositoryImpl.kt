@@ -30,4 +30,7 @@ class CategoryRepositoryImpl(
 
     override suspend fun clearAllSelections() =
         dao.clearAllSelections()
+
+    override fun getSelectedCategories() =
+        dao.getSelectedCategories()
 }

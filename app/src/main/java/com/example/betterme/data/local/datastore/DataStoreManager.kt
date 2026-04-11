@@ -14,4 +14,6 @@ interface DataStoreManager {
     fun getCurrentUserId(): Flow<String?>
     suspend fun setHasSelectedHabits()
     fun hasSelectedHabits(): Flow<Boolean>
+    suspend fun updateUserName(name: String)
+    suspend fun updateUserPhotoUrl(photoUrl: String)
 }

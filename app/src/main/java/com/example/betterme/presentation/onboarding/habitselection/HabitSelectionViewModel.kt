@@ -87,6 +87,8 @@ class HabitSelectionViewModel(
 
     private fun continueFlow() {
         viewModelScope.launch {
+            // Lưu trạng thái chọn vào DB trước khi navigate
+            repository.saveSelections(selectedIds)
             _event.emit(
                 HabitSelectionEvent.NavigateNext(selectedIds.toSet())
             )

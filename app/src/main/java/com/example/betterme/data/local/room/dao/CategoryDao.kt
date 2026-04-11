@@ -35,4 +35,7 @@ interface CategoryDao {
 
     @Query("UPDATE categories SET isSelected = 0")
     suspend fun clearAllSelections()
+
+    @Query("SELECT * FROM categories WHERE isSelected = 1")
+    fun getSelectedCategories(): Flow<List<CategoryEntity>>
 }
