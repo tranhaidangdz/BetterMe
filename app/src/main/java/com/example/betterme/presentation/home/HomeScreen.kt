@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
@@ -226,16 +227,30 @@ fun HomeContent(
 
 @Composable
 fun SectionHeader(title: String, count: Int, modifier: Modifier = Modifier) {
-    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = title,
-            style = BetterMeTypography.Title.Medium.Bold,
-            color = BetterMeColors.Primary.Primary
-        )
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+
+        // 🔹 Nút xanh (title)
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(BetterMeColors.Primary.Primary)
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+        ) {
+            Text(
+                text = title,
+                style = BetterMeTypography.Title.Medium.Bold,
+                color = BetterMeColors.White
+            )
+        }
         Spacer(modifier = Modifier.width(8.dp))
         Box(
-            modifier = Modifier.size(24.dp).clip(CircleShape)
-                .background(BetterMeColors.Primary.Primary),
+            modifier = Modifier
+                .clip(RoundedCornerShape(50)) // badge tròn
+                .background(BetterMeColors.Primary.Primary.copy(0.5f))
+                .padding(horizontal = 10.dp, vertical = 4.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
