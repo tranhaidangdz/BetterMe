@@ -10,6 +10,7 @@ import com.example.betterme.presentation.home.model.HomeProgress
 import com.example.betterme.presentation.theme.BetterMeColors
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 class HomeViewModel(
     private val dataStoreManager: DataStoreManager,
@@ -47,6 +48,7 @@ class HomeViewModel(
             val selectedCategories = categoryRepository.getSelectedCategories().first()
             val allCategories = categoryRepository.getAll().first()
             val colors = BetterMeColors.ListColors.list
+            val randomizedColors = colors.shuffled()
 
             // 3. Build category groups với habit count thực
             val categoryGroups = selectedCategories.mapIndexed { index, category ->
@@ -56,7 +58,9 @@ class HomeViewModel(
                     categoryName = category.name.uppercase(),
                     categoryIcon = category.icon,
                     habitCount = habitCount,
-                    color = colors[index % colors.size]
+                    color = randomizedColors.getOrElse(index) {
+                        colors[Random.nextInt(colors.size)]
+                    }
                 )
             }
 

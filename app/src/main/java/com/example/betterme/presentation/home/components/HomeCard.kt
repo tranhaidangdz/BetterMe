@@ -1,6 +1,7 @@
 package com.example.betterme.presentation.home.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,11 +22,19 @@ fun HomeCard(
     group: HomeCategoryGroup,
     modifier: Modifier = Modifier
 ) {
+    val cardBackground = group.color.copy(alpha = 0.20f)
+    val cardBorder = group.color.copy(alpha = 0.45f)
+
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(BetterMeColors.BackGround.BackgroundSecondary)
+            .background(cardBackground)
+            .border(
+                width = 1.dp,
+                color = cardBorder,
+                shape = RoundedCornerShape(16.dp)
+            )
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
