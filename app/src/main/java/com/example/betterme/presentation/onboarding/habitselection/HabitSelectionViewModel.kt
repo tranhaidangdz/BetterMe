@@ -86,6 +86,10 @@ class HabitSelectionViewModel(
     }
 
     private fun continueFlow() {
+        if (selectedIds.isEmpty()) {
+            emitError("Vui lòng chọn ít nhất 1 nhóm thói quen")
+            return
+        }
         viewModelScope.launch {
             // Lưu trạng thái chọn vào DB trước khi navigate
             repository.saveSelections(selectedIds)

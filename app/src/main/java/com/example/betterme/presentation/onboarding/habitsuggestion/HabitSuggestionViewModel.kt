@@ -6,6 +6,7 @@ import com.example.betterme.data.local.datastore.DataStoreManager
 import com.example.betterme.data.local.fake.fakeHabitGroups
 import com.example.betterme.data.local.room.entities.HabitEntity
 import com.example.betterme.data.local.room.entities.ReminderEntity
+import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.domain.repository.ReminderRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -20,6 +21,7 @@ import kotlinx.coroutines.launch
 class HabitSuggestionViewModel(
     private val selectedCategoryIds: List<Int>,
     private val dataStoreManager: DataStoreManager,
+    private val categoryRepository: CategoryRepository,
     private val habitRepository: HabitRepository,
     private val reminderRepository: ReminderRepository,
 ) : ViewModel() {
@@ -52,26 +54,35 @@ class HabitSuggestionViewModel(
     }
 
     private fun loadSuggestedHabits() {
-        val allGroups = fakeHabitGroups()
-        val filteredGroups = allGroups.filter { it.categoryId in selectedCategoryIds }
+        viewModelScope.launch {
+            val selectedCategories = categoryRepository.getAll().first()
+                .filter { it.id in selectedCategoryIds }
+            val selectedCategoryNameToId = selectedCategories.associate { it.name to it.id }
 
-        var globalId = 1
-        val categoryWithHabits = filteredGroups.map { group ->
-            CategoryWithHabits(
-                categoryName = group.categoryName,
-                categoryIcon = group.categoryIcon,
-                categoryId = group.categoryId,
-                habits = group.habits.map { title ->
-                    SuggestedHabitUiModel(
-                        id = globalId++,
-                        title = title,
-                        isChecked = false // Mặc định KHÔNG tích
-                    )
-                }
-            )
+            val allGroups = fakeHabitGroups()
+            val filteredGroups = allGroups.filter { group ->
+                selectedCategoryNameToId.containsKey(group.categoryName)
+            }
+
+            var globalId = 1
+            val categoryWithHabits = filteredGroups.mapNotNull { group ->
+                val realCategoryId = selectedCategoryNameToId[group.categoryName] ?: return@mapNotNull null
+                CategoryWithHabits(
+                    categoryName = group.categoryName,
+                    categoryIcon = group.categoryIcon,
+                    categoryId = realCategoryId,
+                    habits = group.habits.map { title ->
+                        SuggestedHabitUiModel(
+                            id = globalId++,
+                            title = title,
+                            isChecked = false // Mặc định KHÔNG tích
+                        )
+                    }
+                )
+            }
+
+            _state.update { it.copy(categoryHabits = categoryWithHabits) }
         }
-
-        _state.update { it.copy(categoryHabits = categoryWithHabits) }
     }
 
     private fun toggleHabit(id: Int) {

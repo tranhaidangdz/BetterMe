@@ -45,6 +45,7 @@ class HomeViewModel(
 
             // 2. Lấy selected categories từ DB
             val selectedCategories = categoryRepository.getSelectedCategories().first()
+            val allCategories = categoryRepository.getAll().first()
             val colors = BetterMeColors.ListColors.list
 
             // 3. Build category groups với habit count thực
@@ -67,16 +68,14 @@ class HomeViewModel(
             }
 
             val cantMissList = habits.mapNotNull { habit ->
-                val category = selectedCategories.find { it.id == habit.category_id }
-                if (category != null) {
-                    CantMiss(
-                        categoryId = category.id,
-                        categoryName = category.name,
-                        categoryIcon = category.icon,
-                        habitTitle = habit.title,
-                        progress = 0 // Sẽ tính sau khi có HabitLog tracking
-                    )
-                } else null
+                val category = allCategories.find { it.id == habit.category_id }
+                CantMiss(
+                    categoryId = category?.id ?: -1,
+                    categoryName = category?.name ?: "Khác",
+                    categoryIcon = category?.icon ?: "📝",
+                    habitTitle = habit.title,
+                    progress = 0 // Sẽ tính sau khi có HabitLog tracking
+                )
             }
 
             // 5. Tính progress
