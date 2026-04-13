@@ -22,8 +22,8 @@ fun HomeCard(
     group: HomeCategoryGroup,
     modifier: Modifier = Modifier
 ) {
-    val cardBackground = group.color.copy(alpha = 0.20f)
-    val cardBorder = group.color.copy(alpha = 0.45f)
+    val cardBackground = group.color.copy(alpha = 0.12f)
+    val cardBorder = group.color.copy(alpha = 0.30f)
 
     Row(
         modifier = modifier
