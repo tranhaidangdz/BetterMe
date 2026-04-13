@@ -7,7 +7,7 @@ enum class MainTab(
     val iconRes: Int
 ) {
     HOME("Trang chủ", R.drawable.ic_home),
-    HABITS("Nhóm", R.drawable.ic_habits),
+    HABITS("Nhiệm vụ", R.drawable.ic_habits),
     ADD("Thêm", R.drawable.ic_add),
     AI_CHAT("AI Chat", R.drawable.ic_ai_chat),
     STATS("Thống kê", R.drawable.ic_stats);
