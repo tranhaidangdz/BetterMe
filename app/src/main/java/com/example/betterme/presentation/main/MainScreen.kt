@@ -8,6 +8,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.example.betterme.presentation.dailyhabits.DailyHabitsScreen
 import com.example.betterme.presentation.home.HomeScreen
 import com.example.betterme.presentation.main.components.BottomNavBar
 import com.example.betterme.presentation.main.model.MainTab
@@ -26,7 +27,7 @@ fun MainScreen(
         // Content area
         when (state.selectedTab) {
             MainTab.HOME -> HomeScreen()
-            MainTab.HABITS -> PlaceholderTab("📋 Nhóm thói quen")
+            MainTab.HABITS -> DailyHabitsScreen()
             MainTab.ADD -> PlaceholderTab("➕ Thêm thói quen")
             MainTab.AI_CHAT -> PlaceholderTab("🤖 AI Chat")
             MainTab.STATS -> PlaceholderTab("📊 Thống kê")
