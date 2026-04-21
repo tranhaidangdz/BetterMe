@@ -9,9 +9,12 @@ import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.presentation.home.model.CantMiss
 import com.example.betterme.presentation.home.model.HomeProgress
 import com.example.betterme.presentation.theme.BetterMeColors
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
-import kotlin.random.Random
+import java.util.Random
 
 class HomeViewModel(
     private val dataStoreManager: DataStoreManager,
@@ -21,6 +24,9 @@ class HomeViewModel(
 ) : BaseMviViewModel<HomeIntent, HomeState, HomeEvent>() {
 
     override fun initState(): HomeState = HomeState()
+
+    // Job để cancel collector cũ khi loadData được gọi lại
+    private var dataJob: Job? = null
 
     init {
         processIntent(HomeIntent.LoadData)
@@ -37,75 +43,98 @@ class HomeViewModel(
         }
     }
 
+    // ============================================================
+    // LOAD DATA — Reactive, per-user
+    // Dùng combine() để tự động cập nhật khi habit thay đổi
+    // (ví dụ: sau khi AddHabitScreen thêm habit mới)
+    // ============================================================
     private fun loadData() {
-        viewModelScope.launch {
+        dataJob?.cancel() // Hủy collector cũ nếu có
+        dataJob = viewModelScope.launch {
             updateState { copy(isLoading = true) }
 
-            // 1. Lấy user info từ DataStore
+            // 1. Lấy user info (one-shot, ổn định)
             val user = dataStoreManager.getUserInfo().first()
             val userName = user?.name ?: "Guest"
             val userPhotoUrl = user?.photoUrl ?: ""
             val userId = user?.id ?: dataStoreManager.getCurrentUserId().first() ?: ""
 
-            // 2. Lấy selected categories từ DB
-            val selectedCategories = categoryRepository.getSelectedCategories().first()
-            val allCategories = categoryRepository.getAll().first()
+            if (userId.isBlank()) {
+                updateState {
+                    copy(isLoading = false, userName = userName, userPhotoUrl = userPhotoUrl)
+                }
+                return@launch
+            }
+
+            // 2. Dùng màu nhất quán theo userId (không random mỗi lần reload)
+            val colorSeed = userId.hashCode().toLong()
             val colors = BetterMeColors.ListColors.list
-            val randomizedColors = colors.shuffled()
+            val userColors = colors.shuffled(Random(colorSeed))
 
-            // 3. Build category groups với habit count thực
-            val categoryGroups = selectedCategories.mapIndexed { index, category ->
-                val habitCount = habitRepository.getHabitCountByCategory(category.id)
-                HomeCategoryGroup(
-                    categoryId = category.id,
-                    categoryName = category.name.uppercase(),
-                    categoryIcon = category.icon,
-                    habitCount = habitCount,
-                    color = randomizedColors.getOrElse(index) {
-                        colors[Random.nextInt(colors.size)]
-                    }
+            // 3. Combine 2 reactive flows → tự động recompose khi DB thay đổi
+            combine(
+                habitRepository.getHabits(userId),    // Flow: thay đổi khi add/delete habit
+                categoryRepository.getAll()            // Flow: thay đổi khi add/delete category
+            ) { habits, allCategories ->
+
+                // ===== Category Groups =====
+                // Lấy các category ID duy nhất từ HABITS của user này
+                // → Automatically per-user, không phụ thuộc vào isSelected global
+                val userCategoryIds = habits
+                    .mapNotNull { it.category_id }
+                    .distinct()
+
+                val categoryGroups = userCategoryIds.mapIndexedNotNull { index, categoryId ->
+                    val category = allCategories.find { it.id == categoryId }
+                        ?: return@mapIndexedNotNull null
+                    val habitCount = habits.count { it.category_id == categoryId }
+                    HomeCategoryGroup(
+                        categoryId = category.id,
+                        categoryName = category.name.uppercase(),
+                        categoryIcon = category.icon,
+                        habitCount = habitCount,
+                        color = userColors.getOrElse(index) { colors[index % colors.size] }
+                    )
+                }
+
+                // ===== Cant Miss List (Đang thực hiện) =====
+                val cantMissList = habits.mapNotNull { habit ->
+                    val category = allCategories.find { it.id == habit.category_id }
+                    CantMiss(
+                        categoryId = category?.id ?: -1,
+                        categoryName = category?.name ?: "Khác",
+                        categoryIcon = category?.icon ?: "📝",
+                        habitTitle = habit.title,
+                        progress = 0 // TODO: tính từ HabitLog
+                    )
+                }
+
+                // ===== Progress =====
+                val progress = HomeProgress(
+                    totalHabits = habits.size,
+                    completedHabits = 0, // TODO: tính từ HabitLog
+                    percentage = 0
                 )
-            }
 
-            // 4. Build "Đang thực hiện" list từ habits thực
-            val habits = if (userId.isNotBlank()) {
-                habitRepository.getHabits(userId).first()
-            } else {
-                emptyList()
-            }
-
-            val cantMissList = habits.mapNotNull { habit ->
-                val category = allCategories.find { it.id == habit.category_id }
-                CantMiss(
-                    categoryId = category?.id ?: -1,
-                    categoryName = category?.name ?: "Khác",
-                    categoryIcon = category?.icon ?: "📝",
-                    habitTitle = habit.title,
-                    progress = 0 // Sẽ tính sau khi có HabitLog tracking
-                )
-            }
-
-            // 5. Tính progress
-            val totalHabits = habits.size
-            val progress = HomeProgress(
-                totalHabits = totalHabits,
-                completedHabits = 0, // Sẽ tính sau khi có HabitLog tracking
-                percentage = 0
-            )
-
-            updateState {
-                copy(
-                    isLoading = false,
-                    userName = userName,
-                    userPhotoUrl = userPhotoUrl,
-                    progress = progress,
-                    cantMissList = cantMissList,
-                    categoryGroups = categoryGroups
-                )
+                Triple(categoryGroups, cantMissList, progress)
+            }.collect { (categoryGroups, cantMissList, progress) ->
+                updateState {
+                    copy(
+                        isLoading = false,
+                        userName = userName,
+                        userPhotoUrl = userPhotoUrl,
+                        progress = progress,
+                        cantMissList = cantMissList,
+                        categoryGroups = categoryGroups
+                    )
+                }
             }
         }
     }
 
+    // ============================================================
+    // UPDATE PROFILE
+    // ============================================================
     private fun updateUserName(name: String) {
         viewModelScope.launch {
             dataStoreManager.updateUserName(name)
@@ -120,6 +149,9 @@ class HomeViewModel(
         }
     }
 
+    // ============================================================
+    // LOGOUT
+    // ============================================================
     private fun logout() {
         viewModelScope.launch {
             try {
