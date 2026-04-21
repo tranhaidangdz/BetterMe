@@ -3,7 +3,7 @@ package com.example.betterme.presentation.onboarding.habitsuggestion
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.betterme.data.local.datastore.DataStoreManager
-import com.example.betterme.data.local.fake.fakeHabitGroups
+import com.example.betterme.data.local.fake.getPersonalizedHabitGroups
 import com.example.betterme.data.local.room.entities.HabitEntity
 import com.example.betterme.data.local.room.entities.ReminderEntity
 import com.example.betterme.domain.repository.CategoryRepository
@@ -47,20 +47,33 @@ class HabitSuggestionViewModel(
             HabitSuggestionIntent.DismissReminderPicker -> dismissReminderPicker()
             is HabitSuggestionIntent.ShowRepeatPicker -> showRepeatPicker(intent.habitId)
             HabitSuggestionIntent.DismissRepeatPicker -> dismissRepeatPicker()
+            is HabitSuggestionIntent.ShowStartDatePicker -> showStartDatePicker(intent.habitId)
+            is HabitSuggestionIntent.ShowEndDatePicker -> showEndDatePicker(intent.habitId)
+            is HabitSuggestionIntent.SetStartDate -> setStartDate(intent.habitId, intent.millis)
+            is HabitSuggestionIntent.SetEndDate -> setEndDate(intent.habitId, intent.millis)
+            HabitSuggestionIntent.DismissDatePicker -> dismissDatePicker()
             is HabitSuggestionIntent.ConfirmHabitSettings -> confirmHabitSettings(intent.habitId)
             is HabitSuggestionIntent.DismissHabitSettings -> dismissHabitSettings(intent.habitId)
             HabitSuggestionIntent.StartJourney -> startJourney()
         }
     }
 
+    // ============================================================
+    // LOAD — Personalized habits dựa vào userId
+    // ============================================================
     private fun loadSuggestedHabits() {
         viewModelScope.launch {
+            // Lấy userId để làm seed cho personalization
+            val userId = dataStoreManager.getCurrentUserId().first() ?: "default_user"
+
             val selectedCategories = categoryRepository.getAll().first()
                 .filter { it.id in selectedCategoryIds }
             val selectedCategoryNameToId = selectedCategories.associate { it.name to it.id }
 
-            val allGroups = fakeHabitGroups()
-            val filteredGroups = allGroups.filter { group ->
+            // Lấy danh sách thói quen đã được personalize theo userId
+            val personalizedGroups = getPersonalizedHabitGroups(userId)
+
+            val filteredGroups = personalizedGroups.filter { group ->
                 selectedCategoryNameToId.containsKey(group.categoryName)
             }
 
@@ -85,21 +98,17 @@ class HabitSuggestionViewModel(
         }
     }
 
+    // ============================================================
+    // TOGGLE
+    // ============================================================
     private fun toggleHabit(id: Int) {
         val habit = _state.value.categoryHabits.flatMap { it.habits }.find { it.id == id } ?: return
 
         if (!habit.isChecked) {
-            // Chưa tích → tích + hiện dialog chỉnh sửa reminder/repeat
+            // Chưa tích → tích + hiện dialog chỉnh sửa reminder/repeat/date
             _state.update { current ->
                 current.copy(
-                    categoryHabits = current.categoryHabits.map { category ->
-                        category.copy(
-                            habits = category.habits.map { h ->
-                                if (h.id == id) h.copy(isChecked = true)
-                                else h
-                            }
-                        )
-                    },
+                    categoryHabits = current.updateHabit(id) { it.copy(isChecked = true) },
                     editingHabitId = id
                 )
             }
@@ -107,48 +116,23 @@ class HabitSuggestionViewModel(
             // Đã tích → bỏ tích
             _state.update { current ->
                 current.copy(
-                    categoryHabits = current.categoryHabits.map { category ->
-                        category.copy(
-                            habits = category.habits.map { h ->
-                                if (h.id == id) h.copy(isChecked = false)
-                                else h
-                            }
-                        )
-                    },
+                    categoryHabits = current.updateHabit(id) { it.copy(isChecked = false) },
                     editingHabitId = null
                 )
             }
         }
     }
 
+    // ============================================================
+    // REMINDER
+    // ============================================================
     private fun setReminderTime(habitId: Int, hour: Int, minute: Int) {
         _state.update { current ->
             current.copy(
-                categoryHabits = current.categoryHabits.map { category ->
-                    category.copy(
-                        habits = category.habits.map { h ->
-                            if (h.id == habitId) h.copy(reminderHour = hour, reminderMinute = minute)
-                            else h
-                        }
-                    )
+                categoryHabits = current.updateHabit(habitId) {
+                    it.copy(reminderHour = hour, reminderMinute = minute)
                 },
                 showReminderPicker = false
-            )
-        }
-    }
-
-    private fun setRepeat(habitId: Int, label: String) {
-        _state.update { current ->
-            current.copy(
-                categoryHabits = current.categoryHabits.map { category ->
-                    category.copy(
-                        habits = category.habits.map { h ->
-                            if (h.id == habitId) h.copy(repeatLabel = label)
-                            else h
-                        }
-                    )
-                },
-                showRepeatPicker = false
             )
         }
     }
@@ -161,6 +145,18 @@ class HabitSuggestionViewModel(
         _state.update { it.copy(showReminderPicker = false) }
     }
 
+    // ============================================================
+    // REPEAT
+    // ============================================================
+    private fun setRepeat(habitId: Int, label: String) {
+        _state.update { current ->
+            current.copy(
+                categoryHabits = current.updateHabit(habitId) { it.copy(repeatLabel = label) },
+                showRepeatPicker = false
+            )
+        }
+    }
+
     private fun showRepeatPicker(habitId: Int) {
         _state.update { it.copy(showRepeatPicker = true, editingHabitId = habitId) }
     }
@@ -169,8 +165,43 @@ class HabitSuggestionViewModel(
         _state.update { it.copy(showRepeatPicker = false) }
     }
 
+    // ============================================================
+    // DATE PICKER
+    // ============================================================
+    private fun showStartDatePicker(habitId: Int) {
+        _state.update { it.copy(showStartDatePicker = true, editingHabitId = habitId) }
+    }
+
+    private fun showEndDatePicker(habitId: Int) {
+        _state.update { it.copy(showEndDatePicker = true, editingHabitId = habitId) }
+    }
+
+    private fun setStartDate(habitId: Int, millis: Long) {
+        _state.update { current ->
+            current.copy(
+                categoryHabits = current.updateHabit(habitId) { it.copy(startDateMillis = millis) },
+                showStartDatePicker = false
+            )
+        }
+    }
+
+    private fun setEndDate(habitId: Int, millis: Long) {
+        _state.update { current ->
+            current.copy(
+                categoryHabits = current.updateHabit(habitId) { it.copy(endDateMillis = millis) },
+                showEndDatePicker = false
+            )
+        }
+    }
+
+    private fun dismissDatePicker() {
+        _state.update { it.copy(showStartDatePicker = false, showEndDatePicker = false) }
+    }
+
+    // ============================================================
+    // CONFIRM / DISMISS DIALOG
+    // ============================================================
     private fun confirmHabitSettings(habitId: Int) {
-        // Đóng dialog settings, giữ habit đã checked với settings hiện tại
         _state.update { it.copy(editingHabitId = null) }
     }
 
@@ -178,19 +209,15 @@ class HabitSuggestionViewModel(
         // Bỏ tích habit nếu user huỷ dialog settings
         _state.update { current ->
             current.copy(
-                categoryHabits = current.categoryHabits.map { category ->
-                    category.copy(
-                        habits = category.habits.map { h ->
-                            if (h.id == habitId) h.copy(isChecked = false)
-                            else h
-                        }
-                    )
-                },
+                categoryHabits = current.updateHabit(habitId) { it.copy(isChecked = false) },
                 editingHabitId = null
             )
         }
     }
 
+    // ============================================================
+    // START JOURNEY — Lưu habit thực vào DB
+    // ============================================================
     private fun startJourney() {
         val checkedCount = _state.value.selectedHabitCount
         if (checkedCount == 0) {
@@ -215,21 +242,21 @@ class HabitSuggestionViewModel(
                     category.habits
                         .filter { it.isChecked }
                         .forEach { habit ->
-                            // Lưu habit vào DB
+                            // Lưu habit — dùng startDate/endDate người dùng đã chọn
                             val habitEntity = HabitEntity(
                                 user_id = userId,
                                 category_id = category.categoryId,
                                 title = habit.title,
                                 description = null,
-                                start_date = now,
-                                end_date = null,
+                                start_date = habit.startDateMillis,
+                                end_date = habit.endDateMillis,
                                 reminder_time = habit.reminderTimeFormatted,
                                 reminder_repeat = habit.repeatLabel,
                                 created_at = now
                             )
                             val habitId = habitRepository.addHabit(habitEntity)
 
-                            // Lưu reminder vào DB
+                            // Lưu reminder
                             val reminderEntity = ReminderEntity(
                                 habit_id = habitId.toInt(),
                                 time = habit.reminderTimeFormatted,
@@ -248,6 +275,22 @@ class HabitSuggestionViewModel(
             } finally {
                 _state.update { it.copy(isLoading = false) }
             }
+        }
+    }
+
+    // ============================================================
+    // HELPER — Cập nhật habit trong nested list
+    // ============================================================
+    private fun HabitSuggestionState.updateHabit(
+        habitId: Int,
+        transform: (SuggestedHabitUiModel) -> SuggestedHabitUiModel
+    ): List<CategoryWithHabits> {
+        return categoryHabits.map { category ->
+            category.copy(
+                habits = category.habits.map { h ->
+                    if (h.id == habitId) transform(h) else h
+                }
+            )
         }
     }
 }
