@@ -6,9 +6,11 @@ import com.example.betterme.data.local.datastore.DataStoreManager
 import com.example.betterme.data.local.fake.fakeHabitGroups
 import com.example.betterme.data.local.room.entities.HabitEntity
 import com.example.betterme.data.local.room.entities.ReminderEntity
+import com.example.betterme.data.local.room.entities.UserEntity
 import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.domain.repository.ReminderRepository
+import com.example.betterme.domain.repository.UserRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 class HabitSuggestionViewModel(
     private val selectedCategoryIds: List<Int>,
@@ -24,6 +27,7 @@ class HabitSuggestionViewModel(
     private val categoryRepository: CategoryRepository,
     private val habitRepository: HabitRepository,
     private val reminderRepository: ReminderRepository,
+    private val userRepository: UserRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HabitSuggestionState())
@@ -43,6 +47,8 @@ class HabitSuggestionViewModel(
             is HabitSuggestionIntent.ToggleHabit -> toggleHabit(intent.id)
             is HabitSuggestionIntent.SetReminderTime -> setReminderTime(intent.habitId, intent.hour, intent.minute)
             is HabitSuggestionIntent.SetRepeat -> setRepeat(intent.habitId, intent.label)
+            is HabitSuggestionIntent.SetStartDate -> setStartDate(intent.habitId, intent.dateMillis)
+            is HabitSuggestionIntent.SetEndDate -> setEndDate(intent.habitId, intent.dateMillis)
             is HabitSuggestionIntent.ShowReminderPicker -> showReminderPicker(intent.habitId)
             HabitSuggestionIntent.DismissReminderPicker -> dismissReminderPicker()
             is HabitSuggestionIntent.ShowRepeatPicker -> showRepeatPicker(intent.habitId)
@@ -55,23 +61,24 @@ class HabitSuggestionViewModel(
 
     private fun loadSuggestedHabits() {
         viewModelScope.launch {
-            val selectedCategories = categoryRepository.getAll().first()
+            val userId = dataStoreManager.getCurrentUserId().first().orEmpty()
+            val selectedCategoriesById = categoryRepository.getAll().first()
                 .filter { it.id in selectedCategoryIds }
-            val selectedCategoryNameToId = selectedCategories.associate { it.name to it.id }
+                .associateBy { it.id }
 
             val allGroups = fakeHabitGroups()
-            val filteredGroups = allGroups.filter { group ->
-                selectedCategoryNameToId.containsKey(group.categoryName)
-            }
+            val filteredGroups = allGroups.filter { group -> selectedCategoriesById.containsKey(group.categoryId) }
 
             var globalId = 1
             val categoryWithHabits = filteredGroups.mapNotNull { group ->
-                val realCategoryId = selectedCategoryNameToId[group.categoryName] ?: return@mapNotNull null
+                val selectedCategory = selectedCategoriesById[group.categoryId] ?: return@mapNotNull null
+                val personalizedHabits = group.habits
+                    .personalizedPick(userId = userId, categoryId = group.categoryId, maxItems = 5)
                 CategoryWithHabits(
-                    categoryName = group.categoryName,
-                    categoryIcon = group.categoryIcon,
-                    categoryId = realCategoryId,
-                    habits = group.habits.map { title ->
+                    categoryName = selectedCategory.name,
+                    categoryIcon = selectedCategory.icon,
+                    categoryId = selectedCategory.id,
+                    habits = personalizedHabits.map { title ->
                         SuggestedHabitUiModel(
                             id = globalId++,
                             title = title,
@@ -83,6 +90,14 @@ class HabitSuggestionViewModel(
 
             _state.update { it.copy(categoryHabits = categoryWithHabits) }
         }
+    }
+
+    private fun List<String>.personalizedPick(userId: String, categoryId: Int, maxItems: Int): List<String> {
+        if (isEmpty()) return emptyList()
+        val seed = "$userId-$categoryId".hashCode()
+        return this
+            .shuffled(Random(seed))
+            .take(maxItems.coerceAtMost(this.size))
     }
 
     private fun toggleHabit(id: Int) {
@@ -153,6 +168,46 @@ class HabitSuggestionViewModel(
         }
     }
 
+    private fun setStartDate(habitId: Int, dateMillis: Long) {
+        _state.update { current ->
+            current.copy(
+                categoryHabits = current.categoryHabits.map { category ->
+                    category.copy(
+                        habits = category.habits.map { h ->
+                            if (h.id == habitId) {
+                                h.copy(
+                                    startDate = dateMillis,
+                                    endDate = h.endDate?.takeIf { it >= dateMillis }
+                                )
+                            } else h
+                        }
+                    )
+                }
+            )
+        }
+    }
+
+    private fun setEndDate(habitId: Int, dateMillis: Long?) {
+        val habit = _state.value.categoryHabits.flatMap { it.habits }.find { it.id == habitId } ?: return
+        if (dateMillis != null && dateMillis < habit.startDate) {
+            viewModelScope.launch {
+                _event.emit(HabitSuggestionEvent.ShowError("Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu"))
+            }
+            return
+        }
+        _state.update { current ->
+            current.copy(
+                categoryHabits = current.categoryHabits.map { category ->
+                    category.copy(
+                        habits = category.habits.map { h ->
+                            if (h.id == habitId) h.copy(endDate = dateMillis) else h
+                        }
+                    )
+                }
+            )
+        }
+    }
+
     private fun showReminderPicker(habitId: Int) {
         _state.update { it.copy(showReminderPicker = true, editingHabitId = habitId) }
     }
@@ -170,6 +225,17 @@ class HabitSuggestionViewModel(
     }
 
     private fun confirmHabitSettings(habitId: Int) {
+        val habit = _state.value.categoryHabits
+            .flatMap { it.habits }
+            .find { it.id == habitId } ?: return
+
+        if (habit.endDate == null) {
+            viewModelScope.launch {
+                _event.emit(HabitSuggestionEvent.ShowError("Bạn chưa chọn ngày kết thúc cho thói quen này"))
+            }
+            return
+        }
+
         // Đóng dialog settings, giữ habit đã checked với settings hiện tại
         _state.update { it.copy(editingHabitId = null) }
     }
@@ -200,6 +266,22 @@ class HabitSuggestionViewModel(
             return
         }
 
+        val selectedHabitWithoutEndDate = _state.value.categoryHabits
+            .flatMap { it.habits }
+            .firstOrNull { it.isChecked && it.endDate == null }
+
+        if (selectedHabitWithoutEndDate != null) {
+            _state.update { it.copy(editingHabitId = selectedHabitWithoutEndDate.id) }
+            viewModelScope.launch {
+                _event.emit(
+                    HabitSuggestionEvent.ShowError(
+                        "Thói quen \"${selectedHabitWithoutEndDate.title}\" chưa có ngày kết thúc"
+                    )
+                )
+            }
+            return
+        }
+
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
             try {
@@ -209,7 +291,19 @@ class HabitSuggestionViewModel(
                     return@launch
                 }
 
-                val now = System.currentTimeMillis()
+                // Ensure local user exists to avoid FK error when inserting habits.
+                if (userRepository.getUserById(userId) == null) {
+                    val userInfo = dataStoreManager.getUserInfo().first()
+                    userRepository.insertUser(
+                        UserEntity(
+                            id = userId,
+                            name = userInfo?.name.orEmpty().ifBlank { "User" },
+                            email = userInfo?.email.orEmpty(),
+                            photoUrl = userInfo?.photoUrl.orEmpty(),
+                            created_at = System.currentTimeMillis()
+                        )
+                    )
+                }
 
                 _state.value.categoryHabits.forEach { category ->
                     category.habits
@@ -221,9 +315,10 @@ class HabitSuggestionViewModel(
                                 category_id = category.categoryId,
                                 title = habit.title,
                                 description = null,
-                                start_date = now,
+                                start_date = habit.startDate,
+                                end_date = habit.endDate,
                                 reminder_time = habit.reminderTimeFormatted,
-                                created_at = now
+                                created_at = System.currentTimeMillis()
                             )
                             val habitId = habitRepository.addHabit(habitEntity)
 
@@ -241,7 +336,11 @@ class HabitSuggestionViewModel(
                 _event.emit(HabitSuggestionEvent.NavigateToMain)
             } catch (e: Exception) {
                 e.printStackTrace()
-                _event.emit(HabitSuggestionEvent.ShowError("Có lỗi xảy ra, vui lòng thử lại"))
+                _event.emit(
+                    HabitSuggestionEvent.ShowError(
+                        e.message ?: "Có lỗi xảy ra, vui lòng thử lại"
+                    )
+                )
             } finally {
                 _state.update { it.copy(isLoading = false) }
             }

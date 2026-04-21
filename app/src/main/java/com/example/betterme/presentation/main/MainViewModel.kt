@@ -9,6 +9,24 @@ class MainViewModel : BaseMviViewModel<MainIntent, MainState, MainEvent>() {
     override fun processIntent(intent: MainIntent) {
         when (intent) {
             is MainIntent.SelectTab -> updateState { copy(selectedTab = intent.tab) }
+            is MainIntent.OpenCategoryDetail -> {
+                updateState {
+                    copy(
+                        categoryDetailId = intent.categoryId,
+                        categoryDetailName = intent.categoryName,
+                        categoryDetailIcon = intent.categoryIcon
+                    )
+                }
+            }
+            MainIntent.CloseCategoryDetail -> {
+                updateState {
+                    copy(
+                        categoryDetailId = null,
+                        categoryDetailName = "",
+                        categoryDetailIcon = ""
+                    )
+                }
+            }
         }
     }
 }

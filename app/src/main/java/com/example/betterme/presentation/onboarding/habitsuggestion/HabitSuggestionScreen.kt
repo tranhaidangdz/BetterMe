@@ -28,10 +28,14 @@ import com.example.betterme.presentation.theme.BetterMeShapes
 import com.example.betterme.presentation.theme.BetterMeTypography
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 // =========================
 // SCREEN
 // =========================
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HabitSuggestionScreen(
     selectedCategoryIds: List<Int>,
@@ -42,6 +46,8 @@ fun HabitSuggestionScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    var showStartDatePicker by remember { mutableStateOf(false) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.event.collect { event ->
@@ -66,14 +72,76 @@ fun HabitSuggestionScreen(
 
     // === HABIT SETTINGS DIALOG ===
     val editingHabit = state.editingHabit
+    if (showStartDatePicker && editingHabit != null) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = editingHabit.startDate
+        )
+        DatePickerDialog(
+            onDismissRequest = { showStartDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let {
+                            viewModel.onIntent(HabitSuggestionIntent.SetStartDate(editingHabit.id, it))
+                        }
+                        showStartDatePicker = false
+                    }
+                ) {
+                    Text("Xác nhận", color = BetterMeColors.Primary.Primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStartDatePicker = false }) {
+                    Text("Hủy", color = BetterMeColors.Text.TextTertiary)
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    if (showEndDatePicker && editingHabit != null) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = editingHabit.endDate ?: editingHabit.startDate
+        )
+        DatePickerDialog(
+            onDismissRequest = { showEndDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.onIntent(
+                            HabitSuggestionIntent.SetEndDate(editingHabit.id, datePickerState.selectedDateMillis)
+                        )
+                        showEndDatePicker = false
+                    }
+                ) {
+                    Text("Xác nhận", color = BetterMeColors.Primary.Primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndDatePicker = false }) {
+                    Text("Hủy", color = BetterMeColors.Text.TextTertiary)
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
     if (editingHabit != null && !state.showReminderPicker && !state.showRepeatPicker) {
         HabitSettingsDialog(
             habit = editingHabit,
             repeatOptions = viewModel.repeatOptions,
             onSetReminder = { viewModel.onIntent(HabitSuggestionIntent.ShowReminderPicker(editingHabit.id)) },
             onSetRepeat = { viewModel.onIntent(HabitSuggestionIntent.ShowRepeatPicker(editingHabit.id)) },
+            onSetStartDate = { showStartDatePicker = true },
+            onSetEndDate = { showEndDatePicker = true },
             onConfirm = { viewModel.onIntent(HabitSuggestionIntent.ConfirmHabitSettings(editingHabit.id)) },
-            onDismiss = { viewModel.onIntent(HabitSuggestionIntent.DismissHabitSettings(editingHabit.id)) }
+            onDismiss = {
+                showStartDatePicker = false
+                showEndDatePicker = false
+                viewModel.onIntent(HabitSuggestionIntent.DismissHabitSettings(editingHabit.id))
+            }
         )
     }
 
@@ -297,7 +365,21 @@ fun HabitCheckItem(
                     style = BetterMeTypography.Body.Small.Medium,
                     color = BetterMeColors.Primary.Primary
                 )
+                Text(
+                    text = "📅 ${formatDate(habit.startDate)}",
+                    style = BetterMeTypography.Body.Small.Medium,
+                    color = BetterMeColors.Primary.Primary
+                )
             }
+
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "🏁 ${habit.endDate?.let(::formatDate) ?: "Chưa chọn ngày kết thúc"}",
+                style = BetterMeTypography.Body.Small.Medium,
+                color = if (habit.endDate != null) BetterMeColors.Primary.Primary
+                else BetterMeColors.Border.Wrong,
+                modifier = Modifier.padding(start = 36.dp)
+            )
         }
     }
 }
@@ -346,6 +428,8 @@ fun HabitSettingsDialog(
     repeatOptions: List<String>,
     onSetReminder: () -> Unit,
     onSetRepeat: () -> Unit,
+    onSetStartDate: () -> Unit,
+    onSetEndDate: () -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -383,6 +467,20 @@ fun HabitSettingsDialog(
                     value = habit.repeatLabel,
                     onClick = onSetRepeat
                 )
+
+                SettingRow(
+                    icon = "📅",
+                    label = "Ngày bắt đầu:",
+                    value = formatDate(habit.startDate),
+                    onClick = onSetStartDate
+                )
+
+                SettingRow(
+                    icon = "🏁",
+                    label = "Ngày kết thúc:",
+                    value = habit.endDate?.let { formatDate(it) } ?: "Chưa chọn",
+                    onClick = onSetEndDate
+                )
             }
         },
         confirmButton = {
@@ -406,6 +504,11 @@ fun HabitSettingsDialog(
         shape = BetterMeShapes.large,
         containerColor = BetterMeColors.BackGround.BackgroundPrimary
     )
+}
+
+private fun formatDate(dateMillis: Long): String {
+    val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+    return dateFormat.format(Date(dateMillis))
 }
 
 // =========================

@@ -30,6 +30,10 @@ sealed class HomeIntent : MviIntent {
     data object DismissEditProfile : HomeIntent()
     data class UpdateUserName(val name: String) : HomeIntent()
     data class UpdateUserPhoto(val photoUri: String) : HomeIntent()
+    data object Logout : HomeIntent()
 }
 
-sealed class HomeEvent : MviSingleEvent
+sealed class HomeEvent : MviSingleEvent {
+    data object NavigateToSignIn : HomeEvent()
+    data class ShowError(val message: String) : HomeEvent()
+}

@@ -13,7 +13,9 @@ data class SuggestedHabitUiModel(
     val isChecked: Boolean = false,
     val reminderHour: Int = 7,
     val reminderMinute: Int = 0,
-    val repeatLabel: String = "Hàng ngày"
+    val repeatLabel: String = "Hàng ngày",
+    val startDate: Long = System.currentTimeMillis(),
+    val endDate: Long? = null
 ) {
     val reminderTimeFormatted: String
         get() = String.format("%02d:%02d", reminderHour, reminderMinute)
@@ -51,6 +53,8 @@ sealed class HabitSuggestionIntent : MviIntent {
     data class ToggleHabit(val id: Int) : HabitSuggestionIntent()
     data class SetReminderTime(val habitId: Int, val hour: Int, val minute: Int) : HabitSuggestionIntent()
     data class SetRepeat(val habitId: Int, val label: String) : HabitSuggestionIntent()
+    data class SetStartDate(val habitId: Int, val dateMillis: Long) : HabitSuggestionIntent()
+    data class SetEndDate(val habitId: Int, val dateMillis: Long?) : HabitSuggestionIntent()
     data class ShowReminderPicker(val habitId: Int) : HabitSuggestionIntent()
     data object DismissReminderPicker : HabitSuggestionIntent()
     data class ShowRepeatPicker(val habitId: Int) : HabitSuggestionIntent()

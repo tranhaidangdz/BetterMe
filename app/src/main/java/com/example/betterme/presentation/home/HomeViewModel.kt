@@ -3,8 +3,11 @@ package com.example.betterme.presentation.home
 import androidx.lifecycle.viewModelScope
 import com.example.betterme.base.BaseMviViewModel
 import com.example.betterme.data.local.datastore.DataStoreManager
+import com.example.betterme.data.local.room.entities.UserEntity
+import com.example.betterme.data.provider.GoogleAuthClient
 import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitRepository
+import com.example.betterme.domain.repository.UserRepository
 import com.example.betterme.presentation.home.model.CantMiss
 import com.example.betterme.presentation.home.model.HomeProgress
 import com.example.betterme.presentation.theme.BetterMeColors
@@ -15,7 +18,9 @@ import kotlin.random.Random
 class HomeViewModel(
     private val dataStoreManager: DataStoreManager,
     private val categoryRepository: CategoryRepository,
-    private val habitRepository: HabitRepository
+    private val habitRepository: HabitRepository,
+    private val googleAuthClient: GoogleAuthClient,
+    private val userRepository: UserRepository
 ) : BaseMviViewModel<HomeIntent, HomeState, HomeEvent>() {
 
     override fun initState(): HomeState = HomeState()
@@ -31,6 +36,7 @@ class HomeViewModel(
             HomeIntent.DismissEditProfile -> updateState { copy(showEditProfileDialog = false) }
             is HomeIntent.UpdateUserName -> updateUserName(intent.name)
             is HomeIntent.UpdateUserPhoto -> updateUserPhoto(intent.photoUri)
+            HomeIntent.Logout -> logout()
         }
     }
 
@@ -106,6 +112,7 @@ class HomeViewModel(
     private fun updateUserName(name: String) {
         viewModelScope.launch {
             dataStoreManager.updateUserName(name)
+            persistProfileToLocalUserTable(updatedName = name)
             updateState { copy(userName = name, showEditProfileDialog = false) }
         }
     }
@@ -113,7 +120,51 @@ class HomeViewModel(
     private fun updateUserPhoto(photoUri: String) {
         viewModelScope.launch {
             dataStoreManager.updateUserPhotoUrl(photoUri)
+            persistProfileToLocalUserTable(updatedPhotoUrl = photoUri)
             updateState { copy(userPhotoUrl = photoUri) }
+        }
+    }
+
+    private suspend fun persistProfileToLocalUserTable(
+        updatedName: String? = null,
+        updatedPhotoUrl: String? = null
+    ) {
+        val userInfo = dataStoreManager.getUserInfo().first()
+        val userId = userInfo?.id ?: dataStoreManager.getCurrentUserId().first().orEmpty()
+        if (userId.isBlank()) return
+
+        val existingUser = userRepository.getUserById(userId)
+        val mergedName = updatedName ?: userInfo?.name.orEmpty().ifBlank { existingUser?.name ?: "User" }
+        val mergedPhoto = updatedPhotoUrl ?: userInfo?.photoUrl.orEmpty().ifBlank { existingUser?.photoUrl.orEmpty() }
+        val mergedEmail = userInfo?.email.orEmpty().ifBlank { existingUser?.email.orEmpty() }
+
+        val entity = UserEntity(
+            id = userId,
+            name = mergedName,
+            email = mergedEmail,
+            photoUrl = mergedPhoto,
+            created_at = existingUser?.created_at ?: System.currentTimeMillis()
+        )
+
+        userRepository.insertUser(entity)
+    }
+
+    private fun logout() {
+        viewModelScope.launch {
+            updateState { copy(isLoading = true) }
+            try {
+                googleAuthClient.signOut()
+                dataStoreManager.clearUserInfo()
+                sendEvent(HomeEvent.NavigateToSignIn)
+            } catch (e: Exception) {
+                sendEvent(
+                    HomeEvent.ShowError(
+                        e.message ?: "Đăng xuất thất bại, vui lòng thử lại"
+                    )
+                )
+            } finally {
+                updateState { copy(isLoading = false) }
+            }
         }
     }
 }

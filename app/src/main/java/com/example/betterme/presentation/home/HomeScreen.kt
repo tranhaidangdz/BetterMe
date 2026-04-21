@@ -11,9 +11,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,18 +37,35 @@ import com.example.betterme.presentation.home.model.CantMiss
 import com.example.betterme.presentation.home.model.HomeProgress
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
+import kotlinx.coroutines.flow.collectLatest
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun HomeScreen(
+    onCategoryClick: (Int, String, String) -> Unit = { _, _, _ -> },
+    onLogoutSuccess: () -> Unit = {},
     viewModel: HomeViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.singleEvent.collectLatest { event ->
+            when (event) {
+                HomeEvent.NavigateToSignIn -> onLogoutSuccess()
+                is HomeEvent.ShowError ->
+                    android.widget.Toast.makeText(context, event.message, android.widget.Toast.LENGTH_SHORT)
+                        .show()
+            }
+        }
+    }
 
     HomeContent(
         state = state,
+        onCategoryClick = onCategoryClick,
         onShowEditProfile = { viewModel.processIntent(HomeIntent.ShowEditProfile) },
         onDismissEditProfile = { viewModel.processIntent(HomeIntent.DismissEditProfile) },
+        onLogout = { viewModel.processIntent(HomeIntent.Logout) },
         onSaveProfile = { name, photoUri ->
             viewModel.processIntent(HomeIntent.UpdateUserName(name))
             viewModel.processIntent(HomeIntent.UpdateUserPhoto(photoUri))
@@ -57,8 +76,10 @@ fun HomeScreen(
 @Composable
 fun HomeContent(
     state: HomeState,
+    onCategoryClick: (Int, String, String) -> Unit = { _, _, _ -> },
     onShowEditProfile: () -> Unit = {},
     onDismissEditProfile: () -> Unit = {},
+    onLogout: () -> Unit = {},
     onSaveProfile: (String, String) -> Unit = { _, _ -> }
 ) {
     val colors = BetterMeColors.ListColors.list
@@ -69,7 +90,8 @@ fun HomeContent(
             currentName = state.userName,
             currentPhotoUrl = state.userPhotoUrl,
             onDismiss = onDismissEditProfile,
-            onSave = onSaveProfile
+            onSave = onSaveProfile,
+            onLogout = onLogout
         )
     }
 
@@ -200,7 +222,13 @@ fun HomeContent(
                 items = state.categoryGroups,
                 key = { _, group -> group.categoryId }
             ) { index, group ->
-                HomeCard(index = index, group = group)
+                HomeCard(
+                    index = index,
+                    group = group,
+                    onClick = {
+                        onCategoryClick(group.categoryId, group.categoryName, group.categoryIcon)
+                    }
+                )
             }
         } else {
             item(key = "category_empty") {
@@ -221,6 +249,17 @@ fun HomeContent(
 
         item(key = "bottom_spacer") {
             Spacer(modifier = Modifier.height(80.dp))
+        }
+    }
+
+    if (state.isLoading) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(BetterMeColors.Black.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = BetterMeColors.Primary.Primary)
         }
     }
 }

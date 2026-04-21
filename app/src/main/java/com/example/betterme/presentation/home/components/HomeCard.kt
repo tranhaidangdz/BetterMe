@@ -2,6 +2,7 @@ package com.example.betterme.presentation.home.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,6 +21,7 @@ import com.example.betterme.presentation.theme.BetterMeTypography
 fun HomeCard(
     index: Int,
     group: HomeCategoryGroup,
+    onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val cardBackground = group.color.copy(alpha = 0.12f)
@@ -35,6 +37,7 @@ fun HomeCard(
                 color = cardBorder,
                 shape = RoundedCornerShape(16.dp)
             )
+            .clickable(onClick = onClick)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

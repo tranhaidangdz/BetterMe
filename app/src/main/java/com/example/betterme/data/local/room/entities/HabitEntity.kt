@@ -31,6 +31,7 @@ data class HabitEntity(
     val title: String,
     val description: String?,
     val start_date: Long,
+    val end_date: Long? = null,
     val reminder_time: String?,
     val created_at: Long
 )
