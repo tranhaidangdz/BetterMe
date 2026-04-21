@@ -3,6 +3,7 @@ package com.example.betterme.presentation.dailyhabits
 import com.example.betterme.base.BaseMviViewModel
 import com.example.betterme.presentation.dailyhabits.model.Habit
 import com.example.betterme.presentation.dailyhabits.model.HabitUiModel
+import java.util.concurrent.TimeUnit
 
 class DailyHabitsViewModel : BaseMviViewModel<DailyHabitsIntent, DailyHabitsState, DailyHabitsEvent>() {
 
@@ -65,6 +66,9 @@ class DailyHabitsViewModel : BaseMviViewModel<DailyHabitsIntent, DailyHabitsStat
     }
 
     private fun toUiModel(habit: Habit): HabitUiModel {
+        val daysRemaining = habit.endDateMillis?.let { end ->
+            TimeUnit.MILLISECONDS.toDays(end - System.currentTimeMillis()).toInt().coerceAtLeast(0)
+        }
         return HabitUiModel(
             id = habit.id,
             category = habit.category,
@@ -72,16 +76,21 @@ class DailyHabitsViewModel : BaseMviViewModel<DailyHabitsIntent, DailyHabitsStat
             time = habit.time,
             statusLabel = if (habit.isCompleted) "Đã hoàn thành" else "Đang thực hiện",
             isCompleted = habit.isCompleted,
-            icon = habit.icon
+            icon = habit.icon,
+            startDateMillis = habit.startDateMillis,
+            endDateMillis = habit.endDateMillis,
+            daysRemaining = daysRemaining
         )
     }
 
     private fun fakeHabits(): List<Habit> {
+        val now = System.currentTimeMillis()
+        val day = TimeUnit.DAYS.toMillis(1)
         return listOf(
-            Habit(1, "Vận động & thể chất", "Đi bộ 10000 bước mỗi ngày", "06:40 AM", false, "🏃"),
-            Habit(2, "Vận động & thể chất", "Tập Gym 30 phút mỗi ngày", "09:40 AM", false, "🏃"),
-            Habit(3, "Dinh dưỡng & ăn uống lành mạnh", "Ăn 500g rau mỗi ngày", "11:00 AM", false, "🥗"),
-            Habit(4, "Tinh thần & sức khỏe tâm lý", "Đọc một cuốn sách mỗi ngày", "15:00 PM", true, "🧠")
+            Habit(1, "Vận động & thể chất", "Đi bộ 10000 bước mỗi ngày", "06:40 AM", now, now + day * 21, false, "🏃"),
+            Habit(2, "Vận động & thể chất", "Tập Gym 30 phút mỗi ngày", "09:40 AM", now, now + day * 10, false, "🏃"),
+            Habit(3, "Dinh dưỡng & ăn uống lành mạnh", "Ăn 500g rau mỗi ngày", "11:00 AM", now, now + day * 14, false, "🥗"),
+            Habit(4, "Tinh thần & sức khỏe tâm lý", "Đọc một cuốn sách mỗi ngày", "15:00 PM", now, now + day * 7, true, "🧠")
         )
     }
 }

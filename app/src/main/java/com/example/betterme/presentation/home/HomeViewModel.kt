@@ -3,6 +3,7 @@ package com.example.betterme.presentation.home
 import androidx.lifecycle.viewModelScope
 import com.example.betterme.base.BaseMviViewModel
 import com.example.betterme.data.local.datastore.DataStoreManager
+import com.example.betterme.data.provider.GoogleAuthClient
 import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.presentation.home.model.CantMiss
@@ -14,6 +15,7 @@ import kotlin.random.Random
 
 class HomeViewModel(
     private val dataStoreManager: DataStoreManager,
+    private val googleAuthClient: GoogleAuthClient,
     private val categoryRepository: CategoryRepository,
     private val habitRepository: HabitRepository
 ) : BaseMviViewModel<HomeIntent, HomeState, HomeEvent>() {
@@ -31,6 +33,7 @@ class HomeViewModel(
             HomeIntent.DismissEditProfile -> updateState { copy(showEditProfileDialog = false) }
             is HomeIntent.UpdateUserName -> updateUserName(intent.name)
             is HomeIntent.UpdateUserPhoto -> updateUserPhoto(intent.photoUri)
+            HomeIntent.Logout -> logout()
         }
     }
 
@@ -114,6 +117,18 @@ class HomeViewModel(
         viewModelScope.launch {
             dataStoreManager.updateUserPhotoUrl(photoUri)
             updateState { copy(userPhotoUrl = photoUri) }
+        }
+    }
+
+    private fun logout() {
+        viewModelScope.launch {
+            try {
+                googleAuthClient.signOut()
+                dataStoreManager.clearUserInfo()
+                sendEvent(HomeEvent.LoggedOut)
+            } catch (_: Exception) {
+                sendEvent(HomeEvent.ShowError("Không thể đăng xuất, vui lòng thử lại"))
+            }
         }
     }
 }

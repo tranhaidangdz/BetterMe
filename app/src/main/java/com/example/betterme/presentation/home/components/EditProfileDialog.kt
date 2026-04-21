@@ -33,7 +33,8 @@ fun EditProfileDialog(
     currentName: String,
     currentPhotoUrl: String,
     onDismiss: () -> Unit,
-    onSave: (name: String, photoUri: String) -> Unit
+    onSave: (name: String, photoUri: String) -> Unit,
+    onLogout: () -> Unit
 ) {
     var name by remember { mutableStateOf(currentName) }
     var photoUri by remember { mutableStateOf(currentPhotoUrl) }
@@ -170,6 +171,24 @@ fun EditProfileDialog(
                         text = "Lưu thay đổi",
                         style = BetterMeTypography.Title.Small.SemiBold,
                         color = Color.White
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedButton(
+                    onClick = onLogout,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = BetterMeColors.Red
+                    )
+                ) {
+                    Text(
+                        text = "Đăng xuất",
+                        style = BetterMeTypography.Title.Small.SemiBold
                     )
                 }
             }

@@ -22,5 +22,6 @@ data class ReminderEntity(
     val id: Int = 0,
     val habit_id: Int,
     val time: String,
+    val repeat_pattern: String,
     val is_active: Boolean
 )

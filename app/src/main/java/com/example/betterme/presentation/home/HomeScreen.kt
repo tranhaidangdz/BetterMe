@@ -13,10 +13,14 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,9 +43,20 @@ import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun HomeScreen(
+    onLoggedOut: () -> Unit = {},
     viewModel: HomeViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        viewModel.singleEvent.collect { event ->
+            when (event) {
+                HomeEvent.LoggedOut -> onLoggedOut()
+                is HomeEvent.ShowError -> snackbarHostState.showSnackbar(event.message)
+            }
+        }
+    }
 
     HomeContent(
         state = state,
@@ -50,7 +65,9 @@ fun HomeScreen(
         onSaveProfile = { name, photoUri ->
             viewModel.processIntent(HomeIntent.UpdateUserName(name))
             viewModel.processIntent(HomeIntent.UpdateUserPhoto(photoUri))
-        }
+        },
+        onLogout = { viewModel.processIntent(HomeIntent.Logout) },
+        snackbarHostState = snackbarHostState
     )
 }
 
@@ -59,7 +76,9 @@ fun HomeContent(
     state: HomeState,
     onShowEditProfile: () -> Unit = {},
     onDismissEditProfile: () -> Unit = {},
-    onSaveProfile: (String, String) -> Unit = { _, _ -> }
+    onSaveProfile: (String, String) -> Unit = { _, _ -> },
+    onLogout: () -> Unit = {},
+    snackbarHostState: SnackbarHostState = SnackbarHostState()
 ) {
     val colors = BetterMeColors.ListColors.list
 
@@ -69,7 +88,8 @@ fun HomeContent(
             currentName = state.userName,
             currentPhotoUrl = state.userPhotoUrl,
             onDismiss = onDismissEditProfile,
-            onSave = onSaveProfile
+            onSave = onSaveProfile,
+            onLogout = onLogout
         )
     }
 
@@ -221,6 +241,10 @@ fun HomeContent(
 
         item(key = "bottom_spacer") {
             Spacer(modifier = Modifier.height(80.dp))
+        }
+
+        item(key = "snackbar_host") {
+            SnackbarHost(hostState = snackbarHostState)
         }
     }
 }

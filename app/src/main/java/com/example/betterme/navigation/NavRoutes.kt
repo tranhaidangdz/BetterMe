@@ -95,6 +95,9 @@ fun NavRoutes()
                 MainScreen(
                     navigateToSettings = {
                         backStack.add(Destination.Settings)
+                    },
+                    navigateToSignIn = {
+                        backStack.replaceTop(Destination.SignIn)
                     }
                 )
             }

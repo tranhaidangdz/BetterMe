@@ -8,6 +8,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.example.betterme.presentation.addhabit.AddHabitScreen
 import com.example.betterme.presentation.dailyhabits.DailyHabitsScreen
 import com.example.betterme.presentation.home.HomeScreen
 import com.example.betterme.presentation.main.components.BottomNavBar
@@ -19,6 +20,7 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun MainScreen(
     navigateToSettings: () -> Unit,
+    navigateToSignIn: () -> Unit,
     viewModel: MainViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
@@ -26,9 +28,11 @@ fun MainScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         // Content area
         when (state.selectedTab) {
-            MainTab.HOME -> HomeScreen()
+            MainTab.HOME -> HomeScreen(onLoggedOut = navigateToSignIn)
             MainTab.HABITS -> DailyHabitsScreen()
-            MainTab.ADD -> PlaceholderTab("➕ Thêm thói quen")
+            MainTab.ADD -> AddHabitScreen(
+                onBackClick = { viewModel.processIntent(MainIntent.SelectTab(MainTab.HABITS)) }
+            )
             MainTab.AI_CHAT -> PlaceholderTab("🤖 AI Chat")
             MainTab.STATS -> PlaceholderTab("📊 Thống kê")
         }

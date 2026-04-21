@@ -7,5 +7,8 @@ data class HabitUiModel(
     val time: String,
     val statusLabel: String,
     val isCompleted: Boolean,
-    val icon: String
+    val icon: String,
+    val startDateMillis: Long,
+    val endDateMillis: Long?,
+    val daysRemaining: Int?
 )

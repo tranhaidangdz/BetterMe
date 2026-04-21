@@ -59,6 +59,13 @@ fun HabitCard(
                 style = BetterMeTypography.Body.Small.Medium,
                 color = BetterMeColors.Primary.Primary
             )
+            if (habit.daysRemaining != null) {
+                Text(
+                    text = "Còn ${habit.daysRemaining} ngày đến hạn",
+                    style = BetterMeTypography.Body.Small.Medium,
+                    color = BetterMeColors.Text.TextTertiary
+                )
+            }
         }
 
         Column(horizontalAlignment = Alignment.End) {

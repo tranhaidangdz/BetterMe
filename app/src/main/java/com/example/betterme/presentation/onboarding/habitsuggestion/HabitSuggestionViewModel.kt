@@ -222,7 +222,9 @@ class HabitSuggestionViewModel(
                                 title = habit.title,
                                 description = null,
                                 start_date = now,
+                                end_date = null,
                                 reminder_time = habit.reminderTimeFormatted,
+                                reminder_repeat = habit.repeatLabel,
                                 created_at = now
                             )
                             val habitId = habitRepository.addHabit(habitEntity)
@@ -231,6 +233,7 @@ class HabitSuggestionViewModel(
                             val reminderEntity = ReminderEntity(
                                 habit_id = habitId.toInt(),
                                 time = habit.reminderTimeFormatted,
+                                repeat_pattern = habit.repeatLabel,
                                 is_active = true
                             )
                             reminderRepository.addReminder(reminderEntity)
