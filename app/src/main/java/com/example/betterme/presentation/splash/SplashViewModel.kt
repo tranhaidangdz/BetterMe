@@ -33,21 +33,29 @@ class SplashViewModel(
             val isFirstLaunch = dataStoreManager.isFirstTime().first()
             val currentUserId = dataStoreManager.getCurrentUserId().first()
             val hasSelectedHabits = dataStoreManager.hasSelectedHabits().first()
+            val isGuestUser = dataStoreManager.isGuestUser().first()
+            val hasGoogleSession = firebaseAuth.currentUser != null
 
-            Log.d("SplashVM", "isFirstLaunch=$isFirstLaunch, userId=$currentUserId, hasHabits=$hasSelectedHabits, firebaseUser=${firebaseAuth.currentUser?.uid}")
+            Log.d(
+                "SplashVM",
+                "isFirstLaunch=$isFirstLaunch, userId=$currentUserId, hasHabits=$hasSelectedHabits, isGuest=$isGuestUser, firebaseUser=${firebaseAuth.currentUser?.uid}"
+            )
 
             val nextScreen = when {
                 // Lần đầu mở app → Welcome
                 isFirstLaunch -> NextScreen.WELCOME
 
+                // Đã đăng nhập Google thì vào Main luôn (không ép chọn habits lại)
+                hasGoogleSession -> NextScreen.MAIN
+
                 // Đã có userId và đã chọn habits → Main
                 currentUserId != null && hasSelectedHabits -> NextScreen.MAIN
 
-                // Đã có userId nhưng chưa chọn habits → HabitSelection
-                currentUserId != null && !hasSelectedHabits -> NextScreen.HABIT_SELECTION
+                // Guest user chưa chọn habits thì vẫn vào bước chọn habits
+                isGuestUser && currentUserId != null && !hasSelectedHabits -> NextScreen.HABIT_SELECTION
 
-                // Đã qua onboarding nhưng chưa có userId → SignIn
-                firebaseAuth.currentUser != null -> NextScreen.MAIN
+                // User local chưa đăng nhập Google và chưa đủ dữ liệu habits thì vào SignIn
+                currentUserId != null && !hasSelectedHabits -> NextScreen.SIGN_IN
 
                 // Không có dữ liệu user nào (có thể do Auto Backup restore IS_FIRST_TIME=false)
                 // → Coi như lần đầu, hiện Welcome/Onboarding lại
