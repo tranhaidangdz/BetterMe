@@ -32,6 +32,7 @@ import java.util.Locale
 @Composable
 fun AddHabitScreen(
     onBackClick: () -> Unit = {},
+    onHabitAdded: () -> Unit = {},
     viewModel: AddHabitViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
@@ -44,6 +45,7 @@ fun AddHabitScreen(
         viewModel.singleEvent.collect { event ->
             when (event) {
                 AddHabitEvent.SaveSuccess -> {
+                    onHabitAdded()
                     snackbarHostState.showSnackbar("Đã thêm thói quen thành công!")
                     onBackClick()
                 }

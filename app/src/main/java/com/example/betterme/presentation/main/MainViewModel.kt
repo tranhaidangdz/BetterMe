@@ -1,6 +1,7 @@
 package com.example.betterme.presentation.main
 
 import com.example.betterme.base.BaseMviViewModel
+import com.example.betterme.presentation.main.model.MainTab
 
 class MainViewModel : BaseMviViewModel<MainIntent, MainState, MainEvent>() {
 
@@ -8,7 +9,13 @@ class MainViewModel : BaseMviViewModel<MainIntent, MainState, MainEvent>() {
 
     override fun processIntent(intent: MainIntent) {
         when (intent) {
-            is MainIntent.SelectTab -> updateState { copy(selectedTab = intent.tab) }
+            is MainIntent.SelectTab -> updateState {
+                copy(
+                    selectedTab = intent.tab,
+                    homeRefreshVersion = if (intent.tab == MainTab.HOME) homeRefreshVersion + 1 else homeRefreshVersion
+                )
+            }
+            MainIntent.HabitAdded -> updateState { copy(homeRefreshVersion = homeRefreshVersion + 1) }
             is MainIntent.OpenCategoryDetail -> {
                 updateState {
                     copy(

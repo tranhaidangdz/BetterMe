@@ -33,6 +33,7 @@ fun MainScreen(
         // Content area
         when (state.selectedTab) {
             MainTab.HOME -> HomeScreen(
+                refreshVersion = state.homeRefreshVersion,
                 onLogoutSuccess = navigateToSignIn,
                 onCategoryClick = { categoryId, categoryName, categoryIcon ->
                     viewModel.processIntent(
@@ -46,6 +47,7 @@ fun MainScreen(
             )
             MainTab.HABITS -> DailyHabitsScreen()
             MainTab.ADD -> AddHabitScreen(
+                onHabitAdded = { viewModel.processIntent(MainIntent.HabitAdded) },
                 onBackClick = { viewModel.processIntent(MainIntent.SelectTab(MainTab.HOME)) }
             )
             MainTab.AI_CHAT -> PlaceholderTab("🤖 AI Chat")

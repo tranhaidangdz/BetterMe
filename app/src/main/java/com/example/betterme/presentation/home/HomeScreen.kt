@@ -42,6 +42,7 @@ import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun HomeScreen(
+    refreshVersion: Int = 0,
     onCategoryClick: (Int, String, String) -> Unit = { _, _, _ -> },
     onLogoutSuccess: () -> Unit = {},
     viewModel: HomeViewModel = koinViewModel()
@@ -58,6 +59,10 @@ fun HomeScreen(
                         .show()
             }
         }
+    }
+
+    LaunchedEffect(refreshVersion) {
+        viewModel.processIntent(HomeIntent.LoadData)
     }
 
     HomeContent(

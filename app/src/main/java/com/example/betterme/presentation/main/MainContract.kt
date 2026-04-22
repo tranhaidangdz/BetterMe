@@ -7,6 +7,7 @@ import com.example.betterme.presentation.main.model.MainTab
 
 data class MainState(
     val selectedTab: MainTab = MainTab.HOME,
+    val homeRefreshVersion: Int = 0,
     val categoryDetailId: Int? = null,
     val categoryDetailName: String = "",
     val categoryDetailIcon: String = ""
@@ -14,6 +15,7 @@ data class MainState(
 
 sealed class MainIntent : MviIntent {
     data class SelectTab(val tab: MainTab) : MainIntent()
+    data object HabitAdded : MainIntent()
     data class OpenCategoryDetail(
         val categoryId: Int,
         val categoryName: String,
