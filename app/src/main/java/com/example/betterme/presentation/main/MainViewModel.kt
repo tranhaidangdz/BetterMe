@@ -12,7 +12,11 @@ class MainViewModel : BaseMviViewModel<MainIntent, MainState, MainEvent>() {
             is MainIntent.SelectTab -> updateState {
                 copy(
                     selectedTab = intent.tab,
-                    homeRefreshVersion = if (intent.tab == MainTab.HOME) homeRefreshVersion + 1 else homeRefreshVersion
+                    homeRefreshVersion = if (intent.tab == MainTab.HOME) homeRefreshVersion + 1 else homeRefreshVersion,
+                    // Tự đóng CategoryDetail overlay khi chuyển tab
+                    categoryDetailId = null,
+                    categoryDetailName = "",
+                    categoryDetailIcon = ""
                 )
             }
             MainIntent.HabitAdded -> updateState { copy(homeRefreshVersion = homeRefreshVersion + 1) }

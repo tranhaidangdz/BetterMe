@@ -17,10 +17,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.example.betterme.presentation.addhabit.components.AddHabitTopBar
+import com.example.betterme.R
 import com.example.betterme.presentation.addhabit.components.CategorySelector
 import com.example.betterme.presentation.addhabit.components.HabitFormField
-import com.example.betterme.presentation.addhabit.components.TopHeaderBar
+import com.example.betterme.presentation.components.view.BetterMeTopBar
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
 import org.koin.androidx.compose.koinViewModel
@@ -158,9 +158,10 @@ fun AddHabitScreen(
                 .background(BetterMeColors.BackGround.BackgroundSecondary)
         ) {
             // ===== TOP BAR =====
-            AddHabitTopBar(
-                onBackClick = onBackClick,
-                modifier = Modifier.background(BetterMeColors.BackGround.BackgroundPrimary)
+            BetterMeTopBar(
+                leadingIconRes = R.drawable.ic_arrow_left,
+                title = "Thêm thói quen",
+                onLeadingClick = onBackClick
             )
 
             // ===== FORM =====
@@ -171,17 +172,6 @@ fun AddHabitScreen(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = BetterMeColors.BackGround.BackgroundPrimary,
-                    border = BorderStroke(1.dp, BetterMeColors.Border.BorderLight),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    TopHeaderBar(
-                        title = "Thông tin thói quen",
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
 
                 // Nhóm thói quen
                 CategorySelector(

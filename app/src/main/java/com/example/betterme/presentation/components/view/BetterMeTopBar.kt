@@ -32,47 +32,53 @@ fun BetterMeTopBar(
 ) {
     Row(
         modifier = modifier
-            .background(BetterMeColors.BackGround.BackgroundPrimary)
+            .background(BetterMeColors.BackGround.BackgroundSecondary)
             .fillMaxWidth()
-            .padding(vertical = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            painter = painterResource(leadingIconRes),
-            contentDescription = null,
-            tint = BetterMeColors.Black,
+        Box(
             modifier = Modifier
-                .size(20.dp)
-                .rawClickable {
-                    onLeadingClick()
-                }
-        )
+                .size(40.dp)
+                .rawClickable { onLeadingClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(leadingIconRes),
+                contentDescription = null,
+                tint = BetterMeColors.Black,
+                modifier = Modifier.size(20.dp)
+            )
+        }
 
         Text(
             text = title,
-            style = BetterMeTypography.Title.Large.Bold,
+            style = BetterMeTypography.Title.Medium.Bold,
             color = BetterMeColors.Text.TextPrimary,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 8.dp)
         )
 
         if (trailingIconRes != null) {
-            Icon(
-                painter = painterResource(trailingIconRes),
-                contentDescription = null,
-                tint = BetterMeColors.Black,
+            Box(
                 modifier = Modifier
-                    .size(24.dp)
-                    .rawClickable {
-                        onTrailingClick()
-                    }
-            )
+                    .size(40.dp)
+                    .rawClickable { onTrailingClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(trailingIconRes),
+                    contentDescription = null,
+                    tint = BetterMeColors.Black,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         } else {
-            Box(Modifier.size(24.dp))
+            Box(Modifier.size(40.dp))
         }
     }
 }

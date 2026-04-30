@@ -1,5 +1,6 @@
 package com.example.betterme.presentation.addhabit.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -47,6 +48,7 @@ fun AddHabitTopBar(
 ) {
     Row(
         modifier = modifier
+            .background(BetterMeColors.BackGround.BackgroundSecondary)
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically

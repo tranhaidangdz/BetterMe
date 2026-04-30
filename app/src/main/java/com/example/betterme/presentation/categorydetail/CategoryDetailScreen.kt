@@ -4,18 +4,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.betterme.R
 import com.example.betterme.presentation.categorydetail.components.CategoryActionButton
 import com.example.betterme.presentation.categorydetail.components.CategorySummaryCard
 import com.example.betterme.presentation.categorydetail.components.HabitDetailCard
+import com.example.betterme.presentation.components.view.BetterMeTopBar
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
 
@@ -47,34 +46,11 @@ fun CategoryDetailScreen(
     ) {
         // ===== TOP BAR =====
         item(key = "topbar") {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(BetterMeColors.BackGround.BackgroundPrimary)
-                    .padding(horizontal = 8.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Quay lại",
-                        tint = BetterMeColors.Text.TextPrimary
-                    )
-                }
-                Text(
-                    text = state.categoryName.ifBlank { "Nhóm thói quen" },
-                    style = BetterMeTypography.Title.Medium.Bold,
-                    color = BetterMeColors.Text.TextPrimary,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = {}) {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = "Thông báo",
-                        tint = BetterMeColors.Text.TextPrimary
-                    )
-                }
-            }
+            BetterMeTopBar(
+                leadingIconRes = R.drawable.ic_arrow_left,
+                title = state.categoryName.ifBlank { "Nhóm thói quen" },
+                onLeadingClick = onBack
+            )
         }
 
         // ===== CATEGORY SUMMARY CARD =====

@@ -14,7 +14,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.betterme.presentation.dailyhabits.components.DailyHabitsTopBar
+import com.example.betterme.R
+import com.example.betterme.presentation.components.view.BetterMeTopBar
 import com.example.betterme.presentation.dailyhabits.components.DateSelector
 import com.example.betterme.presentation.dailyhabits.components.FilterTabs
 import com.example.betterme.presentation.dailyhabits.components.HabitCard
@@ -49,7 +50,11 @@ fun DailyHabitsContent(
         contentPadding = PaddingValues(top = 12.dp, bottom = 120.dp)
     ) {
         item {
-            DailyHabitsTopBar()
+            BetterMeTopBar(
+                leadingIconRes = R.drawable.ic_arrow_left,
+                title = "Thói quen",
+                onLeadingClick = { }
+            )
         }
 
         item {
