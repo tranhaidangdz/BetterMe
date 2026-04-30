@@ -14,12 +14,15 @@ enum class DailyHabitFilter(val label: String) {
 data class DateUiModel(
     val month: String,
     val day: String,
-    val weekDay: String
+    val weekDay: String,
+    val dateMillis: Long,
+    val isToday: Boolean = false
 )
 
 data class DailyHabitsState(
     val isLoading: Boolean = false,
     val selectedDateIndex: Int = 0,
+    val todayIndex: Int = 0,
     val selectedFilter: DailyHabitFilter = DailyHabitFilter.ALL,
     val dates: List<DateUiModel> = emptyList(),
     val allHabits: List<HabitUiModel> = emptyList(),
@@ -30,6 +33,7 @@ sealed class DailyHabitsIntent : MviIntent {
     data object LoadData : DailyHabitsIntent()
     data class SelectDate(val index: Int) : DailyHabitsIntent()
     data class SelectFilter(val filter: DailyHabitFilter) : DailyHabitsIntent()
+    data class ToggleHabitCompletion(val habitId: Int) : DailyHabitsIntent()
 }
 
 sealed class DailyHabitsEvent : MviSingleEvent

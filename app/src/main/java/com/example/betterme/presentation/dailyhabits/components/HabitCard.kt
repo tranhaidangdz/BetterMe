@@ -2,6 +2,7 @@ package com.example.betterme.presentation.dailyhabits.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,7 +11,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -25,6 +31,7 @@ import com.example.betterme.presentation.theme.BetterMeTypography
 @Composable
 fun HabitCard(
     habit: HabitUiModel,
+    onToggleCompletion: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -34,9 +41,11 @@ fun HabitCard(
             .background(BetterMeColors.White)
             .border(
                 width = 1.dp,
-                color = BetterMeColors.Primary.Primary.copy(alpha = 0.35f),
+                color = if (habit.isCompleted) BetterMeColors.Green.copy(alpha = 0.35f)
+                else BetterMeColors.Primary.Primary.copy(alpha = 0.35f),
                 shape = RoundedCornerShape(14.dp)
             )
+            .clickable { onToggleCompletion() }
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -54,11 +63,13 @@ fun HabitCard(
                 style = BetterMeTypography.Body.Medium.copy(fontWeight = FontWeight.SemiBold),
                 color = BetterMeColors.Text.TextPrimary
             )
-            Text(
-                text = "⏰ ${habit.time}",
-                style = BetterMeTypography.Body.Small.Medium,
-                color = BetterMeColors.Primary.Primary
-            )
+            if (habit.time.isNotBlank()) {
+                Text(
+                    text = "⏰ ${habit.time}",
+                    style = BetterMeTypography.Body.Small.Medium,
+                    color = BetterMeColors.Primary.Primary
+                )
+            }
         }
 
         Column(horizontalAlignment = Alignment.End) {
@@ -67,22 +78,24 @@ fun HabitCard(
                 style = BetterMeTypography.Headline.Small.Bold
             )
             Spacer(modifier = Modifier.height(8.dp))
+
+            // Check-in button
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
+                    .size(32.dp)
+                    .clip(CircleShape)
                     .background(
-                        if (habit.isCompleted) {
-                            BetterMeColors.Primary.Primary.copy(alpha = 0.20f)
-                        } else {
-                            BetterMeColors.Primary.Primary.copy(alpha = 0.10f)
-                        }
-                    )
-                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                        if (habit.isCompleted) BetterMeColors.Green
+                        else BetterMeColors.Gray.Gray4
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = habit.statusLabel,
-                    style = BetterMeTypography.Body.Small.Medium,
-                    color = BetterMeColors.Primary.Primary
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = if (habit.isCompleted) "Hoàn thành" else "Chưa hoàn thành",
+                    tint = if (habit.isCompleted) BetterMeColors.White
+                    else BetterMeColors.Text.TextTertiary,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

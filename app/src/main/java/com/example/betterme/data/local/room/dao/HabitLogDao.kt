@@ -35,4 +35,11 @@ interface HabitLogDao {
         WHERE habit_id = :habitId AND status = 'DONE'
     """)
     suspend fun countCompleted(habitId: Int): Int
+
+    /** Lấy tất cả habitId đã DONE trong ngày (date = startOfDay millis) */
+    @Query("""
+        SELECT habit_id FROM habit_logs 
+        WHERE date = :dateMillis AND status = 'DONE'
+    """)
+    suspend fun getCompletedHabitIdsByDate(dateMillis: Long): List<Int>
 }

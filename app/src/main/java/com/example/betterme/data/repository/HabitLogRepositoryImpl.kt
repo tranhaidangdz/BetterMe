@@ -25,4 +25,7 @@ class HabitLogRepositoryImpl(
 
     override suspend fun countCompleted(habitId: Int) =
         dao.countCompleted(habitId)
+
+    override suspend fun getCompletedHabitIdsByDate(dateMillis: Long) =
+        dao.getCompletedHabitIdsByDate(dateMillis)
 }

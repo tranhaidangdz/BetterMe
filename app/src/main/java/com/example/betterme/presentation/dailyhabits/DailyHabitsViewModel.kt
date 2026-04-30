@@ -1,10 +1,25 @@
 package com.example.betterme.presentation.dailyhabits
 
+import androidx.lifecycle.viewModelScope
 import com.example.betterme.base.BaseMviViewModel
-import com.example.betterme.presentation.dailyhabits.model.Habit
+import com.example.betterme.data.local.datastore.DataStoreManager
+import com.example.betterme.data.local.room.entities.HabitLogEntity
+import com.example.betterme.domain.repository.CategoryRepository
+import com.example.betterme.domain.repository.HabitLogRepository
+import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.presentation.dailyhabits.model.HabitUiModel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
-class DailyHabitsViewModel : BaseMviViewModel<DailyHabitsIntent, DailyHabitsState, DailyHabitsEvent>() {
+class DailyHabitsViewModel(
+    private val dataStoreManager: DataStoreManager,
+    private val habitRepository: HabitRepository,
+    private val habitLogRepository: HabitLogRepository,
+    private val categoryRepository: CategoryRepository,
+) : BaseMviViewModel<DailyHabitsIntent, DailyHabitsState, DailyHabitsEvent>() {
 
     override fun initState(): DailyHabitsState = DailyHabitsState()
 
@@ -17,71 +32,196 @@ class DailyHabitsViewModel : BaseMviViewModel<DailyHabitsIntent, DailyHabitsStat
             DailyHabitsIntent.LoadData -> loadData()
             is DailyHabitsIntent.SelectDate -> selectDate(intent.index)
             is DailyHabitsIntent.SelectFilter -> selectFilter(intent.filter)
+            is DailyHabitsIntent.ToggleHabitCompletion -> toggleCompletion(intent.habitId)
         }
     }
 
+    // ============================================================
+    // LOAD — Tạo danh sách 7 ngày (3 trước + hôm nay + 3 sau)
+    //        + load habits thực từ Room
+    // ============================================================
     private fun loadData() {
-        val dates = listOf(
-            DateUiModel("Jan", "20", "Mon"),
-            DateUiModel("Jan", "21", "Tue"),
-            DateUiModel("Jan", "22", "Wed"),
-            DateUiModel("Jan", "23", "Thu"),
-            DateUiModel("Jan", "24", "Fri")
-        )
+        viewModelScope.launch {
+            updateState { copy(isLoading = true) }
 
-        val habits = fakeHabits().map(::toUiModel)
+            try {
+                // 1. Tạo danh sách ngày thực tế (7 ngày)
+                val today = Calendar.getInstance()
+                val todayIndex = 3 // Hôm nay nằm ở vị trí thứ 4 (index 3)
+                val dates = (-3..3).map { offset ->
+                    val cal = Calendar.getInstance().apply {
+                        add(Calendar.DAY_OF_YEAR, offset)
+                    }
+                    DateUiModel(
+                        month = SimpleDateFormat("MMM", Locale("vi")).format(cal.time),
+                        day = SimpleDateFormat("dd", Locale.getDefault()).format(cal.time),
+                        weekDay = SimpleDateFormat("EEE", Locale("vi")).format(cal.time),
+                        dateMillis = getStartOfDay(cal),
+                        isToday = offset == 0
+                    )
+                }
 
-        updateState {
-            copy(
-                dates = dates,
-                selectedDateIndex = 2,
-                selectedFilter = DailyHabitFilter.ALL,
-                allHabits = habits,
-                visibleHabits = habits
-            )
+                // 2. Load habits + check-in status cho ngày được chọn (mặc định = hôm nay)
+                val selectedDate = dates[todayIndex]
+                val habits = loadHabitsForDate(selectedDate.dateMillis)
+
+                updateState {
+                    copy(
+                        isLoading = false,
+                        dates = dates,
+                        todayIndex = todayIndex,
+                        selectedDateIndex = todayIndex,
+                        selectedFilter = DailyHabitFilter.ALL,
+                        allHabits = habits,
+                        visibleHabits = habits
+                    )
+                }
+            } catch (e: Exception) {
+                updateState { copy(isLoading = false) }
+            }
         }
     }
 
+    // ============================================================
+    // SELECT DATE — Load lại habits cho ngày mới
+    // ============================================================
     private fun selectDate(index: Int) {
         if (index !in currentState.dates.indices) return
-        updateState {
-            copy(selectedDateIndex = index)
+        viewModelScope.launch {
+            updateState { copy(isLoading = true, selectedDateIndex = index) }
+
+            try {
+                val selectedDate = currentState.dates[index]
+                val habits = loadHabitsForDate(selectedDate.dateMillis)
+
+                updateState {
+                    copy(
+                        isLoading = false,
+                        allHabits = habits,
+                        visibleHabits = applyFilter(currentState.selectedFilter, habits)
+                    )
+                }
+            } catch (e: Exception) {
+                updateState { copy(isLoading = false) }
+            }
         }
     }
 
+    // ============================================================
+    // FILTER — Lọc theo trạng thái
+    // ============================================================
     private fun selectFilter(filter: DailyHabitFilter) {
-        val filtered = when (filter) {
-            DailyHabitFilter.ALL -> currentState.allHabits
-            DailyHabitFilter.IN_PROGRESS -> currentState.allHabits.filter { !it.isCompleted }
-            DailyHabitFilter.DONE -> currentState.allHabits.filter { it.isCompleted }
-        }
-
         updateState {
             copy(
                 selectedFilter = filter,
-                visibleHabits = filtered
+                visibleHabits = applyFilter(filter, allHabits)
             )
         }
     }
 
-    private fun toUiModel(habit: Habit): HabitUiModel {
-        return HabitUiModel(
-            id = habit.id,
-            category = habit.category,
-            title = habit.title,
-            time = habit.time,
-            statusLabel = if (habit.isCompleted) "Đã hoàn thành" else "Đang thực hiện",
-            isCompleted = habit.isCompleted,
-            icon = habit.icon
-        )
+    // ============================================================
+    // TOGGLE CHECK-IN — Đánh dấu hoàn thành / bỏ hoàn thành
+    // ============================================================
+    private fun toggleCompletion(habitId: Int) {
+        viewModelScope.launch {
+            try {
+                val selectedDate = currentState.dates[currentState.selectedDateIndex]
+                val dateMillis = selectedDate.dateMillis
+
+                val existingLog = habitLogRepository.getLogByDate(habitId, dateMillis)
+
+                if (existingLog != null && existingLog.status == "DONE") {
+                    // Bỏ hoàn thành → xóa log
+                    habitLogRepository.deleteLog(existingLog)
+                } else if (existingLog != null) {
+                    // Cập nhật status thành DONE
+                    habitLogRepository.updateLog(existingLog.copy(status = "DONE"))
+                } else {
+                    // Tạo log mới
+                    habitLogRepository.addLog(
+                        HabitLogEntity(
+                            habit_id = habitId,
+                            date = dateMillis,
+                            status = "DONE",
+                            note = null,
+                            image = null,
+                            created_at = System.currentTimeMillis()
+                        )
+                    )
+                }
+
+                // Reload habits cho ngày hiện tại
+                val habits = loadHabitsForDate(dateMillis)
+                updateState {
+                    copy(
+                        allHabits = habits,
+                        visibleHabits = applyFilter(selectedFilter, habits)
+                    )
+                }
+            } catch (_: Exception) { }
+        }
     }
 
-    private fun fakeHabits(): List<Habit> {
-        return listOf(
-            Habit(1, "Vận động & thể chất", "Đi bộ 10000 bước mỗi ngày", "06:40 AM", false, "🏃"),
-            Habit(2, "Vận động & thể chất", "Tập Gym 30 phút mỗi ngày", "09:40 AM", false, "🏃"),
-            Habit(3, "Dinh dưỡng & ăn uống lành mạnh", "Ăn 500g rau mỗi ngày", "11:00 AM", false, "🥗"),
-            Habit(4, "Tinh thần & sức khỏe tâm lý", "Đọc một cuốn sách mỗi ngày", "15:00 PM", true, "🧠")
-        )
+    // ============================================================
+    // HELPER — Load habits kèm trạng thái check-in cho 1 ngày
+    // ============================================================
+    private suspend fun loadHabitsForDate(dateMillis: Long): List<HabitUiModel> {
+        val userId = dataStoreManager.getCurrentUserId().first() ?: return emptyList()
+
+        // Lấy tất cả habits của user (đang active trong ngày được chọn)
+        val allHabits = habitRepository.getHabits(userId).first()
+            .filter { habit ->
+                // Chỉ hiện habit mà ngày được chọn nằm trong khoảng [start_date, end_date]
+                habit.start_date <= dateMillis &&
+                        (habit.end_date == null || habit.end_date >= dateMillis)
+            }
+
+        // Lấy danh sách habitId đã DONE trong ngày
+        val completedIds = habitLogRepository.getCompletedHabitIdsByDate(dateMillis).toSet()
+
+        // Lấy tất cả categories để map tên + icon
+        val categories = try {
+            categoryRepository.getAll().first().associateBy { it.id }
+        } catch (_: Exception) {
+            emptyMap()
+        }
+
+        return allHabits.map { habit ->
+            val category = habit.category_id?.let { categories[it] }
+            val isCompleted = habit.id in completedIds
+
+            HabitUiModel(
+                id = habit.id,
+                category = category?.name ?: "Không phân loại",
+                title = habit.title,
+                time = habit.reminder_time ?: "",
+                statusLabel = if (isCompleted) "Đã hoàn thành" else "Đang thực hiện",
+                isCompleted = isCompleted,
+                icon = category?.icon ?: "📌"
+            )
+        }
+    }
+
+    // ============================================================
+    // HELPER — Áp dụng filter lên danh sách habits
+    // ============================================================
+    private fun applyFilter(filter: DailyHabitFilter, habits: List<HabitUiModel>): List<HabitUiModel> {
+        return when (filter) {
+            DailyHabitFilter.ALL -> habits
+            DailyHabitFilter.IN_PROGRESS -> habits.filter { !it.isCompleted }
+            DailyHabitFilter.DONE -> habits.filter { it.isCompleted }
+        }
+    }
+
+    // ============================================================
+    // HELPER — Lấy start of day (00:00:00) millis
+    // ============================================================
+    private fun getStartOfDay(calendar: Calendar): Long {
+        return calendar.apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
     }
 }

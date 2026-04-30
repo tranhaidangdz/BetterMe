@@ -16,4 +16,6 @@ interface HabitLogRepository {
     suspend fun deleteLog(log: HabitLogEntity)
 
     suspend fun countCompleted(habitId: Int): Int
+
+    suspend fun getCompletedHabitIdsByDate(dateMillis: Long): List<Int>
 }

@@ -3,12 +3,14 @@ package com.example.betterme.presentation.dailyhabits.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,7 +30,7 @@ fun DateSelector(
     onSelect: (Int) -> Unit
 ) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(dates.indices.toList()) { index ->
+        items(dates.size) { index ->
             val date = dates[index]
             val isSelected = index == selectedIndex
             Column(
@@ -60,6 +62,19 @@ fun DateSelector(
                     style = BetterMeTypography.Body.Small.Medium,
                     color = if (isSelected) BetterMeColors.White else BetterMeColors.Text.TextTertiary
                 )
+                // Indicator "Hôm nay"
+                if (date.isToday) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isSelected) BetterMeColors.White
+                                else BetterMeColors.Primary.Primary
+                            )
+                    )
+                }
             }
         }
     }
