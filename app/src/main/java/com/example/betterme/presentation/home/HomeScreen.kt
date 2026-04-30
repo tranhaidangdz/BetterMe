@@ -253,7 +253,7 @@ fun HomeContent(
         }
 
         item(key = "bottom_spacer") {
-            Spacer(modifier = Modifier.height(80.dp))
+            Spacer(modifier = Modifier.height(140.dp))
         }
     }
 
