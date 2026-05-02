@@ -32,20 +32,26 @@ import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun DailyHabitsScreen(
+    onBackClick: () -> Unit = {},
+    onHabitClick: (Int) -> Unit = {},
     viewModel: DailyHabitsViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
 
     DailyHabitsContent(
         state = state,
-        onIntent = viewModel::processIntent
+        onIntent = viewModel::processIntent,
+        onBackClick = onBackClick,
+        onHabitClick = onHabitClick
     )
 }
 
 @Composable
 fun DailyHabitsContent(
     state: DailyHabitsState,
-    onIntent: (DailyHabitsIntent) -> Unit
+    onIntent: (DailyHabitsIntent) -> Unit,
+    onBackClick: () -> Unit = {},
+    onHabitClick: (Int) -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -65,7 +71,7 @@ fun DailyHabitsContent(
                 BetterMeTopBar(
                     leadingIconRes = R.drawable.ic_arrow_left,
                     title = "Thói quen",
-                    onLeadingClick = { }
+                    onLeadingClick = onBackClick
                 )
             }
 
@@ -113,7 +119,8 @@ fun DailyHabitsContent(
                     habit = habit,
                     onToggleCompletion = {
                         onIntent(DailyHabitsIntent.ToggleHabitCompletion(habit.id))
-                    }
+                    },
+                    onCardClick = { onHabitClick(habit.id) }
                 )
             }
         }

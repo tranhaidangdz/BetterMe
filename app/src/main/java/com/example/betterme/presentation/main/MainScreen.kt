@@ -14,6 +14,7 @@ import com.example.betterme.presentation.categorydetail.CategoryDetailIntent
 import com.example.betterme.presentation.categorydetail.CategoryDetailScreen
 import com.example.betterme.presentation.categorydetail.CategoryDetailViewModel
 import com.example.betterme.presentation.dailyhabits.DailyHabitsScreen
+import com.example.betterme.presentation.habitdetail.HabitDetailScreen
 import com.example.betterme.presentation.home.HomeScreen
 import com.example.betterme.presentation.main.components.BottomNavBar
 import com.example.betterme.presentation.main.model.MainTab
@@ -45,7 +46,12 @@ fun MainScreen(
                     )
                 }
             )
-            MainTab.HABITS -> DailyHabitsScreen()
+            MainTab.HABITS -> DailyHabitsScreen(
+                onBackClick = { viewModel.processIntent(MainIntent.SelectTab(MainTab.HOME)) },
+                onHabitClick = { habitId ->
+                    viewModel.processIntent(MainIntent.OpenHabitDetail(habitId))
+                }
+            )
             MainTab.ADD -> AddHabitScreen(
                 onHabitAdded = { viewModel.processIntent(MainIntent.HabitAdded) },
                 onBackClick = { viewModel.processIntent(MainIntent.SelectTab(MainTab.HOME)) }
@@ -75,6 +81,9 @@ fun MainScreen(
             CategoryDetailScreen(
                 state = detailState,
                 onBack = { viewModel.processIntent(MainIntent.CloseCategoryDetail) },
+                onHabitClick = { habitId ->
+                    viewModel.processIntent(MainIntent.OpenHabitDetail(habitId))
+                },
                 onAiReviewClick = {
                     viewModel.processIntent(MainIntent.CloseCategoryDetail)
                     viewModel.processIntent(MainIntent.SelectTab(MainTab.AI_CHAT))
@@ -87,6 +96,14 @@ fun MainScreen(
                     viewModel.processIntent(MainIntent.CloseCategoryDetail)
                     viewModel.processIntent(MainIntent.SelectTab(MainTab.AI_CHAT))
                 }
+            )
+        }
+
+        // Habit Detail Overlay
+        if (state.habitDetailId != null) {
+            HabitDetailScreen(
+                habitId = state.habitDetailId!!,
+                onBackClick = { viewModel.processIntent(MainIntent.CloseHabitDetail) }
             )
         }
 

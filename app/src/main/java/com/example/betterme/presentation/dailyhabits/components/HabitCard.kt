@@ -32,6 +32,7 @@ import com.example.betterme.presentation.theme.BetterMeTypography
 fun HabitCard(
     habit: HabitUiModel,
     onToggleCompletion: () -> Unit = {},
+    onCardClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -45,7 +46,7 @@ fun HabitCard(
                 else BetterMeColors.Primary.Primary.copy(alpha = 0.35f),
                 shape = RoundedCornerShape(14.dp)
             )
-            .clickable { onToggleCompletion() }
+            .clickable { onCardClick() }
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -87,7 +88,8 @@ fun HabitCard(
                     .background(
                         if (habit.isCompleted) BetterMeColors.Green
                         else BetterMeColors.Gray.Gray4
-                    ),
+                    )
+                    .clickable { onToggleCompletion() },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(

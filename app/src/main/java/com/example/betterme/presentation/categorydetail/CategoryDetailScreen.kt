@@ -1,6 +1,7 @@
 package com.example.betterme.presentation.categorydetail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -25,6 +26,7 @@ import com.example.betterme.presentation.theme.BetterMeTypography
 fun CategoryDetailScreen(
     state: CategoryDetailState,
     onBack: () -> Unit,
+    onHabitClick: (Int) -> Unit = {},
     onAiReviewClick: () -> Unit,
     onAddHabitClick: () -> Unit,
     onAiSuggestClick: () -> Unit,
@@ -93,13 +95,18 @@ fun CategoryDetailScreen(
         } else {
             itemsIndexed(items = state.habits, key = { _, habit -> habit.id }) { index, habit ->
                 val palette = habitCardPalettes[index % habitCardPalettes.size]
-                HabitDetailCard(
-                    habit = habit,
-                    emoji = habitEmojis[index % habitEmojis.size],
-                    cardColor = palette.first,
-                    accentColor = palette.second,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .clickable { onHabitClick(habit.id) }
+                ) {
+                    HabitDetailCard(
+                        habit = habit,
+                        emoji = habitEmojis[index % habitEmojis.size],
+                        cardColor = palette.first,
+                        accentColor = palette.second,
+                    )
+                }
                 Spacer(Modifier.height(10.dp))
             }
         }

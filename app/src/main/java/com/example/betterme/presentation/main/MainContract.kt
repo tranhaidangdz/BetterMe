@@ -10,7 +10,8 @@ data class MainState(
     val homeRefreshVersion: Int = 0,
     val categoryDetailId: Int? = null,
     val categoryDetailName: String = "",
-    val categoryDetailIcon: String = ""
+    val categoryDetailIcon: String = "",
+    val habitDetailId: Int? = null
 ) : MviViewState
 
 sealed class MainIntent : MviIntent {
@@ -22,6 +23,8 @@ sealed class MainIntent : MviIntent {
         val categoryIcon: String
     ) : MainIntent()
     data object CloseCategoryDetail : MainIntent()
+    data class OpenHabitDetail(val habitId: Int) : MainIntent()
+    data object CloseHabitDetail : MainIntent()
 }
 
 sealed class MainEvent : MviSingleEvent
