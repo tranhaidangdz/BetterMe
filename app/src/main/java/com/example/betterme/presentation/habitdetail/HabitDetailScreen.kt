@@ -3,6 +3,7 @@ package com.example.betterme.presentation.habitdetail
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,10 +16,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.betterme.R
 import com.example.betterme.presentation.components.view.BetterMeTopBar
@@ -71,10 +75,8 @@ fun HabitDetailContent(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .padding(bottom = 80.dp), // Space for bottom button
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(bottom = 24.dp)
+                .statusBarsPadding(),
+            contentPadding = PaddingValues(bottom = 100.dp)
         ) {
             // ===== TOP BAR =====
             item(key = "topbar") {
@@ -87,6 +89,7 @@ fun HabitDetailContent(
 
             // ===== HABIT INFO CARD =====
             item(key = "info") {
+                Spacer(modifier = Modifier.height(8.dp))
                 HabitInfoCard(
                     title = state.habitTitle,
                     categoryName = state.categoryName,
@@ -98,6 +101,7 @@ fun HabitDetailContent(
 
             // ===== STREAK CARD =====
             item(key = "streak") {
+                Spacer(modifier = Modifier.height(10.dp))
                 StreakCard(
                     currentStreak = state.currentStreak,
                     longestStreak = state.longestStreak,
@@ -109,49 +113,18 @@ fun HabitDetailContent(
 
             // ===== MINI TABS =====
             item(key = "tabs") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(0.dp)
-                ) {
-                    HabitDetailTab.entries.forEach { tab ->
-                        val isSelected = tab == state.selectedTab
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { onIntent(HabitDetailIntent.SelectTab(tab)) }
-                                .padding(bottom = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = tab.label,
-                                    style = BetterMeTypography.Body.Small.Medium,
-                                    color = if (isSelected) BetterMeColors.Primary.Primary
-                                    else BetterMeColors.Text.TextTertiary
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(0.6f)
-                                        .height(2.dp)
-                                        .clip(RoundedCornerShape(1.dp))
-                                        .background(
-                                            if (isSelected) BetterMeColors.Primary.Primary
-                                            else BetterMeColors.White.copy(alpha = 0f)
-                                        )
-                                )
-                            }
-                        }
-                    }
-                }
+                Spacer(modifier = Modifier.height(14.dp))
+                MiniTabBar(
+                    selectedTab = state.selectedTab,
+                    onSelectTab = { onIntent(HabitDetailIntent.SelectTab(it)) },
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
             }
 
             // ===== TAB CONTENT =====
             when (state.selectedTab) {
                 HabitDetailTab.HISTORY -> {
-                    // Calendar
                     item(key = "calendar") {
                         CheckInCalendar(
                             title = state.calendarTitle,
@@ -162,17 +135,20 @@ fun HabitDetailContent(
                         )
                     }
 
-                    // Check-in logs
                     if (state.checkInLogs.isEmpty()) {
                         item(key = "empty_logs") {
+                            Spacer(modifier = Modifier.height(8.dp))
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(80.dp),
+                                    .padding(horizontal = 16.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(BetterMeColors.White)
+                                    .padding(vertical = 32.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "Chưa có lịch sử check-in",
+                                    text = "📋 Chưa có lịch sử check-in",
                                     style = BetterMeTypography.Body.Medium,
                                     color = BetterMeColors.Text.TextTertiary
                                 )
@@ -183,6 +159,7 @@ fun HabitDetailContent(
                             items = state.checkInLogs,
                             key = { it.logId }
                         ) { log ->
+                            Spacer(modifier = Modifier.height(8.dp))
                             CheckInLogCard(
                                 log = log,
                                 modifier = Modifier.padding(horizontal = 16.dp)
@@ -212,28 +189,41 @@ fun HabitDetailContent(
             }
         }
 
-        // ===== BOTTOM BUTTON — Check in ngay =====
+        // ===== STICKY BOTTOM BUTTON =====
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .background(BetterMeColors.BackGround.BackgroundSecondary)
+                .shadow(
+                    elevation = 8.dp,
+                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                    clip = false
+                )
+                .background(
+                    color = BetterMeColors.White,
+                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                )
                 .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
             Button(
                 onClick = { onIntent(HabitDetailIntent.CheckInToday) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .height(52.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (state.isCompletedToday) BetterMeColors.Green
                     else BetterMeColors.Primary.Primary
+                ),
+                elevation = ButtonDefaults.buttonElevation(
+                    defaultElevation = 2.dp,
+                    pressedElevation = 0.dp
                 )
             ) {
                 Text(
-                    text = if (state.isCompletedToday) "✓ Đã check in hôm nay" else "+ Check in ngay",
+                    text = if (state.isCompletedToday) "✓ Đã check in hôm nay"
+                    else "+ Check in ngay",
                     style = BetterMeTypography.Title.Small.Bold,
                     color = BetterMeColors.White
                 )
@@ -245,13 +235,61 @@ fun HabitDetailContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(BetterMeColors.Black.copy(alpha = 0.1f)),
+                    .background(BetterMeColors.Black.copy(alpha = 0.08f)),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(40.dp),
                     color = BetterMeColors.Primary.Primary,
                     strokeWidth = 3.dp
+                )
+            }
+        }
+    }
+}
+
+// ============================================================
+// MINI TAB BAR — Lịch sử | Nhắc nhở | Thống kê
+// ============================================================
+@Composable
+private fun MiniTabBar(
+    selectedTab: HabitDetailTab,
+    onSelectTab: (HabitDetailTab) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(BetterMeColors.White)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        HabitDetailTab.entries.forEach { tab ->
+            val isSelected = tab == selectedTab
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        if (isSelected) BetterMeColors.Primary.Primary.copy(alpha = 0.1f)
+                        else BetterMeColors.White
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onSelectTab(tab) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = tab.label,
+                    style = BetterMeTypography.Body.Small.Medium.copy(
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    ),
+                    color = if (isSelected) BetterMeColors.Primary.Primary
+                    else BetterMeColors.Text.TextTertiary,
+                    maxLines = 1
                 )
             }
         }

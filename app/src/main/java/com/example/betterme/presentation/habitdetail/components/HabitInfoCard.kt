@@ -1,18 +1,26 @@
 package com.example.betterme.presentation.habitdetail.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
 
+// ============================================================
+// HABIT INFO CARD — Thông tin thói quen + trạng thái
+// ============================================================
 @Composable
 fun HabitInfoCard(
     title: String,
@@ -24,64 +32,95 @@ fun HabitInfoCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(BetterMeColors.White)
             .padding(16.dp)
     ) {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Icon
+            // Category icon
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(14.dp))
                     .background(BetterMeColors.Primary.PrimaryBackground),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = categoryIcon, style = BetterMeTypography.Title.Medium.Bold)
+                Text(
+                    text = categoryIcon,
+                    style = BetterMeTypography.Headline.Small.Bold
+                )
             }
 
+            // Title + category + status — stacked vertically to prevent overflow
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     style = BetterMeTypography.Title.Small.Bold,
                     color = BetterMeColors.Text.TextPrimary,
-                    maxLines = 2
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Category + Status on separate row (wraps naturally)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
+                    // Category name
                     Text(
                         text = categoryName,
                         style = BetterMeTypography.Body.Small.Medium,
-                        color = BetterMeColors.Text.TextTertiary
+                        color = BetterMeColors.Text.TextTertiary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 120.dp)
                     )
-                    // Status badge
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(
-                                if (isCompletedToday) BetterMeColors.Green.copy(alpha = 0.15f)
-                                else BetterMeColors.Primary.Primary.copy(alpha = 0.12f)
-                            )
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = if (isCompletedToday) "✅ Đã hoàn thành" else "⏳ Đang thực hiện",
-                            style = BetterMeTypography.Body.Small.Medium,
-                            color = if (isCompletedToday) BetterMeColors.Green else BetterMeColors.Primary.Primary
-                        )
-                    }
+
+                    // Status badge — fixed size, won't push other elements
+                    StatusBadge(isCompleted = isCompletedToday)
                 }
             }
         }
     }
 }
 
+@Composable
+private fun StatusBadge(isCompleted: Boolean) {
+    val bgColor = if (isCompleted) BetterMeColors.Green.copy(alpha = 0.12f)
+    else BetterMeColors.Primary.Primary.copy(alpha = 0.10f)
+    val textColor = if (isCompleted) BetterMeColors.Green else BetterMeColors.Primary.Primary
+
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(bgColor)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(textColor)
+        )
+        Text(
+            text = if (isCompleted) "Đã hoàn thành" else "Đang thực hiện",
+            style = BetterMeTypography.Body.Small.Medium,
+            color = textColor,
+            maxLines = 1
+        )
+    }
+}
+
+// ============================================================
+// STREAK CARD — Chuỗi ngày + tiến độ tuần
+// ============================================================
 @Composable
 fun StreakCard(
     currentStreak: Int,
@@ -90,10 +129,16 @@ fun StreakCard(
     weeklyTotal: Int,
     modifier: Modifier = Modifier
 ) {
+    val animatedFraction by animateFloatAsState(
+        targetValue = if (weeklyTotal > 0) weeklyProgress.toFloat() / weeklyTotal else 0f,
+        animationSpec = tween(600),
+        label = "weekly_progress"
+    )
+
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(BetterMeColors.White)
             .padding(16.dp)
     ) {
@@ -102,19 +147,29 @@ fun StreakCard(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            StreakItem(value = "$currentStreak ngày", label = "Chuỗi hiện tại")
+            StreakItem(
+                value = currentStreak.toString(),
+                unit = "ngày",
+                label = "Chuỗi hiện tại",
+                modifier = Modifier.weight(1f)
+            )
             Box(
                 modifier = Modifier
                     .width(1.dp)
-                    .height(48.dp)
+                    .height(56.dp)
                     .background(BetterMeColors.Border.BorderLight)
             )
-            StreakItem(value = "$longestStreak ngày", label = "Chuỗi dài nhất")
+            StreakItem(
+                value = longestStreak.toString(),
+                unit = "ngày",
+                label = "Chuỗi dài nhất",
+                modifier = Modifier.weight(1f)
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Weekly progress bar
+        // Weekly progress label
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -132,20 +187,20 @@ fun StreakCard(
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
-        // Progress bar
+
+        // Animated progress bar
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(3.dp))
+                .height(8.dp)
+                .clip(RoundedCornerShape(4.dp))
                 .background(BetterMeColors.Gray.Gray4)
         ) {
-            val fraction = if (weeklyTotal > 0) weeklyProgress.toFloat() / weeklyTotal else 0f
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .fillMaxWidth(fraction.coerceIn(0f, 1f))
-                    .clip(RoundedCornerShape(3.dp))
+                    .fillMaxWidth(animatedFraction.coerceIn(0f, 1f))
+                    .clip(RoundedCornerShape(4.dp))
                     .background(BetterMeColors.Primary.Primary)
             )
         }
@@ -153,15 +208,34 @@ fun StreakCard(
 }
 
 @Composable
-private fun StreakItem(value: String, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = value,
-            style = BetterMeTypography.Title.Medium.Bold,
-            color = BetterMeColors.Primary.Primary,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(2.dp))
+private fun StreakItem(
+    value: String,
+    unit: String,
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = value,
+                style = BetterMeTypography.Headline.Small.Bold,
+                color = BetterMeColors.Primary.Primary
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = unit,
+                style = BetterMeTypography.Body.Small.Medium,
+                color = BetterMeColors.Primary.Primary,
+                modifier = Modifier.padding(bottom = 2.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = label,
             style = BetterMeTypography.Body.Small.Medium,
