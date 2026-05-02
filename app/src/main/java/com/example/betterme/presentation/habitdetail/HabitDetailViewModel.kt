@@ -1,5 +1,6 @@
 package com.example.betterme.presentation.habitdetail
 
+import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import com.example.betterme.base.BaseMviViewModel
 import com.example.betterme.data.local.datastore.DataStoreManager
@@ -26,9 +27,17 @@ class HabitDetailViewModel(
         when (intent) {
             is HabitDetailIntent.LoadHabit -> loadHabit(intent.habitId)
             is HabitDetailIntent.SelectTab -> selectTab(intent.tab)
-            HabitDetailIntent.CheckInToday -> checkInToday()
             HabitDetailIntent.PreviousMonth -> changeMonth(-1)
             HabitDetailIntent.NextMonth -> changeMonth(1)
+
+            // Check-in camera flow
+            HabitDetailIntent.StartCheckIn -> startCheckIn()
+            is HabitDetailIntent.PhotoCaptured -> photoCaptured(intent.uri)
+            is HabitDetailIntent.UpdateCheckInNote -> updateCheckInNote(intent.note)
+            is HabitDetailIntent.SetLocation -> setLocation(intent.lat, intent.lng, intent.name)
+            HabitDetailIntent.ConfirmCheckIn -> confirmCheckIn()
+            HabitDetailIntent.DismissCheckIn -> dismissCheckIn()
+            HabitDetailIntent.UndoCheckIn -> undoCheckIn()
         }
     }
 
@@ -131,38 +140,134 @@ class HabitDetailViewModel(
     }
 
     // ============================================================
-    // CHECK-IN TODAY
+    // CHECK-IN CAMERA FLOW
     // ============================================================
-    private fun checkInToday() {
-        viewModelScope.launch {
-            try {
-                val habitId = currentState.habitId
-                val today = getStartOfDay(Calendar.getInstance())
-                val existingLog = habitLogRepository.getLogByDate(habitId, today)
 
-                if (existingLog != null && existingLog.status == "DONE") {
-                    // Undo check-in
-                    habitLogRepository.deleteLog(existingLog)
-                    sendEvent(HabitDetailEvent.ShowMessage("Đã bỏ check-in"))
-                } else if (existingLog != null) {
-                    habitLogRepository.updateLog(existingLog.copy(status = "DONE"))
-                    sendEvent(HabitDetailEvent.ShowMessage("Đã check-in thành công! 🎉"))
-                } else {
-                    habitLogRepository.addLog(
-                        HabitLogEntity(
-                            habit_id = habitId,
-                            date = today,
+    /** Bước 1: Bấm nút → signal UI mở camera */
+    private fun startCheckIn() {
+        if (currentState.isCompletedToday) {
+            // Nếu đã check-in rồi → không mở camera nữa
+            return
+        }
+        // Signal UI to launch camera — location sẽ được lấy trong composable
+        sendEvent(HabitDetailEvent.LaunchCamera)
+    }
+
+    /** Bước 2: Camera trả ảnh về → chuyển sang CONFIRM */
+    private fun photoCaptured(uri: Uri) {
+        updateState {
+            copy(
+                checkInStep = CheckInStep.CONFIRM,
+                checkInPhotoUri = uri,
+                checkInNote = "",
+                checkInTimestamp = System.currentTimeMillis()
+            )
+        }
+    }
+
+    /** Cập nhật ghi chú */
+    private fun updateCheckInNote(note: String) {
+        if (note.length <= 200) {
+            updateState { copy(checkInNote = note) }
+        }
+    }
+
+    /** Nhận location từ UI */
+    private fun setLocation(lat: Double, lng: Double, name: String?) {
+        updateState {
+            copy(
+                checkInLatitude = lat,
+                checkInLongitude = lng,
+                checkInLocationName = name
+            )
+        }
+    }
+
+    /** Bước 3: Xác nhận → lưu vào Room */
+    private fun confirmCheckIn() {
+        viewModelScope.launch {
+            updateState { copy(isSavingCheckIn = true) }
+            try {
+                val state = currentState
+                val today = getStartOfDay(Calendar.getInstance())
+                val existingLog = habitLogRepository.getLogByDate(state.habitId, today)
+
+                val imageUriStr = state.checkInPhotoUri?.toString()
+
+                if (existingLog != null) {
+                    // Cập nhật log hiện tại
+                    habitLogRepository.updateLog(
+                        existingLog.copy(
                             status = "DONE",
-                            note = null,
-                            image = null,
-                            created_at = System.currentTimeMillis()
+                            note = state.checkInNote.ifBlank { null },
+                            image = imageUriStr,
+                            created_at = state.checkInTimestamp,
+                            latitude = state.checkInLatitude,
+                            longitude = state.checkInLongitude
                         )
                     )
-                    sendEvent(HabitDetailEvent.ShowMessage("Đã check-in thành công! 🎉"))
+                } else {
+                    // Tạo mới
+                    habitLogRepository.addLog(
+                        HabitLogEntity(
+                            habit_id = state.habitId,
+                            date = today,
+                            status = "DONE",
+                            note = state.checkInNote.ifBlank { null },
+                            image = imageUriStr,
+                            created_at = state.checkInTimestamp,
+                            latitude = state.checkInLatitude,
+                            longitude = state.checkInLongitude
+                        )
+                    )
                 }
 
-                // Reload data
-                loadHabit(habitId)
+                updateState {
+                    copy(
+                        isSavingCheckIn = false,
+                        checkInStep = CheckInStep.SUCCESS
+                    )
+                }
+                sendEvent(HabitDetailEvent.CheckInSaved)
+            } catch (e: Exception) {
+                updateState { copy(isSavingCheckIn = false) }
+                sendEvent(HabitDetailEvent.ShowMessage("Lỗi khi lưu check-in: ${e.message}"))
+            }
+        }
+    }
+
+    /** Hủy check-in flow → quay lại IDLE */
+    private fun dismissCheckIn() {
+        updateState {
+            copy(
+                checkInStep = CheckInStep.IDLE,
+                checkInPhotoUri = null,
+                checkInNote = "",
+                checkInLatitude = null,
+                checkInLongitude = null,
+                checkInLocationName = null,
+                checkInTimestamp = 0L
+            )
+        }
+    }
+
+    /** Sau SUCCESS, bấm "Tuyệt vời" → reload data & quay IDLE */
+    fun onSuccessDismiss() {
+        dismissCheckIn()
+        loadHabit(currentState.habitId)
+    }
+
+    /** Bỏ check-in hôm nay (undo) */
+    private fun undoCheckIn() {
+        viewModelScope.launch {
+            try {
+                val today = getStartOfDay(Calendar.getInstance())
+                val existingLog = habitLogRepository.getLogByDate(currentState.habitId, today)
+                if (existingLog != null && existingLog.status == "DONE") {
+                    habitLogRepository.deleteLog(existingLog)
+                    sendEvent(HabitDetailEvent.ShowMessage("Đã bỏ check-in"))
+                    loadHabit(currentState.habitId)
+                }
             } catch (_: Exception) { }
         }
     }

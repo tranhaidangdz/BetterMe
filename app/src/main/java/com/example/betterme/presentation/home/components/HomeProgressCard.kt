@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -26,6 +27,7 @@ import com.example.betterme.presentation.theme.BetterMeTypography
 @Composable
 fun HomeProgressCard(
     progress: HomeProgress,
+    onViewProgress: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val animatedProgress by animateFloatAsState(
@@ -48,8 +50,14 @@ fun HomeProgressCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
+                val statusText = when {
+                    progress.totalHabits == 0 -> "Chưa có nhiệm vụ\nnào hôm nay"
+                    progress.percentage >= 100 -> "Tất cả nhiệm vụ\nđã hoàn thành! 🎉"
+                    progress.completedHabits > 0 -> "${progress.completedHabits}/${progress.totalHabits} nhiệm vụ\nđã hoàn thành!"
+                    else -> "Nhiệm vụ hôm nay\nchờ bạn hoàn thành!"
+                }
                 Text(
-                    text = "Nhiệm vụ hôm nay\nđã hoàn thành!",
+                    text = statusText,
                     style = BetterMeTypography.Title.Small.Bold,
                     color = Color.White
                 )
@@ -58,6 +66,7 @@ fun HomeProgressCard(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
                         .background(BetterMeColors.White15)
+                        .clickable { onViewProgress() }
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Text(

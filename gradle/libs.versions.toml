@@ -50,6 +50,7 @@ foundationLayoutVersion = "1.10.6"
 lottieVersion = "6.4.0"
 googleid = "1.2.0"
 foundation = "1.10.6"
+playServicesLocation = "21.3.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -121,6 +122,9 @@ lottie-compose = { group = "com.airbnb.android", name = "lottie-compose", versio
 lottie = { group = "com.airbnb.android", name = "lottie", version.ref = "lottieVersion" }
 googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
+
+# Location
+play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

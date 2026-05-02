@@ -10,6 +10,7 @@ object BetterMeColors {
     val Red = Color(0xFFFF3429)
     val Blue = Color(0xFF007AFF)
     val Green = Color(0xFF34C759)
+    val Yellow = Color(0xFFFFC107)
 
     object Primary {
         val Primary = Color(0xFF0077FF)

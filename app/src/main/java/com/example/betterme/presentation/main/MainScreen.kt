@@ -36,6 +36,9 @@ fun MainScreen(
             MainTab.HOME -> HomeScreen(
                 refreshVersion = state.homeRefreshVersion,
                 onLogoutSuccess = navigateToSignIn,
+                onViewProgress = {
+                    viewModel.processIntent(MainIntent.SelectTab(MainTab.HABITS))
+                },
                 onCategoryClick = { categoryId, categoryName, categoryIcon ->
                     viewModel.processIntent(
                         MainIntent.OpenCategoryDetail(
@@ -107,12 +110,14 @@ fun MainScreen(
             )
         }
 
-        // Bottom Nav Bar
-        BottomNavBar(
-            selectedTab = state.selectedTab,
-            onTabSelected = { viewModel.processIntent(MainIntent.SelectTab(it)) },
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
+        // Bottom Nav Bar — ẩn khi overlay đang mở
+        if (state.categoryDetailId == null && state.habitDetailId == null) {
+            BottomNavBar(
+                selectedTab = state.selectedTab,
+                onTabSelected = { viewModel.processIntent(MainIntent.SelectTab(it)) },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
     }
 }
 

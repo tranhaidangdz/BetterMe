@@ -1,6 +1,11 @@
 package com.example.betterme.presentation.habitdetail
 
+import android.Manifest
+import android.content.Context
+import android.location.Geocoder
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -12,11 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,13 +25,19 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import com.example.betterme.R
 import com.example.betterme.presentation.components.view.BetterMeTopBar
 import com.example.betterme.presentation.habitdetail.components.*
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import kotlinx.coroutines.flow.collectLatest
 import org.koin.androidx.compose.koinViewModel
+import java.io.File
+import java.util.Locale
 
 @Composable
 fun HabitDetailScreen(
@@ -41,6 +48,42 @@ fun HabitDetailScreen(
     val state by viewModel.viewState.collectAsState()
     val context = LocalContext.current
 
+    // ===== CAMERA URI (FileProvider) =====
+    var photoUri by remember { mutableStateOf<android.net.Uri?>(null) }
+
+    // ===== CAMERA LAUNCHER =====
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && photoUri != null) {
+            viewModel.processIntent(HabitDetailIntent.PhotoCaptured(photoUri!!))
+        }
+    }
+
+    // ===== PERMISSION LAUNCHER (Camera + Location) =====
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val cameraGranted = permissions[Manifest.permission.CAMERA] == true
+        val locationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+                || permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+
+        if (cameraGranted) {
+            // Lấy GPS trước (nếu được cấp quyền)
+            if (locationGranted) {
+                fetchLocation(context, viewModel)
+            }
+
+            // Tạo file tạm cho camera
+            val uri = createImageUri(context)
+            photoUri = uri
+            cameraLauncher.launch(uri)
+        } else {
+            Toast.makeText(context, "Cần quyền camera để check-in", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // ===== LISTEN EVENTS =====
     LaunchedEffect(habitId) {
         viewModel.processIntent(HabitDetailIntent.LoadHabit(habitId))
     }
@@ -50,28 +93,88 @@ fun HabitDetailScreen(
             when (event) {
                 is HabitDetailEvent.ShowMessage ->
                     Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
+
+                is HabitDetailEvent.LaunchCamera -> {
+                    // Request permissions then launch camera
+                    permissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.CAMERA,
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
+                }
+
+                is HabitDetailEvent.CheckInSaved -> {
+                    // State đã chuyển sang SUCCESS — UI sẽ tự render
+                }
             }
         }
     }
 
-    HabitDetailContent(
-        state = state,
-        onBackClick = onBackClick,
-        onIntent = viewModel::processIntent
-    )
-}
-
-@Composable
-fun HabitDetailContent(
-    state: HabitDetailState,
-    onBackClick: () -> Unit,
-    onIntent: (HabitDetailIntent) -> Unit
-) {
+    // ===== MAIN CONTENT =====
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(BetterMeColors.BackGround.BackgroundSecondary)
     ) {
+        HabitDetailMainContent(
+            state = state,
+            onBackClick = onBackClick,
+            onIntent = viewModel::processIntent
+        )
+
+        // ===== CHECK-IN CONFIRM OVERLAY =====
+        if (state.checkInStep == CheckInStep.CONFIRM) {
+            CheckInConfirmSheet(
+                state = state,
+                onNoteChanged = { viewModel.processIntent(HabitDetailIntent.UpdateCheckInNote(it)) },
+                onConfirm = { viewModel.processIntent(HabitDetailIntent.ConfirmCheckIn) },
+                onDismiss = { viewModel.processIntent(HabitDetailIntent.DismissCheckIn) }
+            )
+        }
+
+        // ===== CHECK-IN SUCCESS OVERLAY =====
+        if (state.checkInStep == CheckInStep.SUCCESS) {
+            CheckInSuccessSheet(
+                habitTitle = state.habitTitle,
+                currentStreak = state.currentStreak + 1, // +1 vì vừa check-in
+                onDismiss = { viewModel.onSuccessDismiss() },
+                onViewHistory = {
+                    viewModel.onSuccessDismiss()
+                    viewModel.processIntent(HabitDetailIntent.SelectTab(HabitDetailTab.HISTORY))
+                }
+            )
+        }
+
+        // Loading overlay
+        if (state.isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(BetterMeColors.Black.copy(alpha = 0.08f)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(40.dp),
+                    color = BetterMeColors.Primary.Primary,
+                    strokeWidth = 3.dp
+                )
+            }
+        }
+    }
+}
+
+// ============================================================
+// MAIN CONTENT — LazyColumn + sticky button
+// ============================================================
+@Composable
+private fun HabitDetailMainContent(
+    state: HabitDetailState,
+    onBackClick: () -> Unit,
+    onIntent: (HabitDetailIntent) -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -206,43 +309,73 @@ fun HabitDetailContent(
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
-            Button(
-                onClick = { onIntent(HabitDetailIntent.CheckInToday) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (state.isCompletedToday) BetterMeColors.Green
-                    else BetterMeColors.Primary.Primary
-                ),
-                elevation = ButtonDefaults.buttonElevation(
-                    defaultElevation = 2.dp,
-                    pressedElevation = 0.dp
-                )
-            ) {
-                Text(
-                    text = if (state.isCompletedToday) "✓ Đã check in hôm nay"
-                    else "+ Check in ngay",
-                    style = BetterMeTypography.Title.Small.Bold,
-                    color = BetterMeColors.White
-                )
-            }
-        }
+            if (state.isCompletedToday) {
+                // Đã check-in → nút undo
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Undo button
+                    Button(
+                        onClick = { onIntent(HabitDetailIntent.UndoCheckIn) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BetterMeColors.Red.copy(alpha = 0.1f)
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(0.dp)
+                    ) {
+                        Text(
+                            text = "Bỏ check-in",
+                            style = BetterMeTypography.Body.Medium.copy(fontWeight = FontWeight.SemiBold),
+                            color = BetterMeColors.Red
+                        )
+                    }
 
-        // Loading overlay
-        if (state.isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(BetterMeColors.Black.copy(alpha = 0.08f)),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(40.dp),
-                    color = BetterMeColors.Primary.Primary,
-                    strokeWidth = 3.dp
-                )
+                    // Status button (disabled)
+                    Button(
+                        onClick = { },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BetterMeColors.Green
+                        ),
+                        enabled = false,
+                        elevation = ButtonDefaults.buttonElevation(0.dp)
+                    ) {
+                        Text(
+                            text = "✓ Đã hoàn thành",
+                            style = BetterMeTypography.Title.Small.Bold,
+                            color = BetterMeColors.White
+                        )
+                    }
+                }
+            } else {
+                // Chưa check-in → nút mở camera
+                Button(
+                    onClick = { onIntent(HabitDetailIntent.StartCheckIn) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BetterMeColors.Primary.Primary
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(
+                        defaultElevation = 2.dp,
+                        pressedElevation = 0.dp
+                    )
+                ) {
+                    Text(
+                        text = "📸 Check in bằng camera",
+                        style = BetterMeTypography.Title.Small.Bold,
+                        color = BetterMeColors.White
+                    )
+                }
             }
         }
     }
@@ -294,4 +427,63 @@ private fun MiniTabBar(
             }
         }
     }
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+/** Tạo URI cho camera output qua FileProvider */
+private fun createImageUri(context: Context): android.net.Uri {
+    val imageDir = File(context.cacheDir, "checkin_images").apply { mkdirs() }
+    val imageFile = File(imageDir, "checkin_${System.currentTimeMillis()}.jpg")
+    return FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        imageFile
+    )
+}
+
+/** Lấy GPS location hiện tại (last known hoặc fresh) */
+@Suppress("MissingPermission")
+private fun fetchLocation(context: Context, viewModel: HabitDetailViewModel) {
+    try {
+        val fusedClient = LocationServices.getFusedLocationProviderClient(context)
+        val cancellationToken = CancellationTokenSource()
+
+        fusedClient.getCurrentLocation(
+            Priority.PRIORITY_HIGH_ACCURACY,
+            cancellationToken.token
+        ).addOnSuccessListener { location ->
+            if (location != null) {
+                // Reverse geocode
+                val locationName = try {
+                    val geocoder = Geocoder(context, Locale("vi"))
+                    @Suppress("DEPRECATION")
+                    val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+                    addresses?.firstOrNull()?.let { addr ->
+                        buildString {
+                            addr.thoroughfare?.let { append(it) }
+                            addr.subAdminArea?.let {
+                                if (isNotEmpty()) append(", ")
+                                append(it)
+                            }
+                            addr.adminArea?.let {
+                                if (isNotEmpty()) append(", ")
+                                append(it)
+                            }
+                        }.ifBlank { null }
+                    }
+                } catch (_: Exception) { null }
+
+                viewModel.processIntent(
+                    HabitDetailIntent.SetLocation(
+                        lat = location.latitude,
+                        lng = location.longitude,
+                        name = locationName
+                    )
+                )
+            }
+        }
+    } catch (_: Exception) { }
 }

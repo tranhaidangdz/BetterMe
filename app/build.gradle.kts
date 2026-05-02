@@ -110,4 +110,7 @@ dependencies {
 
     //LottieAnimation
     implementation(libs.lottie.compose)
+
+    // Location (GPS for check-in anti-cheat)
+    implementation(libs.play.services.location)
 }

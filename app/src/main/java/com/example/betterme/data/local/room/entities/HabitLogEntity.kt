@@ -25,5 +25,7 @@ data class HabitLogEntity(
     val status: String,
     val note: String?,
     val image: String?,
-    val created_at: Long
+    val created_at: Long,
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )

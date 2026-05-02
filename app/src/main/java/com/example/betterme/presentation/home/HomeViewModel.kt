@@ -6,6 +6,7 @@ import com.example.betterme.data.local.datastore.DataStoreManager
 import com.example.betterme.data.local.room.entities.UserEntity
 import com.example.betterme.data.provider.GoogleAuthClient
 import com.example.betterme.domain.repository.CategoryRepository
+import com.example.betterme.domain.repository.HabitLogRepository
 import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.domain.repository.UserRepository
 import com.example.betterme.presentation.home.model.CantMiss
@@ -13,12 +14,14 @@ import com.example.betterme.presentation.home.model.HomeProgress
 import com.example.betterme.presentation.theme.BetterMeColors
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.Calendar
 import kotlin.random.Random
 
 class HomeViewModel(
     private val dataStoreManager: DataStoreManager,
     private val categoryRepository: CategoryRepository,
     private val habitRepository: HabitRepository,
+    private val habitLogRepository: HabitLogRepository,
     private val googleAuthClient: GoogleAuthClient,
     private val userRepository: UserRepository
 ) : BaseMviViewModel<HomeIntent, HomeState, HomeEvent>() {
@@ -76,24 +79,41 @@ class HomeViewModel(
             } else {
                 emptyList()
             }
+            // 4. Tính dữ liệu check-in hôm nay
+            val today = getStartOfDay()
+            val completedHabitIds = habitLogRepository.getCompletedHabitIdsByDate(today)
 
-            val cantMissList = habits.mapNotNull { habit ->
-                val category = allCategories.find { it.id == habit.category_id }
-                CantMiss(
-                    categoryId = category?.id ?: -1,
-                    categoryName = category?.name ?: "Khác",
-                    categoryIcon = category?.icon ?: "📝",
-                    habitTitle = habit.title,
-                    progress = 0 // Sẽ tính sau khi có HabitLog tracking
-                )
-            }
+            // 5. Build "Đang thực hiện" — chỉ hiện habits chưa hoàn thành hôm nay
+            val cantMissList = habits
+                .filter { it.id !in completedHabitIds }
+                .mapNotNull { habit ->
+                    val category = allCategories.find { it.id == habit.category_id }
 
-            // 5. Tính progress
+                    // Tiến độ thực: số ngày DONE / tổng ngày từ start → nay
+                    val doneCount = habitLogRepository.countCompleted(habit.id)
+                    val totalDays = ((today - habit.start_date) / (24 * 60 * 60 * 1000)).toInt().coerceAtLeast(1)
+                    val habitProgress = ((doneCount.toFloat() / totalDays) * 100).toInt().coerceIn(0, 100)
+
+                    CantMiss(
+                        categoryId = category?.id ?: -1,
+                        categoryName = category?.name ?: "Khác",
+                        categoryIcon = category?.icon ?: "📝",
+                        habitTitle = habit.title,
+                        progress = habitProgress
+                    )
+                }
+
+            // 6. Tính progress tổng cho card trên cùng
             val totalHabits = habits.size
+            val completedHabits = habits.count { it.id in completedHabitIds }
+            val percentage = if (totalHabits > 0) {
+                ((completedHabits.toFloat() / totalHabits) * 100).toInt()
+            } else 0
+
             val progress = HomeProgress(
                 totalHabits = totalHabits,
-                completedHabits = 0, // Sẽ tính sau khi có HabitLog tracking
-                percentage = 0
+                completedHabits = completedHabits,
+                percentage = percentage
             )
 
             updateState {
@@ -166,5 +186,14 @@ class HomeViewModel(
                 updateState { copy(isLoading = false) }
             }
         }
+    }
+
+    private fun getStartOfDay(): Long {
+        return Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
     }
 }

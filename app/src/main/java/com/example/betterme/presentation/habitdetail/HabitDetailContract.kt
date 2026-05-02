@@ -1,5 +1,6 @@
 package com.example.betterme.presentation.habitdetail
 
+import android.net.Uri
 import com.example.betterme.base.MviIntent
 import com.example.betterme.base.MviSingleEvent
 import com.example.betterme.base.MviViewState
@@ -11,6 +12,15 @@ enum class HabitDetailTab(val label: String) {
     HISTORY("Lịch sử check in"),
     AI_SUGGEST("Nhắc nhở"),
     STATS("Thống kê")
+}
+
+// ============================================================
+// ENUM — bước check-in
+// ============================================================
+enum class CheckInStep {
+    IDLE,       // Chưa bắt đầu
+    CONFIRM,    // Đang xem ảnh + ghi chú trước khi xác nhận
+    SUCCESS     // Đã check-in thành công
 }
 
 // ============================================================
@@ -74,7 +84,17 @@ data class HabitDetailState(
     val checkInLogs: List<CheckInLogUiModel> = emptyList(),
 
     // Stats tab
-    val stats: HabitStatUiModel = HabitStatUiModel()
+    val stats: HabitStatUiModel = HabitStatUiModel(),
+
+    // ===== CHECK-IN FLOW =====
+    val checkInStep: CheckInStep = CheckInStep.IDLE,
+    val checkInPhotoUri: Uri? = null,
+    val checkInNote: String = "",
+    val checkInLatitude: Double? = null,
+    val checkInLongitude: Double? = null,
+    val checkInLocationName: String? = null,  // Tên vị trí (reverse geocode)
+    val checkInTimestamp: Long = 0L,
+    val isSavingCheckIn: Boolean = false
 ) : MviViewState
 
 // ============================================================
@@ -83,9 +103,17 @@ data class HabitDetailState(
 sealed class HabitDetailIntent : MviIntent {
     data class LoadHabit(val habitId: Int) : HabitDetailIntent()
     data class SelectTab(val tab: HabitDetailTab) : HabitDetailIntent()
-    data object CheckInToday : HabitDetailIntent()
     data object PreviousMonth : HabitDetailIntent()
     data object NextMonth : HabitDetailIntent()
+
+    // Check-in camera flow
+    data object StartCheckIn : HabitDetailIntent()          // Bấm nút "Check in" → mở camera
+    data class PhotoCaptured(val uri: Uri) : HabitDetailIntent()  // Camera trả ảnh về
+    data class UpdateCheckInNote(val note: String) : HabitDetailIntent()
+    data class SetLocation(val lat: Double, val lng: Double, val name: String?) : HabitDetailIntent()
+    data object ConfirmCheckIn : HabitDetailIntent()        // Xác nhận → lưu vào DB
+    data object DismissCheckIn : HabitDetailIntent()        // Hủy check-in flow
+    data object UndoCheckIn : HabitDetailIntent()           // Bỏ check-in hôm nay
 }
 
 // ============================================================
@@ -93,4 +121,6 @@ sealed class HabitDetailIntent : MviIntent {
 // ============================================================
 sealed class HabitDetailEvent : MviSingleEvent {
     data class ShowMessage(val message: String) : HabitDetailEvent()
+    data object LaunchCamera : HabitDetailEvent()           // Signal UI to open camera
+    data object CheckInSaved : HabitDetailEvent()           // Lưu thành công → hiện success
 }

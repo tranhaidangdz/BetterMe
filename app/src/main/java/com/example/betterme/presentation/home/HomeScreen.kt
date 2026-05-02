@@ -44,6 +44,7 @@ import org.koin.androidx.compose.koinViewModel
 fun HomeScreen(
     refreshVersion: Int = 0,
     onCategoryClick: (Int, String, String) -> Unit = { _, _, _ -> },
+    onViewProgress: () -> Unit = {},
     onLogoutSuccess: () -> Unit = {},
     viewModel: HomeViewModel = koinViewModel()
 ) {
@@ -68,6 +69,7 @@ fun HomeScreen(
     HomeContent(
         state = state,
         onCategoryClick = onCategoryClick,
+        onViewProgress = onViewProgress,
         onShowEditProfile = { viewModel.processIntent(HomeIntent.ShowEditProfile) },
         onDismissEditProfile = { viewModel.processIntent(HomeIntent.DismissEditProfile) },
         onLogout = { viewModel.processIntent(HomeIntent.Logout) },
@@ -82,6 +84,7 @@ fun HomeScreen(
 fun HomeContent(
     state: HomeState,
     onCategoryClick: (Int, String, String) -> Unit = { _, _, _ -> },
+    onViewProgress: () -> Unit = {},
     onShowEditProfile: () -> Unit = {},
     onDismissEditProfile: () -> Unit = {},
     onLogout: () -> Unit = {},
@@ -175,7 +178,10 @@ fun HomeContent(
 
         // ===== PROGRESS CARD =====
         item(key = "progress") {
-            HomeProgressCard(progress = state.progress)
+            HomeProgressCard(
+                progress = state.progress,
+                onViewProgress = onViewProgress
+            )
         }
 
         // ===== SECTION: Đang thực hiện =====
