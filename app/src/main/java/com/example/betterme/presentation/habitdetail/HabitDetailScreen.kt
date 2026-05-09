@@ -13,15 +13,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FabPosition
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -166,7 +166,7 @@ fun HabitDetailScreen(
 }
 
 // ============================================================
-// MAIN CONTENT — Scaffold with FAB + LazyColumn
+// MAIN CONTENT — Column layout with fixed bottom check-in bar
 // ============================================================
 @Composable
 private fun HabitDetailMainContent(
@@ -174,27 +174,14 @@ private fun HabitDetailMainContent(
     onBackClick: () -> Unit,
     onIntent: (HabitDetailIntent) -> Unit
 ) {
-    Scaffold(
-        containerColor = Color.Transparent,
-        floatingActionButton = {
-            HabitDetailFab(
-                isCompletedToday = state.isCompletedToday,
-                onCheckInClick = { onIntent(HabitDetailIntent.StartCheckIn) },
-                onUndoClick = { onIntent(HabitDetailIntent.UndoCheckIn) },
-                modifier = Modifier.navigationBarsPadding()
-            )
-        },
-        floatingActionButtonPosition = FabPosition.Center
-    ) { innerPadding ->
-        // Dynamic bottom padding: scaffold padding + extra clearance for FAB
-        val fabClearance = 24.dp
-        val bottomPad = innerPadding.calculateBottomPadding() + fabClearance
-
+    Column(modifier = Modifier.fillMaxSize()) {
+        // ===== SCROLLABLE CONTENT — takes all remaining space =====
         LazyColumn(
             modifier = Modifier
-                .fillMaxSize()
+                .weight(1f)
+                .fillMaxWidth()
                 .statusBarsPadding(),
-            contentPadding = PaddingValues(bottom = bottomPad)
+            contentPadding = PaddingValues(bottom = 12.dp)
         ) {
             // ===== TOP BAR =====
             item(key = "topbar") {
@@ -304,6 +291,106 @@ private fun HabitDetailMainContent(
                         )
                     }
                 }
+            }
+        }
+
+        // ===== FIXED BOTTOM CHECK-IN BAR =====
+        CheckInBottomBar(
+            isCompletedToday = state.isCompletedToday,
+            onCheckInClick = { onIntent(HabitDetailIntent.StartCheckIn) },
+            onUndoClick = { onIntent(HabitDetailIntent.UndoCheckIn) }
+        )
+    }
+}
+
+// ============================================================
+// FIXED BOTTOM BAR — Camera check-in / Undo+Status
+// ============================================================
+@Composable
+private fun CheckInBottomBar(
+    isCompletedToday: Boolean,
+    onCheckInClick: () -> Unit,
+    onUndoClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
+                clip = false
+            )
+            .background(
+                color = BetterMeColors.White,
+                shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)
+            )
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+    ) {
+        if (isCompletedToday) {
+            // Đã check-in → undo + status row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = onUndoClick,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BetterMeColors.Red.copy(alpha = 0.1f)
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(0.dp)
+                ) {
+                    Text(
+                        text = "Bỏ check-in",
+                        style = BetterMeTypography.Body.Medium.copy(fontWeight = FontWeight.SemiBold),
+                        color = BetterMeColors.Red
+                    )
+                }
+
+                Button(
+                    onClick = { },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BetterMeColors.Green
+                    ),
+                    enabled = false,
+                    elevation = ButtonDefaults.buttonElevation(0.dp)
+                ) {
+                    Text(
+                        text = "✓ Đã hoàn thành",
+                        style = BetterMeTypography.Title.Small.Bold,
+                        color = BetterMeColors.White
+                    )
+                }
+            }
+        } else {
+            // Chưa check-in → camera button
+            Button(
+                onClick = onCheckInClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BetterMeColors.Primary.Primary
+                ),
+                elevation = ButtonDefaults.buttonElevation(
+                    defaultElevation = 2.dp,
+                    pressedElevation = 0.dp
+                )
+            ) {
+                Text(
+                    text = "📸 Check in bằng camera",
+                    style = BetterMeTypography.Title.Small.Bold,
+                    color = BetterMeColors.White
+                )
             }
         }
     }
