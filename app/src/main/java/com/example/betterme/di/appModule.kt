@@ -42,6 +42,7 @@ import com.example.betterme.presentation.addhabit.AddHabitViewModel
 import com.example.betterme.presentation.categorydetail.CategoryDetailViewModel
 import com.example.betterme.presentation.habitdetail.HabitDetailViewModel
 import com.example.betterme.presentation.splash.SplashViewModel
+import com.example.betterme.presentation.statistics.StatisticsViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
@@ -153,4 +154,5 @@ val viewModelModule = module {
     viewModelOf(::AddHabitViewModel)
     viewModelOf(::CategoryDetailViewModel)
     viewModelOf(::HabitDetailViewModel)
+    viewModelOf(::StatisticsViewModel)
 }

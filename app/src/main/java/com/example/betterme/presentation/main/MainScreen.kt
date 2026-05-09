@@ -17,6 +17,7 @@ import com.example.betterme.presentation.dailyhabits.DailyHabitsScreen
 import com.example.betterme.presentation.habitdetail.HabitDetailScreen
 import com.example.betterme.presentation.home.HomeScreen
 import com.example.betterme.presentation.main.components.BottomNavBar
+import com.example.betterme.presentation.statistics.StatisticsScreen
 import com.example.betterme.presentation.main.model.MainTab
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
@@ -60,7 +61,9 @@ fun MainScreen(
                 onBackClick = { viewModel.processIntent(MainIntent.SelectTab(MainTab.HOME)) }
             )
             MainTab.AI_CHAT -> PlaceholderTab("🤖 AI Chat")
-            MainTab.STATS -> PlaceholderTab("📊 Thống kê")
+            MainTab.STATS -> StatisticsScreen(
+                onBackClick = { viewModel.processIntent(MainIntent.SelectTab(MainTab.HOME)) }
+            )
         }
 
         // Category Detail Overlay
