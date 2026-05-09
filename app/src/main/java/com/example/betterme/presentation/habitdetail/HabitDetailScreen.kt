@@ -13,17 +13,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FabPosition
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.example.betterme.R
@@ -166,7 +165,7 @@ fun HabitDetailScreen(
 }
 
 // ============================================================
-// MAIN CONTENT — LazyColumn + sticky button
+// MAIN CONTENT — Scaffold with FAB + LazyColumn
 // ============================================================
 @Composable
 private fun HabitDetailMainContent(
@@ -174,12 +173,27 @@ private fun HabitDetailMainContent(
     onBackClick: () -> Unit,
     onIntent: (HabitDetailIntent) -> Unit
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    Scaffold(
+        containerColor = Color.Transparent,
+        floatingActionButton = {
+            HabitDetailFab(
+                isCompletedToday = state.isCompletedToday,
+                onCheckInClick = { onIntent(HabitDetailIntent.StartCheckIn) },
+                onUndoClick = { onIntent(HabitDetailIntent.UndoCheckIn) },
+                modifier = Modifier.navigationBarsPadding()
+            )
+        },
+        floatingActionButtonPosition = FabPosition.Center
+    ) { innerPadding ->
+        // Dynamic bottom padding: scaffold padding + extra clearance for FAB
+        val fabClearance = 24.dp
+        val bottomPad = innerPadding.calculateBottomPadding() + fabClearance
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding(),
-            contentPadding = PaddingValues(bottom = 100.dp)
+            contentPadding = PaddingValues(bottom = bottomPad)
         ) {
             // ===== TOP BAR =====
             item(key = "topbar") {
@@ -204,7 +218,7 @@ private fun HabitDetailMainContent(
 
             // ===== STREAK CARD =====
             item(key = "streak") {
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 StreakCard(
                     currentStreak = state.currentStreak,
                     longestStreak = state.longestStreak,
@@ -222,7 +236,7 @@ private fun HabitDetailMainContent(
                     onSelectTab = { onIntent(HabitDetailIntent.SelectTab(it)) },
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
             // ===== TAB CONTENT =====
@@ -240,7 +254,7 @@ private fun HabitDetailMainContent(
 
                     if (state.checkInLogs.isEmpty()) {
                         item(key = "empty_logs") {
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -262,7 +276,7 @@ private fun HabitDetailMainContent(
                             items = state.checkInLogs,
                             key = { it.logId }
                         ) { log ->
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
                             CheckInLogCard(
                                 log = log,
                                 modifier = Modifier.padding(horizontal = 16.dp)
@@ -288,93 +302,6 @@ private fun HabitDetailMainContent(
                             modifier = Modifier.padding(horizontal = 16.dp)
                         )
                     }
-                }
-            }
-        }
-
-        // ===== STICKY BOTTOM BUTTON =====
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .shadow(
-                    elevation = 8.dp,
-                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-                    clip = false
-                )
-                .background(
-                    color = BetterMeColors.White,
-                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
-                )
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 14.dp)
-        ) {
-            if (state.isCompletedToday) {
-                // Đã check-in → nút undo
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // Undo button
-                    Button(
-                        onClick = { onIntent(HabitDetailIntent.UndoCheckIn) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = BetterMeColors.Red.copy(alpha = 0.1f)
-                        ),
-                        elevation = ButtonDefaults.buttonElevation(0.dp)
-                    ) {
-                        Text(
-                            text = "Bỏ check-in",
-                            style = BetterMeTypography.Body.Medium.copy(fontWeight = FontWeight.SemiBold),
-                            color = BetterMeColors.Red
-                        )
-                    }
-
-                    // Status button (disabled)
-                    Button(
-                        onClick = { },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = BetterMeColors.Green
-                        ),
-                        enabled = false,
-                        elevation = ButtonDefaults.buttonElevation(0.dp)
-                    ) {
-                        Text(
-                            text = "✓ Đã hoàn thành",
-                            style = BetterMeTypography.Title.Small.Bold,
-                            color = BetterMeColors.White
-                        )
-                    }
-                }
-            } else {
-                // Chưa check-in → nút mở camera
-                Button(
-                    onClick = { onIntent(HabitDetailIntent.StartCheckIn) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = BetterMeColors.Primary.Primary
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(
-                        defaultElevation = 2.dp,
-                        pressedElevation = 0.dp
-                    )
-                ) {
-                    Text(
-                        text = "📸 Check in bằng camera",
-                        style = BetterMeTypography.Title.Small.Bold,
-                        color = BetterMeColors.White
-                    )
                 }
             }
         }
