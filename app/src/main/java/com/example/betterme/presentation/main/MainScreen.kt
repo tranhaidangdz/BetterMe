@@ -164,16 +164,14 @@ fun MainScreen(
             )
         }
 
-        // Challenge Detail Overlay
-        if (state.challengeDetailId != null) {
-            val detailId = state.challengeDetailId!!
-            ChallengeDetailScreen(
-                challengeId = if (state.challengeDetailIsPreview) detailId else null,
-                userChallengeId = if (state.challengeDetailIsPreview) null else detailId,
-                isPreview = state.challengeDetailIsPreview,
-                onBackClick = { viewModel.processIntent(MainIntent.CloseChallengeDetail) }
-            )
-        }
+        // ===== Overlay z-order =====
+        // The list-type overlays (Discover, Achievements, Badges, Group, Upcoming,
+        // Completed) MUST render before the Challenge Detail block. Inside a Compose
+        // [Box], children draw in source order — the last `if`-block sits on top.
+        // Challenge Detail is opened FROM these list overlays, so it must be the
+        // topmost screen; otherwise tapping a card mounts Detail behind the open list
+        // and the user only sees it after dismissing the list (the "press back to see
+        // detail" bug). Keep Challenge Detail last.
 
         // Challenge Achievements Profile Overlay
         if (state.showChallengeAchievements) {
@@ -232,6 +230,18 @@ fun MainScreen(
                 onOpenChallengeDetail = { id ->
                     viewModel.processIntent(MainIntent.OpenChallengeDetail(id))
                 }
+            )
+        }
+
+        // Challenge Detail Overlay — kept last so it always renders on top of any
+        // list overlay that opened it. See the z-order note above.
+        if (state.challengeDetailId != null) {
+            val detailId = state.challengeDetailId!!
+            ChallengeDetailScreen(
+                challengeId = if (state.challengeDetailIsPreview) detailId else null,
+                userChallengeId = if (state.challengeDetailIsPreview) null else detailId,
+                isPreview = state.challengeDetailIsPreview,
+                onBackClick = { viewModel.processIntent(MainIntent.CloseChallengeDetail) }
             )
         }
 

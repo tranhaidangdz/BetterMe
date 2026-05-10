@@ -15,7 +15,20 @@ interface ChallengeDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(challenge: ChallengeEntity): Long
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    /**
+     * Idempotent catalog insert: keeps existing rows untouched. Using IGNORE here
+     * (instead of REPLACE) is critical because [com.example.betterme.data.local.room.entities.UserChallengeEntity]
+     * declares `onDelete = CASCADE` on its FK to this table — REPLACE deletes-then-inserts
+     * the parent row, which would cascade-wipe a user's joined challenges and check-in
+     * logs every time the seeder backfilled a new entry.
+     *
+     * Trade-off: re-running the seed never refreshes already-shipped content (e.g. an
+     * edited title on challenge id=1 stays as the prior version on existing installs).
+     * That's acceptable for a curated catalog where rewrites are rare; if we ever need
+     * to push content updates, do it via a versioned migration that explicitly UPDATEs
+     * the affected columns rather than re-INSERTing the row.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(challenges: List<ChallengeEntity>)
 
     @Update

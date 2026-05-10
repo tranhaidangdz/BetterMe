@@ -13,7 +13,15 @@ interface AchievementDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(achievement: AchievementEntity): Long
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    /**
+     * Idempotent badge-catalog insert. IGNORE keeps existing rows intact, which matters
+     * because [com.example.betterme.data.local.room.entities.ChallengeEntity] declares
+     * `onDelete = SET_NULL` on its FK to this table — REPLACE deletes-then-reinserts, and
+     * the brief delete pulse would null-out every challenge's `reward_badge_id` before
+     * the new badge row lands. With IGNORE, existing badges stay, new badges get added,
+     * and challenge → badge bindings remain valid.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(achievements: List<AchievementEntity>)
 
     @Query("SELECT * FROM achievements ORDER BY category, sort_order ASC")

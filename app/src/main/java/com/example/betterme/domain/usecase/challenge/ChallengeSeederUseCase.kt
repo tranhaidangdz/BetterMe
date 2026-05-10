@@ -16,8 +16,19 @@ import com.example.betterme.domain.repository.GroupTeamRepository
  * Seeds the challenge catalog, badge catalog, and mock group teams on first launch
  * (and after destructive Room migrations). Idempotent via [DataStoreManager.isChallengesSeeded].
  *
+ * The challenge catalog is the union of three coexisting sources — they are merged,
+ * never replaced:
+ * - [ChallengesSeed]           — 48 entries, IDs 1..48 (mix of EASY/MEDIUM/HARD/LEGENDARY)
+ * - [UpcomingChallengesSeed]   — 20 entries, IDs 100..119 (seasonal future-dated)
+ * - [EliteChallengesSeed]      — 20 entries, IDs 200..219 (10 HARD + 10 LEGENDARY)
+ *
+ * All three insert into the same `challenges` table via the same DAO, so every screen
+ * (Discover, Overview, Detail) sees a single unified catalog of 88 challenges.
+ *
  * Order matters: badges first (challenges FK to reward_badge_id), then challenges, then teams
- * (teams FK to challenge_id).
+ * (teams FK to challenge_id). DAO inserts use OnConflictStrategy.IGNORE so re-seeding on
+ * upgrade adds new IDs without disturbing existing rows or cascade-deleting any user's
+ * joined challenges and check-in logs.
  */
 class ChallengeSeederUseCase(
     private val database: BetterMeDatabase,
@@ -32,8 +43,11 @@ class ChallengeSeederUseCase(
         // against an expected total catches both first-launch and the case where the
         // app upgrades and ships more challenges (the previous flag-only guard would
         // leave older installs forever stuck at the initial catalog size).
-        // OnConflictStrategy.REPLACE on the DAO inserts means re-seeding is idempotent
-        // for already-existing rows; only newly-added IDs actually mutate the table.
+        // OnConflictStrategy.IGNORE on the catalog DAO inserts means re-seeding is
+        // idempotent for already-existing rows; only newly-added IDs actually mutate
+        // the table. This is critical because UserChallengeEntity has CASCADE on its
+        // FK to challenges — REPLACE would delete-then-reinsert and cascade-wipe
+        // every joined challenge + log row a user has accumulated.
         val expectedChallenges = ChallengesSeed.challenges().size +
             UpcomingChallengesSeed.upcoming().size +
             EliteChallengesSeed.elite().size
