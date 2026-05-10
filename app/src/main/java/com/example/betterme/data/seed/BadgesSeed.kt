@@ -391,6 +391,68 @@ object BadgesSeed {
             criteria_type = "CHALLENGE_COMPLETED",
             criteria_value = 1,
             sort_order = 30
+        ),
+        // ==== Elite tier — HARD-difficulty badges (31-35) ====
+        AchievementEntity(
+            id = 31, title = "Chiến Binh Bình Minh",
+            description = "Hoàn thành chuỗi thử thách dậy sớm",
+            category = "DISCIPLINE", icon_emoji = "🌅", color_hex = "#F97316",
+            criteria_type = "CHALLENGE_COMPLETED", criteria_value = 1, sort_order = 31
+        ),
+        AchievementEntity(
+            id = 32, title = "Bậc Thầy Vận Động",
+            description = "Hoàn thành thử thách thể chất khắc nghiệt",
+            category = "HEALTH", icon_emoji = "🏃‍♂️", color_hex = "#EF4444",
+            criteria_type = "CHALLENGE_COMPLETED", criteria_value = 1, sort_order = 32
+        ),
+        AchievementEntity(
+            id = 33, title = "Bậc Thầy Tập Trung",
+            description = "Hoàn thành thử thách deep work",
+            category = "LEARNING", icon_emoji = "🎯", color_hex = "#6366F1",
+            criteria_type = "CHALLENGE_COMPLETED", criteria_value = 1, sort_order = 33
+        ),
+        AchievementEntity(
+            id = 34, title = "Ý Chí Sắt Đá",
+            description = "Vượt qua thử thách kỷ luật cá nhân khắc nghiệt",
+            category = "DISCIPLINE", icon_emoji = "🛡️", color_hex = "#0EA5E9",
+            criteria_type = "CHALLENGE_COMPLETED", criteria_value = 1, sort_order = 34
+        ),
+        AchievementEntity(
+            id = 35, title = "Học Giả Bền Bỉ",
+            description = "Hoàn thành chuỗi học tập / đọc sách dài hạn",
+            category = "LEARNING", icon_emoji = "📚", color_hex = "#14B8A6",
+            criteria_type = "CHALLENGE_COMPLETED", criteria_value = 1, sort_order = 35
+        ),
+        // ==== Elite tier — LEGENDARY badges (36-40) ====
+        AchievementEntity(
+            id = 36, title = "Nhà Vô Địch 75 Hard",
+            description = "Hoàn thành huyền thoại 75 Hard",
+            category = "SPECIAL", icon_emoji = "🏆", color_hex = "#EAB308",
+            criteria_type = "CHALLENGE_COMPLETED", criteria_value = 1, sort_order = 36
+        ),
+        AchievementEntity(
+            id = 37, title = "Tâm Trí Tu Sĩ",
+            description = "Hoàn thành Monk Mode 30 ngày",
+            category = "SPECIAL", icon_emoji = "🧘‍♂️", color_hex = "#7C3AED",
+            criteria_type = "CHALLENGE_COMPLETED", criteria_value = 1, sort_order = 37
+        ),
+        AchievementEntity(
+            id = 38, title = "Kỷ Luật Thép",
+            description = "Hoàn thành 100 ngày kỷ luật",
+            category = "SPECIAL", icon_emoji = "⚔️", color_hex = "#0F172A",
+            criteria_type = "CHALLENGE_COMPLETED", criteria_value = 1, sort_order = 38
+        ),
+        AchievementEntity(
+            id = 39, title = "Anh Hùng Lột Xác",
+            description = "Hoàn thành hành trình transformation",
+            category = "SPECIAL", icon_emoji = "🦅", color_hex = "#DC2626",
+            criteria_type = "CHALLENGE_COMPLETED", criteria_value = 1, sort_order = 39
+        ),
+        AchievementEntity(
+            id = 40, title = "Huyền Thoại Tự Chủ",
+            description = "Đạt cảnh giới Self-Mastery",
+            category = "SPECIAL", icon_emoji = "👑", color_hex = "#F59E0B",
+            criteria_type = "CHALLENGE_COMPLETED", criteria_value = 1, sort_order = 40
         )
     )
 }
