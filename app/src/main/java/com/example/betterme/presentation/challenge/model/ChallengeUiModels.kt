@@ -84,6 +84,21 @@ data class CategoryTileUi(
 )
 
 /**
+ * UI model for the prominent upcoming-challenge carousel on the Discover screen.
+ * Includes the precomputed countdown so the card stays render-cheap.
+ */
+data class UpcomingFeatureUiModel(
+    val challengeId: Int,
+    val title: String,
+    val iconEmoji: String,
+    val accentColor: Color,
+    val daysUntilStart: Int,
+    val startLabel: String,
+    val rewardCoins: Int,
+    val participantCount: Int
+)
+
+/**
  * Single day cell in the 7-day streak strip on Detail screen.
  */
 data class DayCellUi(

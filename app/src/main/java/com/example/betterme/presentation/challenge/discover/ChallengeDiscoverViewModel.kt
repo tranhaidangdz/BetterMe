@@ -53,9 +53,20 @@ class ChallengeDiscoverViewModel(
                         accentColor = colorForCategory(cat.id)
                     )
                 }
-                val featured = challenges.filter { it.is_featured }
-                    .map { it.toFeaturedUi() }
+                val now = System.currentTimeMillis()
+                // Featured = is_featured AND not in the future (those go in upcomingFeatured).
+                val featured = challenges.filter {
+                    it.is_featured && (it.start_date == null || it.start_date <= now)
+                }.map { it.toFeaturedUi() }
+                // Upcoming = future start_date, sorted by soonest first, capped at 10
+                // for the carousel.
+                val upcomingFeatured = challenges
+                    .filter { (it.start_date ?: 0L) > now }
+                    .sortedBy { it.start_date }
+                    .take(10)
+                    .map { it.toUpcomingUi(now) }
                 val newest = challenges
+                    .filter { (it.start_date ?: 0L) <= now }
                     .sortedByDescending { it.created_at }
                     .take(10)
                     .map { it.toNewUi() }
@@ -63,6 +74,7 @@ class ChallengeDiscoverViewModel(
                     copy(
                         isLoading = false,
                         featured = featured,
+                        upcomingFeatured = upcomingFeatured,
                         categories = tiles,
                         newest = newest
                     )
@@ -80,6 +92,22 @@ class ChallengeDiscoverViewModel(
             val results = challengeRepository.search(q).map { it.toNewUi() }
             updateState { copy(searchResults = results) }
         }
+    }
+
+    private fun ChallengeEntity.toUpcomingUi(now: Long): com.example.betterme.presentation.challenge.model.UpcomingFeatureUiModel {
+        val DAY_MS = 24L * 60L * 60L * 1000L
+        val days = ((((start_date ?: now) - now) / DAY_MS).toInt()).coerceAtLeast(0)
+        val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale("vi"))
+        return com.example.betterme.presentation.challenge.model.UpcomingFeatureUiModel(
+            challengeId = id,
+            title = title,
+            iconEmoji = icon_emoji,
+            accentColor = parseColor(color_hex),
+            daysUntilStart = days,
+            startLabel = sdf.format(java.util.Date(start_date ?: now)),
+            rewardCoins = reward_coins,
+            participantCount = participant_count
+        )
     }
 
     private fun ChallengeEntity.toFeaturedUi() = FeaturedChallengeUiModel(

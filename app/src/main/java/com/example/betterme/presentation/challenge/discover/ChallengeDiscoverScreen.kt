@@ -121,6 +121,34 @@ fun ChallengeDiscoverScreen(
                 }
             }
 
+            if (state.upcomingFeatured.isNotEmpty()) {
+                item {
+                    com.example.betterme.presentation.components.view.SectionHeader(
+                        title = "Sắp diễn ra",
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+                item {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp)
+                    ) {
+                        items(state.upcomingFeatured, key = { it.challengeId }) { card ->
+                            com.example.betterme.presentation.challenge.discover.components.UpcomingFeatureCard(
+                                title = card.title,
+                                iconEmoji = card.iconEmoji,
+                                accentColor = card.accentColor,
+                                daysUntilStart = card.daysUntilStart,
+                                startLabel = card.startLabel,
+                                rewardCoins = card.rewardCoins,
+                                participantCount = card.participantCount,
+                                onClick = { onOpenChallengeDetail(card.challengeId) }
+                            )
+                        }
+                    }
+                }
+            }
+
             if (state.categories.isNotEmpty()) {
                 item {
                     SectionHeader(

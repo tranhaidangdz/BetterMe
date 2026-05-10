@@ -6,6 +6,7 @@ import com.example.betterme.data.local.room.database.BetterMeDatabase
 import com.example.betterme.data.seed.BadgesSeed
 import com.example.betterme.data.seed.ChallengesSeed
 import com.example.betterme.data.seed.GroupTeamsSeed
+import com.example.betterme.data.seed.UpcomingChallengesSeed
 import com.example.betterme.domain.repository.AchievementRepository
 import com.example.betterme.domain.repository.ChallengeRepository
 import com.example.betterme.domain.repository.GroupTeamRepository
@@ -36,6 +37,7 @@ class ChallengeSeederUseCase(
         database.withTransaction {
             achievementRepository.insertAll(BadgesSeed.badges)
             challengeRepository.insertAll(ChallengesSeed.challenges())
+            challengeRepository.insertAll(UpcomingChallengesSeed.upcoming())
             groupTeamRepository.insertAll(GroupTeamsSeed.teams)
         }
 
