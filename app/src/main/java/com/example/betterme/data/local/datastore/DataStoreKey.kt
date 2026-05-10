@@ -11,4 +11,5 @@ object DataStoreKey {
     val USER_PHOTO_URL = stringPreferencesKey("user_photo_url")
     val IS_GUEST = booleanPreferencesKey("is_guest")
     val HAS_SELECTED_HABITS = booleanPreferencesKey("has_selected_habits")
+    val CHALLENGES_SEEDED = booleanPreferencesKey("challenges_seeded")
 }

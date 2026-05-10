@@ -13,6 +13,14 @@ import com.example.betterme.presentation.addhabit.AddHabitScreen
 import com.example.betterme.presentation.categorydetail.CategoryDetailIntent
 import com.example.betterme.presentation.categorydetail.CategoryDetailScreen
 import com.example.betterme.presentation.categorydetail.CategoryDetailViewModel
+import com.example.betterme.presentation.challenge.achievements.ChallengeAchievementsScreen
+import com.example.betterme.presentation.challenge.badges.ChallengeBadgesScreen
+import com.example.betterme.presentation.challenge.completed.ChallengeCompletedScreen
+import com.example.betterme.presentation.challenge.detail.ChallengeDetailScreen
+import com.example.betterme.presentation.challenge.discover.ChallengeDiscoverScreen
+import com.example.betterme.presentation.challenge.group.ChallengeGroupScreen
+import com.example.betterme.presentation.challenge.overview.ChallengeOverviewScreen
+import com.example.betterme.presentation.challenge.upcoming.ChallengeUpcomingScreen
 import com.example.betterme.presentation.dailyhabits.DailyHabitsScreen
 import com.example.betterme.presentation.habitdetail.HabitDetailScreen
 import com.example.betterme.presentation.home.HomeScreen
@@ -60,7 +68,23 @@ fun MainScreen(
                 onHabitAdded = { viewModel.processIntent(MainIntent.HabitAdded) },
                 onBackClick = { viewModel.processIntent(MainIntent.SelectTab(MainTab.HOME)) }
             )
-            MainTab.AI_CHAT -> PlaceholderTab("🤖 AI Chat")
+            MainTab.CHALLENGE -> ChallengeOverviewScreen(
+                onOpenChallengeDetail = { id ->
+                    viewModel.processIntent(MainIntent.OpenChallengeDetail(id))
+                },
+                onOpenDiscover = {
+                    viewModel.processIntent(MainIntent.OpenChallengeDiscover)
+                },
+                onOpenAchievements = {
+                    viewModel.processIntent(MainIntent.OpenChallengeAchievements)
+                },
+                onOpenUpcoming = {
+                    viewModel.processIntent(MainIntent.OpenChallengeUpcoming)
+                },
+                onOpenCompleted = {
+                    viewModel.processIntent(MainIntent.OpenChallengeCompleted)
+                }
+            )
             MainTab.STATS -> StatisticsScreen(
                 onBackClick = { viewModel.processIntent(MainIntent.SelectTab(MainTab.HOME)) }
             )
@@ -92,7 +116,7 @@ fun MainScreen(
                 },
                 onAiReviewClick = {
                     viewModel.processIntent(MainIntent.CloseCategoryDetail)
-                    viewModel.processIntent(MainIntent.SelectTab(MainTab.AI_CHAT))
+                    viewModel.processIntent(MainIntent.SelectTab(MainTab.HOME))
                 },
                 onAddHabitClick = {
                     viewModel.processIntent(MainIntent.CloseCategoryDetail)
@@ -100,7 +124,7 @@ fun MainScreen(
                 },
                 onAiSuggestClick = {
                     viewModel.processIntent(MainIntent.CloseCategoryDetail)
-                    viewModel.processIntent(MainIntent.SelectTab(MainTab.AI_CHAT))
+                    viewModel.processIntent(MainIntent.SelectTab(MainTab.HOME))
                 }
             )
         }
@@ -113,8 +137,89 @@ fun MainScreen(
             )
         }
 
+        // Challenge Detail Overlay
+        if (state.challengeDetailId != null) {
+            val detailId = state.challengeDetailId!!
+            ChallengeDetailScreen(
+                challengeId = if (state.challengeDetailIsPreview) detailId else null,
+                userChallengeId = if (state.challengeDetailIsPreview) null else detailId,
+                isPreview = state.challengeDetailIsPreview,
+                onBackClick = { viewModel.processIntent(MainIntent.CloseChallengeDetail) }
+            )
+        }
+
+        // Challenge Achievements Profile Overlay
+        if (state.showChallengeAchievements) {
+            ChallengeAchievementsScreen(
+                onBackClick = { viewModel.processIntent(MainIntent.CloseChallengeAchievements) },
+                onSeeAllBadges = { viewModel.processIntent(MainIntent.OpenChallengeBadges) }
+            )
+        }
+
+        // Challenge Badges Overlay
+        if (state.showChallengeBadges) {
+            ChallengeBadgesScreen(
+                onBackClick = { viewModel.processIntent(MainIntent.CloseChallengeBadges) }
+            )
+        }
+
+        // Challenge Group Overlay
+        if (state.challengeGroupId != null) {
+            ChallengeGroupScreen(
+                challengeId = state.challengeGroupId!!,
+                onBackClick = { viewModel.processIntent(MainIntent.CloseChallengeGroup) },
+                onOpenUserChallenge = { ucId ->
+                    viewModel.processIntent(MainIntent.CloseChallengeGroup)
+                    viewModel.processIntent(MainIntent.OpenChallengeDetail(ucId))
+                }
+            )
+        }
+
+        // Challenge Discover Overlay
+        if (state.showChallengeDiscover) {
+            ChallengeDiscoverScreen(
+                onBackClick = { viewModel.processIntent(MainIntent.CloseChallengeDiscover) },
+                onOpenChallengeDetail = { id ->
+                    viewModel.processIntent(MainIntent.OpenChallengeDetail(id, isPreview = true))
+                },
+                onOpenGroupChallenge = { id ->
+                    viewModel.processIntent(MainIntent.OpenChallengeGroup(id))
+                }
+            )
+        }
+
+        // Challenge Upcoming List Overlay
+        if (state.showChallengeUpcoming) {
+            ChallengeUpcomingScreen(
+                onBackClick = { viewModel.processIntent(MainIntent.CloseChallengeUpcoming) },
+                onOpenChallengeDetail = { id ->
+                    viewModel.processIntent(MainIntent.OpenChallengeDetail(id, isPreview = true))
+                }
+            )
+        }
+
+        // Challenge Completed List Overlay
+        if (state.showChallengeCompleted) {
+            ChallengeCompletedScreen(
+                onBackClick = { viewModel.processIntent(MainIntent.CloseChallengeCompleted) },
+                onOpenChallengeDetail = { id ->
+                    viewModel.processIntent(MainIntent.OpenChallengeDetail(id))
+                }
+            )
+        }
+
         // Bottom Nav Bar — ẩn khi overlay đang mở
-        if (state.categoryDetailId == null && state.habitDetailId == null) {
+        val anyOverlay = state.categoryDetailId != null
+            || state.habitDetailId != null
+            || state.challengeDetailId != null
+            || state.showChallengeDiscover
+            || state.showChallengeAchievements
+            || state.showChallengeBadges
+            || state.challengeGroupId != null
+            || state.showChallengeUpcoming
+            || state.showChallengeCompleted
+            || state.challengeCelebrationId != null
+        if (!anyOverlay) {
             BottomNavBar(
                 selectedTab = state.selectedTab,
                 onTabSelected = { viewModel.processIntent(MainIntent.SelectTab(it)) },

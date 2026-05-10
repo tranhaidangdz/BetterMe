@@ -9,6 +9,6 @@ enum class MainTab(
     HOME("Trang chủ", R.drawable.ic_home),
     HABITS("Nhiệm vụ", R.drawable.ic_habits),
     ADD("Thêm", R.drawable.ic_add),
-    AI_CHAT("AI Chat", R.drawable.ic_ai_chat),
+    CHALLENGE("Thử thách", R.drawable.ic_challenge),
     STATS("Thống kê", R.drawable.ic_stats);
 }

@@ -9,20 +9,26 @@ import com.example.betterme.data.local.room.dao.AIChatDao
 import com.example.betterme.data.local.room.dao.AchievementDao
 import com.example.betterme.data.local.room.dao.CategoryDao
 import com.example.betterme.data.local.room.dao.ChallengeDao
+import com.example.betterme.data.local.room.dao.ChallengeLogDao
+import com.example.betterme.data.local.room.dao.GroupTeamDao
 import com.example.betterme.data.local.room.dao.HabitDao
 import com.example.betterme.data.local.room.dao.HabitLogDao
 import com.example.betterme.data.local.room.dao.ReminderDao
 import com.example.betterme.data.local.room.dao.UserAchievementDao
+import com.example.betterme.data.local.room.dao.UserCategoryDao
 import com.example.betterme.data.local.room.dao.UserChallengeDao
 import com.example.betterme.data.local.room.dao.UserDao
 import com.example.betterme.data.local.room.entities.AIChatEntity
 import com.example.betterme.data.local.room.entities.AchievementEntity
 import com.example.betterme.data.local.room.entities.CategoryEntity
 import com.example.betterme.data.local.room.entities.ChallengeEntity
+import com.example.betterme.data.local.room.entities.ChallengeLogEntity
+import com.example.betterme.data.local.room.entities.GroupTeamEntity
 import com.example.betterme.data.local.room.entities.HabitEntity
 import com.example.betterme.data.local.room.entities.HabitLogEntity
 import com.example.betterme.data.local.room.entities.ReminderEntity
 import com.example.betterme.data.local.room.entities.UserAchievementEntity
+import com.example.betterme.data.local.room.entities.UserCategoryEntity
 import com.example.betterme.data.local.room.entities.UserChallengeEntity
 import com.example.betterme.data.local.room.entities.UserEntity
 
@@ -30,16 +36,19 @@ import com.example.betterme.data.local.room.entities.UserEntity
     entities = [
         UserEntity::class,
         CategoryEntity::class,
+        UserCategoryEntity::class,
         HabitEntity::class,
         HabitLogEntity::class,
         ReminderEntity::class,
         ChallengeEntity::class,
         UserChallengeEntity::class,
+        ChallengeLogEntity::class,
+        GroupTeamEntity::class,
         AchievementEntity::class,
         UserAchievementEntity::class,
         AIChatEntity::class
     ],
-    version = 4,
+    version = 6,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -49,9 +58,12 @@ abstract class BetterMeDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
     abstract fun habitLogDao(): HabitLogDao
     abstract fun categoryDao(): CategoryDao
+    abstract fun userCategoryDao(): UserCategoryDao
     abstract fun reminderDao(): ReminderDao
     abstract fun challengeDao(): ChallengeDao
     abstract fun userChallengeDao(): UserChallengeDao
+    abstract fun challengeLogDao(): ChallengeLogDao
+    abstract fun groupTeamDao(): GroupTeamDao
     abstract fun achievementDao(): AchievementDao
     abstract fun userAchievementDao(): UserAchievementDao
     abstract fun aiChatDao(): AIChatDao

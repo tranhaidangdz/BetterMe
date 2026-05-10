@@ -11,7 +11,17 @@ data class MainState(
     val categoryDetailId: Int? = null,
     val categoryDetailName: String = "",
     val categoryDetailIcon: String = "",
-    val habitDetailId: Int? = null
+    val habitDetailId: Int? = null,
+    // Challenge overlay state
+    val challengeDetailId: Int? = null,
+    val challengeDetailIsPreview: Boolean = false,
+    val showChallengeDiscover: Boolean = false,
+    val showChallengeAchievements: Boolean = false,
+    val showChallengeBadges: Boolean = false,
+    val challengeGroupId: Int? = null,
+    val showChallengeUpcoming: Boolean = false,
+    val showChallengeCompleted: Boolean = false,
+    val challengeCelebrationId: Int? = null
 ) : MviViewState
 
 sealed class MainIntent : MviIntent {
@@ -25,6 +35,24 @@ sealed class MainIntent : MviIntent {
     data object CloseCategoryDetail : MainIntent()
     data class OpenHabitDetail(val habitId: Int) : MainIntent()
     data object CloseHabitDetail : MainIntent()
+
+    // Challenge overlays
+    data class OpenChallengeDetail(val id: Int, val isPreview: Boolean = false) : MainIntent()
+    data object CloseChallengeDetail : MainIntent()
+    data object OpenChallengeDiscover : MainIntent()
+    data object CloseChallengeDiscover : MainIntent()
+    data object OpenChallengeAchievements : MainIntent()
+    data object CloseChallengeAchievements : MainIntent()
+    data object OpenChallengeBadges : MainIntent()
+    data object CloseChallengeBadges : MainIntent()
+    data class OpenChallengeGroup(val challengeId: Int) : MainIntent()
+    data object CloseChallengeGroup : MainIntent()
+    data object OpenChallengeUpcoming : MainIntent()
+    data object CloseChallengeUpcoming : MainIntent()
+    data object OpenChallengeCompleted : MainIntent()
+    data object CloseChallengeCompleted : MainIntent()
+    data class ShowChallengeCelebration(val userChallengeId: Int) : MainIntent()
+    data object DismissChallengeCelebration : MainIntent()
 }
 
 sealed class MainEvent : MviSingleEvent

@@ -38,4 +38,42 @@
     <!-- Common -->
     <string name="common_continue">Tiếp tục</string>
 
+    <!-- Challenge tab -->
+    <string name="tab_challenge">Thử thách</string>
+    <string name="challenge_overview_title">Thử thách</string>
+    <string name="challenge_discover_title">Khám phá thử thách</string>
+    <string name="challenge_detail_title">Chi tiết thử thách</string>
+    <string name="challenge_badges_title">Hệ thống huy hiệu</string>
+    <string name="challenge_group_title">Thử thách nhóm</string>
+    <string name="challenge_achievements_title">Thành tích của tôi</string>
+    <string name="challenge_upcoming_title">Sắp diễn ra</string>
+    <string name="challenge_completed_title">Đã hoàn thành</string>
+
+    <string name="challenge_filter_active">Đang diễn ra</string>
+    <string name="challenge_filter_upcoming">Sắp diễn ra</string>
+    <string name="challenge_filter_completed">Đã hoàn thành</string>
+    <string name="challenge_filter_all">Tất cả</string>
+    <string name="challenge_filter_failed">Chưa hoàn thành</string>
+
+    <string name="challenge_cta_continue">Tiếp tục thử thách</string>
+    <string name="challenge_cta_join">Tham gia thử thách</string>
+    <string name="challenge_cta_explore">Khám phá thử thách mới</string>
+    <string name="challenge_cta_remind">Nhắc tôi</string>
+    <string name="challenge_cta_amazing">Tuyệt vời!</string>
+    <string name="challenge_cta_share">Chia sẻ thành tích</string>
+
+    <string name="challenge_difficulty_easy">Dễ</string>
+    <string name="challenge_difficulty_medium">Trung bình</string>
+    <string name="challenge_difficulty_hard">Khó</string>
+
+    <string name="challenge_celebration_title">Chúc mừng!</string>
+    <string name="challenge_celebration_subtitle">Bạn đã hoàn thành thử thách</string>
+
+    <string name="challenge_empty_active">Chưa có thử thách nào đang diễn ra</string>
+    <string name="challenge_empty_upcoming">Chưa có thử thách sắp diễn ra</string>
+    <string name="challenge_empty_completed">Bạn chưa hoàn thành thử thách nào</string>
+    <string name="challenge_empty_badges">Chưa có huy hiệu</string>
+
+    <string name="challenge_search_placeholder">Tìm kiếm thử thách…</string>
+
 </resources>

@@ -1,17 +1,46 @@
 package com.example.betterme.domain.repository
 
 import com.example.betterme.data.local.room.entities.UserChallengeEntity
+import com.example.betterme.data.local.room.relation.UserChallengeWithDetails
 import kotlinx.coroutines.flow.Flow
 
 interface UserChallengeRepository {
 
-    fun getUserChallenges(userId: Int): Flow<List<UserChallengeEntity>>
+    fun observeByUser(userId: String): Flow<List<UserChallengeEntity>>
 
-    suspend fun joinChallenge(entity: UserChallengeEntity)
+    fun observeByStatus(userId: String, status: String): Flow<List<UserChallengeEntity>>
 
-    suspend fun updateProgress(entity: UserChallengeEntity)
+    fun observeWithDetails(userId: String): Flow<List<UserChallengeWithDetails>>
 
-    suspend fun updateProgressById(id: Int, progress: Int)
+    fun observeWithDetailsByStatus(userId: String, status: String): Flow<List<UserChallengeWithDetails>>
 
-    suspend fun leaveChallenge(entity: UserChallengeEntity)
+    suspend fun getById(id: Int): UserChallengeEntity?
+
+    suspend fun getWithDetailsById(id: Int): UserChallengeWithDetails?
+
+    suspend fun getByUserAndChallenge(userId: String, challengeId: Int): UserChallengeEntity?
+
+    suspend fun insert(userChallenge: UserChallengeEntity): Long
+
+    suspend fun update(userChallenge: UserChallengeEntity)
+
+    suspend fun delete(userChallenge: UserChallengeEntity)
+
+    suspend fun updateProgress(
+        id: Int,
+        currentStreak: Int,
+        bestStreak: Int,
+        progressPct: Int,
+        lastCheckIn: Long
+    )
+
+    suspend fun markCompleted(id: Int, endDate: Long)
+
+    suspend fun markAbandoned(id: Int, endDate: Long)
+
+    suspend fun countCompletedByUser(userId: String): Int
+
+    suspend fun countActiveByUser(userId: String): Int
+
+    suspend fun maxBestStreak(userId: String): Int?
 }

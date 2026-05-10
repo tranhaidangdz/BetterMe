@@ -8,8 +8,22 @@ class AchievementRepositoryImpl(
     private val dao: AchievementDao
 ) : AchievementRepository {
 
-    override fun getAll() = dao.getAll()
+    override fun observeAll() = dao.observeAll()
 
-    override suspend fun insert(achievement: AchievementEntity) =
-        dao.insert(achievement)
+    override fun observeByCategory(category: String) = dao.observeByCategory(category)
+
+    override suspend fun getById(id: Int) = dao.getById(id)
+
+    override suspend fun insert(achievement: AchievementEntity) = dao.insert(achievement)
+
+    override suspend fun insertAll(achievements: List<AchievementEntity>) =
+        dao.insertAll(achievements)
+
+    override suspend fun findUnclaimedByThreshold(
+        userId: String,
+        type: String,
+        value: Int
+    ) = dao.findUnclaimedByThreshold(userId, type, value)
+
+    override suspend fun count() = dao.count()
 }

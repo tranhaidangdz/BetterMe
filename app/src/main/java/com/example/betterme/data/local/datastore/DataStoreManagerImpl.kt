@@ -3,6 +3,7 @@ package com.example.betterme.data.local.datastore
 import com.example.betterme.domain.model.User
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -105,6 +106,20 @@ class DataStoreManagerImpl(
     override suspend fun updateUserPhotoUrl(photoUrl: String) {
         dataStore.edit { preferences ->
             preferences[DataStoreKey.USER_PHOTO_URL] = photoUrl
+        }
+    }
+
+    override suspend fun isChallengesSeeded(): Boolean {
+        return try {
+            dataStore.data.map { it[DataStoreKey.CHALLENGES_SEEDED] ?: false }.first()
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    override suspend fun setChallengesSeeded() {
+        dataStore.edit { preferences ->
+            preferences[DataStoreKey.CHALLENGES_SEEDED] = true
         }
     }
 }

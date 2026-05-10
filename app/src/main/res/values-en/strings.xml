@@ -37,4 +37,42 @@
 
     <!-- Common -->
     <string name="common_continue">Continue</string>
+
+    <!-- Challenge tab -->
+    <string name="tab_challenge">Challenge</string>
+    <string name="challenge_overview_title">Challenges</string>
+    <string name="challenge_discover_title">Discover challenges</string>
+    <string name="challenge_detail_title">Challenge details</string>
+    <string name="challenge_badges_title">Badge system</string>
+    <string name="challenge_group_title">Group challenge</string>
+    <string name="challenge_achievements_title">My achievements</string>
+    <string name="challenge_upcoming_title">Upcoming</string>
+    <string name="challenge_completed_title">Completed</string>
+
+    <string name="challenge_filter_active">In progress</string>
+    <string name="challenge_filter_upcoming">Upcoming</string>
+    <string name="challenge_filter_completed">Completed</string>
+    <string name="challenge_filter_all">All</string>
+    <string name="challenge_filter_failed">Not completed</string>
+
+    <string name="challenge_cta_continue">Continue challenge</string>
+    <string name="challenge_cta_join">Join challenge</string>
+    <string name="challenge_cta_explore">Discover new challenges</string>
+    <string name="challenge_cta_remind">Remind me</string>
+    <string name="challenge_cta_amazing">Awesome!</string>
+    <string name="challenge_cta_share">Share achievement</string>
+
+    <string name="challenge_difficulty_easy">Easy</string>
+    <string name="challenge_difficulty_medium">Medium</string>
+    <string name="challenge_difficulty_hard">Hard</string>
+
+    <string name="challenge_celebration_title">Congratulations!</string>
+    <string name="challenge_celebration_subtitle">You completed the challenge</string>
+
+    <string name="challenge_empty_active">No active challenges yet</string>
+    <string name="challenge_empty_upcoming">No upcoming challenges</string>
+    <string name="challenge_empty_completed">No completed challenges yet</string>
+    <string name="challenge_empty_badges">No badges yet</string>
+
+    <string name="challenge_search_placeholder">Search challenges…</string>
 </resources>

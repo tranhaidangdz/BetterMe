@@ -5,7 +5,21 @@ import kotlinx.coroutines.flow.Flow
 
 interface AchievementRepository {
 
-    fun getAll(): Flow<List<AchievementEntity>>
+    fun observeAll(): Flow<List<AchievementEntity>>
 
-    suspend fun insert(achievement: AchievementEntity)
+    fun observeByCategory(category: String): Flow<List<AchievementEntity>>
+
+    suspend fun getById(id: Int): AchievementEntity?
+
+    suspend fun insert(achievement: AchievementEntity): Long
+
+    suspend fun insertAll(achievements: List<AchievementEntity>)
+
+    suspend fun findUnclaimedByThreshold(
+        userId: String,
+        type: String,
+        value: Int
+    ): List<AchievementEntity>
+
+    suspend fun count(): Int
 }

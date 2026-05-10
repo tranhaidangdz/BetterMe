@@ -1,26 +1,22 @@
 package com.example.betterme.data.local.room.entities
 
 import androidx.room.Entity
-import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "reminders",
-    foreignKeys = [
-        ForeignKey(
-            entity = HabitEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["habit_id"],
-            onDelete = ForeignKey.CASCADE
-        )
-    ],
-    indices = [Index("habit_id")]
+    indices = [
+        Index(value = ["target_type", "target_id"])
+    ]
 )
 data class ReminderEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
-    val habit_id: Int,
-    val time: String,
-    val is_active: Boolean
+    val target_type: String,                        // "HABIT" | "USER_CHALLENGE" | "CHALLENGE_START"
+    val target_id: Int,
+    val time: String,                               // "HH:mm" daily, OR ISO date for one-shot
+    val is_active: Boolean = true,
+    val work_id: String? = null,                    // WorkManager request UUID for cancellation
+    val created_at: Long = System.currentTimeMillis()
 )

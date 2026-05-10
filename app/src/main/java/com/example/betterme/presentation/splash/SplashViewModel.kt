@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.example.betterme.base.BaseMviViewModel
 import com.example.betterme.data.local.datastore.DataStoreManager
+import com.example.betterme.domain.usecase.challenge.ChallengeSeederUseCase
 import com.example.betterme.presentation.splash.model.NextScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -13,7 +14,8 @@ import kotlinx.coroutines.launch
 
 class SplashViewModel(
     private val dataStoreManager: DataStoreManager,
-    private val firebaseAuth: FirebaseAuth
+    private val firebaseAuth: FirebaseAuth,
+    private val challengeSeederUseCase: ChallengeSeederUseCase
 ) : BaseMviViewModel<SplashIntent, SplashState, SplashEvent>() {
 
     override fun initState(): SplashState {
@@ -29,6 +31,13 @@ class SplashViewModel(
     private fun handleCheckFirstLaunch() {
         viewModelScope.launch(Dispatchers.IO) {
             delay(1500)
+
+            // Seed challenges + badges + group teams on first launch (idempotent).
+            try {
+                challengeSeederUseCase()
+            } catch (e: Exception) {
+                Log.e("SplashVM", "Challenge seed failed", e)
+            }
 
             val isFirstLaunch = dataStoreManager.isFirstTime().first()
             val currentUserId = dataStoreManager.getCurrentUserId().first()

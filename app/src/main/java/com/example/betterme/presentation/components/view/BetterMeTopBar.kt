@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -28,11 +29,14 @@ fun BetterMeTopBar(
     onLeadingClick: () -> Unit,
     modifier: Modifier = Modifier,
     trailingIconRes: Int? = null,
-    onTrailingClick: () -> Unit = {}
+    onTrailingClick: () -> Unit = {},
+    backgroundColor: Color = BetterMeColors.BackGround.BackgroundSecondary,
+    iconTint: Color = BetterMeColors.Black,
+    titleColor: Color = BetterMeColors.Text.TextPrimary
 ) {
     Row(
         modifier = modifier
-            .background(BetterMeColors.BackGround.BackgroundSecondary)
+            .background(backgroundColor)
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -46,7 +50,7 @@ fun BetterMeTopBar(
             Icon(
                 painter = painterResource(leadingIconRes),
                 contentDescription = null,
-                tint = BetterMeColors.Black,
+                tint = iconTint,
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -54,7 +58,7 @@ fun BetterMeTopBar(
         Text(
             text = title,
             style = BetterMeTypography.Title.Medium.Bold,
-            color = BetterMeColors.Text.TextPrimary,
+            color = titleColor,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
@@ -73,7 +77,7 @@ fun BetterMeTopBar(
                 Icon(
                     painter = painterResource(trailingIconRes),
                     contentDescription = null,
-                    tint = BetterMeColors.Black,
+                    tint = iconTint,
                     modifier = Modifier.size(20.dp)
                 )
             }

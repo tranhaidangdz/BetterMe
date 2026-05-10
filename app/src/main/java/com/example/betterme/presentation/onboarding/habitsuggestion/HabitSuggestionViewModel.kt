@@ -324,7 +324,8 @@ class HabitSuggestionViewModel(
 
                             // Lưu reminder vào DB
                             val reminderEntity = ReminderEntity(
-                                habit_id = habitId.toInt(),
+                                target_type = "HABIT",
+                                target_id = habitId.toInt(),
                                 time = habit.reminderTimeFormatted,
                                 is_active = true
                             )

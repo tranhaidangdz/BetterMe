@@ -8,12 +8,28 @@ class UserAchievementRepositoryImpl(
     private val dao: UserAchievementDao
 ) : UserAchievementRepository {
 
-    override fun getByUser(userId: Int) =
-        dao.getByUser(userId)
+    override fun observeByUser(userId: String) = dao.observeByUser(userId)
 
-    override suspend fun insert(entity: UserAchievementEntity) =
-        dao.insert(entity)
+    override fun observeByUserWithBadge(userId: String) = dao.observeByUserWithBadge(userId)
 
-    override suspend fun isAchieved(userId: Int, achievementId: Int) =
-        dao.isAchieved(userId, achievementId)
+    override suspend fun insert(entity: UserAchievementEntity) = dao.insert(entity)
+
+    override suspend fun hasEarned(userId: String, achievementId: Int) =
+        dao.hasEarned(userId, achievementId)
+
+    override suspend fun award(
+        userId: String,
+        achievementId: Int,
+        sourceUserChallengeId: Int?
+    ): Long {
+        val entity = UserAchievementEntity(
+            user_id = userId,
+            achievement_id = achievementId,
+            achieved_at = System.currentTimeMillis(),
+            source_user_challenge_id = sourceUserChallengeId
+        )
+        return dao.insert(entity)
+    }
+
+    override suspend fun countByUser(userId: String) = dao.countByUser(userId)
 }
