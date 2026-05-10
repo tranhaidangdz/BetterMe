@@ -10,13 +10,19 @@ data class BadgeSectionUi(
     val badges: List<BadgeUiModel>
 )
 
+enum class BadgeStatusFilter { All, Earned, Locked }
+
 data class ChallengeBadgesState(
     val isLoading: Boolean = true,
-    val sections: List<BadgeSectionUi> = emptyList()
+    val sections: List<BadgeSectionUi> = emptyList(),
+    val filter: BadgeStatusFilter = BadgeStatusFilter.All,
+    val totalBadges: Int = 0,
+    val earnedBadges: Int = 0
 ) : MviViewState
 
 sealed class ChallengeBadgesIntent : MviIntent {
     data object Load : ChallengeBadgesIntent()
+    data class SetFilter(val filter: BadgeStatusFilter) : ChallengeBadgesIntent()
 }
 
 sealed class ChallengeBadgesEvent : MviSingleEvent

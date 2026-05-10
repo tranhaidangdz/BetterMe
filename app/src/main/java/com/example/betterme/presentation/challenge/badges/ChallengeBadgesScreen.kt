@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.betterme.R
 import com.example.betterme.presentation.challenge.badges.components.BadgeSection
+import com.example.betterme.presentation.challenge.badges.components.BadgeStatusFilterRow
+import com.example.betterme.presentation.challenge.badges.components.BadgeSummaryCard
 import com.example.betterme.presentation.components.view.BetterMeTopBar
 import com.example.betterme.presentation.theme.BetterMeColors
 import org.koin.androidx.compose.koinViewModel
@@ -25,6 +27,19 @@ fun ChallengeBadgesScreen(
     viewModel: ChallengeBadgesViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
+
+    val filteredSections = state.sections
+        .map { section ->
+            val filtered = when (state.filter) {
+                BadgeStatusFilter.All -> section.badges
+                BadgeStatusFilter.Earned -> section.badges.filter { it.isEarned }
+                BadgeStatusFilter.Locked -> section.badges.filter { !it.isEarned }
+            }
+            section.copy(badges = filtered)
+        }
+        .filter { it.badges.isNotEmpty() }
+
+    val lockedCount = state.totalBadges - state.earnedBadges
 
     Box(
         modifier = Modifier
@@ -45,7 +60,21 @@ fun ChallengeBadgesScreen(
                     onLeadingClick = onBackClick
                 )
             }
-            items(state.sections, key = { it.title }) { section ->
+            item {
+                BadgeSummaryCard(
+                    earned = state.earnedBadges,
+                    total = state.totalBadges
+                )
+            }
+            item {
+                BadgeStatusFilterRow(
+                    selected = state.filter,
+                    earnedCount = state.earnedBadges,
+                    lockedCount = lockedCount,
+                    onSelect = { viewModel.processIntent(ChallengeBadgesIntent.SetFilter(it)) }
+                )
+            }
+            items(filteredSections, key = { it.title }) { section ->
                 BadgeSection(section = section)
             }
         }

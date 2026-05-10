@@ -31,6 +31,7 @@ class ChallengeBadgesViewModel(
     override fun processIntent(intent: ChallengeBadgesIntent) {
         when (intent) {
             ChallengeBadgesIntent.Load -> load()
+            is ChallengeBadgesIntent.SetFilter -> updateState { copy(filter = intent.filter) }
         }
     }
 
@@ -53,14 +54,22 @@ class ChallengeBadgesViewModel(
                     "DISCIPLINE" to "5. Huy hiệu kỷ luật",
                     "SPECIAL" to "6. Huy hiệu đặc biệt"
                 )
-                sectionOrder.map { (key, label) ->
+                val builtSections = sectionOrder.map { (key, label) ->
                     val list = all.filter { it.category == key }
                         .sortedBy { it.sort_order }
                         .map { it.toUi(earnedById[it.id]?.achieved_at) }
                     BadgeSectionUi(title = label, badges = list)
                 }
-            }.collect { sections ->
-                updateState { copy(isLoading = false, sections = sections) }
+                Triple(builtSections, all.size, earnedById.size)
+            }.collect { (sections, total, earnedCount) ->
+                updateState {
+                    copy(
+                        isLoading = false,
+                        sections = sections,
+                        totalBadges = total,
+                        earnedBadges = earnedCount
+                    )
+                }
             }
         }
     }
