@@ -45,13 +45,25 @@ class KoinApp : Application() {
      */
     private fun initCloudinary() {
         val cloudName = BuildConfig.CLOUDINARY_CLOUD_NAME
-        if (cloudName.isBlank()) return
+        val preset = BuildConfig.CLOUDINARY_UPLOAD_PRESET
+        if (cloudName.isBlank() || preset.isBlank()) {
+            Log.w(
+                "CloudinaryInit",
+                "Skipping init — cloudName='$cloudName' preset='$preset' " +
+                    "(check local.properties + rebuild)"
+            )
+            return
+        }
         try {
             MediaManager.init(this, mapOf("cloud_name" to cloudName))
+            Log.i(
+                "CloudinaryInit",
+                "MediaManager.init OK cloudName=$cloudName preset=$preset"
+            )
         } catch (e: IllegalStateException) {
             // MediaManager.init throws if it's already been initialized (e.g., process
             // restart in tests) — that's a no-op for our purposes.
-            Log.d("KoinApp", "Cloudinary already initialized: ${e.message}")
+            Log.d("CloudinaryInit", "Already initialized: ${e.message}")
         }
     }
 
