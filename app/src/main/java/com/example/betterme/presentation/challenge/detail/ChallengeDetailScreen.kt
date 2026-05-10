@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -109,7 +110,29 @@ fun ChallengeDetailScreen(
         }
     }
 
+    // The ChallengeDetailViewModel is scoped to MainScreen's parent ViewModelStoreOwner,
+    // so the same VM instance is reused every time this overlay opens. Without an
+    // explicit reset, switching from challenge A to challenge B would render A's title /
+    // hero / strip for one frame before B's load coroutine finishes — the "stacked
+    // overlay" stale-flash users reported. Two layered guards eliminate that:
+    //
+    // 1. DisposableEffect.onDispose wipes state synchronously when the overlay leaves
+    //    composition (back tap → state.challengeDetailId = null → screen unmounts).
+    //    The next mount starts from a clean ChallengeDetailState() with isLoading=true,
+    //    which the existing loading overlay already covers — no visible stale data.
+    //
+    // 2. The load LaunchedEffect dispatches Reset before LoadPreview/LoadActive too,
+    //    catching the rare A→B direct switch where the overlay never unmounts (e.g., a
+    //    list row tap inside a context where the detail is already open). The reset
+    //    fires synchronously inside processIntent before the suspending DB read kicks
+    //    off, so the recomposition triggered by LaunchedEffect's first state write sees
+    //    a clean slate, not the previous challenge's data.
+    DisposableEffect(Unit) {
+        onDispose { viewModel.processIntent(ChallengeDetailIntent.Reset) }
+    }
+
     LaunchedEffect(challengeId, userChallengeId, isPreview) {
+        viewModel.processIntent(ChallengeDetailIntent.Reset)
         when {
             userChallengeId != null && !isPreview ->
                 viewModel.processIntent(ChallengeDetailIntent.LoadActive(userChallengeId))

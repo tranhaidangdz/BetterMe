@@ -74,6 +74,13 @@ sealed class ChallengeDetailIntent : MviIntent {
     data object DismissCelebration : ChallengeDetailIntent()
     data object LeaveChallenge : ChallengeDetailIntent()
     data object Share : ChallengeDetailIntent()
+    /**
+     * Wipe the entire detail state back to its initial values. Dispatched on screen
+     * dispose and again at the top of every load so a new challenge never sees the
+     * previous challenge's title / hero / strip / reward fields during the brief window
+     * before the load coroutine finishes populating fresh data.
+     */
+    data object Reset : ChallengeDetailIntent()
 }
 
 sealed class ChallengeDetailEvent : MviSingleEvent {

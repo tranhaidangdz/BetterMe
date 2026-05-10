@@ -93,6 +93,7 @@ class ChallengeDetailViewModel(
                     if (s.rewardBadgeName != null) " + huy hiệu ${s.rewardBadgeName}!" else "!"
                 sendEvent(ChallengeDetailEvent.LaunchShareSheet(message))
             }
+            ChallengeDetailIntent.Reset -> updateState { ChallengeDetailState() }
         }
     }
 
