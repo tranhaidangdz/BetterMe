@@ -27,6 +27,8 @@ data class ChallengeDetailState(
     val difficulty: Difficulty = Difficulty.EASY,
     val rewardCoins: Int = 0,
     val rewardBadgeName: String? = null,
+    /** Optional Cloudinary URL for the reward badge artwork; null = use emoji fallback. */
+    val rewardBadgeImageUrl: String? = null,
     val durationDays: Int = 0,
     val targetStreak: Int = 0,
     val currentStreak: Int = 0,

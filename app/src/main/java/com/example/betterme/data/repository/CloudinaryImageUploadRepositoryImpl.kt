@@ -37,7 +37,7 @@ class CloudinaryImageUploadRepositoryImpl(
     override suspend fun upload(
         localUri: Uri,
         folder: ImageUploadRepository.Folder
-    ): String = suspendCancellableCoroutine { cont ->
+    ): String? = suspendCancellableCoroutine { cont ->
         try {
             // Stable public_id derived from the URI string keeps re-uploads idempotent on
             // Cloudinary's side without needing client-side dedup state.
@@ -56,7 +56,6 @@ class CloudinaryImageUploadRepositoryImpl(
                     override fun onSuccess(requestId: String?, resultData: MutableMap<Any?, Any?>?) {
                         val url = resultData?.get("secure_url") as? String
                             ?: resultData?.get("url") as? String
-                            ?: localUri.toString()
                         if (cont.isActive) cont.resume(url)
                     }
 
@@ -65,15 +64,16 @@ class CloudinaryImageUploadRepositoryImpl(
                             TAG,
                             "Cloudinary upload failed: code=${error?.code} msg=${error?.description}"
                         )
-                        if (cont.isActive) cont.resume(localUri.toString())
+                        // Returning null (instead of the local URI) ensures we never
+                        // persist a transient FileProvider URI as if it were durable.
+                        if (cont.isActive) cont.resume(null)
                     }
 
                     override fun onReschedule(requestId: String?, error: ErrorInfo?) {
-                        // Cloudinary persisted the request to retry later — for our use case
-                        // we don't want to block the check-in flow on retry, so resolve
-                        // immediately with the local URI; a later upload will still register
-                        // on Cloudinary's side under the same public_id.
-                        if (cont.isActive) cont.resume(localUri.toString())
+                        // Cloudinary persisted the request to retry later. We don't want
+                        // to block the check-in flow on retry, but we also can't promise
+                        // the upload will land — return null and let the call site decide.
+                        if (cont.isActive) cont.resume(null)
                     }
                 })
                 .dispatch()
@@ -83,7 +83,7 @@ class CloudinaryImageUploadRepositoryImpl(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Cloudinary upload threw", e)
-            if (cont.isActive) cont.resume(localUri.toString())
+            if (cont.isActive) cont.resume(null)
         }
     }
 

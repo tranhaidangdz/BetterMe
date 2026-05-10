@@ -62,6 +62,7 @@ class ChallengeAchievementsViewModel(
                         description = it.description,
                         iconRes = it.icon,
                         iconEmoji = it.icon_emoji.ifBlank { "🏅" },
+                        imageUrl = it.image_url,
                         accentColor = parseColor(it.color_hex),
                         isEarned = true
                     )

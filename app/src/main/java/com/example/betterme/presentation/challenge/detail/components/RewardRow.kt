@@ -20,9 +20,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
 
@@ -35,7 +37,8 @@ import com.example.betterme.presentation.theme.BetterMeTypography
 fun RewardRow(
     coins: Int,
     badgeName: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    badgeImageUrl: String? = null
 ) {
     Row(
         modifier = modifier
@@ -67,6 +70,7 @@ fun RewardRow(
         RewardCell(
             iconBg = Color(0xFFDBEAFE),
             iconEmoji = "💧",
+            iconUrl = badgeImageUrl,
             value = badgeName ?: "—",
             label = "Huy hiệu",
             valueOnTop = false,
@@ -82,7 +86,8 @@ private fun RewardCell(
     value: String,
     label: String,
     modifier: Modifier = Modifier,
-    valueOnTop: Boolean = true
+    valueOnTop: Boolean = true,
+    iconUrl: String? = null
 ) {
     Row(
         modifier = modifier,
@@ -96,7 +101,16 @@ private fun RewardCell(
                 .background(iconBg),
             contentAlignment = Alignment.Center
         ) {
-            Text(text = iconEmoji, fontSize = 20.sp)
+            if (!iconUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = iconUrl,
+                    contentDescription = label,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.size(28.dp)
+                )
+            } else {
+                Text(text = iconEmoji, fontSize = 20.sp)
+            }
         }
         Column {
             if (valueOnTop) {

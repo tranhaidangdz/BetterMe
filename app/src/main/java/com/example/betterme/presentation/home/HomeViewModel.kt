@@ -215,13 +215,18 @@ class HomeViewModel(
             // Upload to Cloudinary so the avatar survives reinstalls and is reachable from
             // any device the user signs into. If the value is already an HTTPS URL (e.g.,
             // returned from Google Sign-In), the uploader transparently passes it through.
-            val resolved = if (photoUri.startsWith("http://") || photoUri.startsWith("https://")) {
+            // If upload fails (returns null), keep the existing avatar — never persist
+            // a transient local URI that won't survive cache rotation.
+            val resolved: String = if (photoUri.startsWith("http://") || photoUri.startsWith("https://")) {
                 photoUri
             } else {
                 imageUploadRepository.upload(
                     localUri = android.net.Uri.parse(photoUri),
                     folder = ImageUploadRepository.Folder.Profile
-                )
+                ) ?: run {
+                    sendEvent(HomeEvent.ShowError("Tải ảnh đại diện thất bại. Vui lòng thử lại."))
+                    return@launch
+                }
             }
             dataStoreManager.updateUserPhotoUrl(resolved)
             persistProfileToLocalUserTable(updatedPhotoUrl = resolved)

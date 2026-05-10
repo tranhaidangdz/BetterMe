@@ -2,6 +2,7 @@ package com.example.betterme.presentation.challenge.badges.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import coil3.compose.AsyncImage
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -60,32 +61,49 @@ fun BadgeGridItem(
                 .padding(2.dp),
             contentAlignment = Alignment.Center
         ) {
-            if (model.iconRes != 0) {
-                Image(
-                    painter = painterResource(model.iconRes),
-                    contentDescription = model.name,
-                    contentScale = ContentScale.Fit,
-                    colorFilter = if (model.isEarned) null else GrayscaleFilter,
-                    modifier = Modifier
-                        .size(artworkSize)
-                        .alpha(if (model.isEarned) 1f else 0.45f)
-                )
-            } else {
-                // Legacy fallback when no PNG drawable is configured for the badge.
-                Box(
-                    modifier = Modifier
-                        .size(artworkSize)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(
-                            if (model.isEarned) model.accentColor.copy(alpha = 0.18f)
-                            else BetterMeColors.Gray.Gray3
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (model.isEarned) model.iconEmoji else "🔒",
-                        fontSize = 30.sp
+            // Resolution order: network URL > drawable resource > emoji fallback. Locked
+            // badges still desaturate via [GrayscaleFilter] regardless of source.
+            when {
+                !model.imageUrl.isNullOrBlank() -> {
+                    AsyncImage(
+                        model = model.imageUrl,
+                        contentDescription = model.name,
+                        contentScale = ContentScale.Fit,
+                        colorFilter = if (model.isEarned) null else GrayscaleFilter,
+                        modifier = Modifier
+                            .size(artworkSize)
+                            .alpha(if (model.isEarned) 1f else 0.45f)
                     )
+                }
+                model.iconRes != 0 -> {
+                    Image(
+                        painter = painterResource(model.iconRes),
+                        contentDescription = model.name,
+                        contentScale = ContentScale.Fit,
+                        colorFilter = if (model.isEarned) null else GrayscaleFilter,
+                        modifier = Modifier
+                            .size(artworkSize)
+                            .alpha(if (model.isEarned) 1f else 0.45f)
+                    )
+                }
+                else -> {
+                    // Final fallback when neither network art nor a PNG drawable is
+                    // configured: tinted disc with the emoji glyph.
+                    Box(
+                        modifier = Modifier
+                            .size(artworkSize)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                if (model.isEarned) model.accentColor.copy(alpha = 0.18f)
+                                else BetterMeColors.Gray.Gray3
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (model.isEarned) model.iconEmoji else "🔒",
+                            fontSize = 30.sp
+                        )
+                    }
                 }
             }
         }

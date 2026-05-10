@@ -82,7 +82,9 @@ data class CategoryTileUi(
     val name: String,
     val emoji: String,
     val challengeCount: Int,
-    val accentColor: Color
+    val accentColor: Color,
+    /** Optional Cloudinary URL; CategoryTile prefers this when set. */
+    val imageUrl: String? = null
 )
 
 /**
@@ -125,6 +127,11 @@ data class BadgeUiModel(
     val description: String,
     val iconRes: Int = 0,
     val iconEmoji: String = "🏅",
+    /**
+     * Optional Cloudinary (or any HTTPS) artwork URL. When set, BadgeGridItem and
+     * RewardRow prefer this over [iconRes] / [iconEmoji] and load via Coil's AsyncImage.
+     */
+    val imageUrl: String? = null,
     val accentColor: Color,
     val isEarned: Boolean,
     val earnedAtLabel: String? = null

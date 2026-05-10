@@ -26,12 +26,15 @@ interface ImageUploadRepository {
     }
 
     /**
-     * Upload [localUri] and return the resolved URL that should be stored in the database.
+     * Upload [localUri] and return the URL that should be persisted in the database.
      *
-     * - On Cloudinary success: secure HTTPS URL.
-     * - On Cloudinary failure or local fallback: the original [localUri] toString.
+     * - Cloudinary impl: returns the `secure_url` on success, **null on failure** —
+     *   callers must not persist transient local URIs that won't survive a cache rotation.
+     * - Local-passthrough impl (no Cloudinary credentials configured): returns the
+     *   original [localUri] toString — the device URI IS the only source of truth in
+     *   that build, so it's safe to persist.
      *
-     * Never throws — failures degrade to keeping the local URI so the app stays usable.
+     * Never throws.
      */
-    suspend fun upload(localUri: Uri, folder: Folder): String
+    suspend fun upload(localUri: Uri, folder: Folder): String?
 }

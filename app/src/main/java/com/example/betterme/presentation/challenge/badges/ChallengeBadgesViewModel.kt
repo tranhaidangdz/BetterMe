@@ -81,6 +81,7 @@ class ChallengeBadgesViewModel(
             description = description,
             iconRes = icon,
             iconEmoji = if (icon_emoji.isNotBlank()) icon_emoji else "🏅",
+            imageUrl = image_url,
             accentColor = parseColor(color_hex),
             isEarned = earnedAt != null,
             earnedAtLabel = earnedAt?.let {

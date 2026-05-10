@@ -52,7 +52,7 @@ import com.example.betterme.data.local.room.migrations.ALL_MIGRATIONS
         NotificationEntity::class,
         AIChatEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

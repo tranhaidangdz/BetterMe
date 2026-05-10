@@ -16,5 +16,10 @@ data class CategoryEntity(
     val id: Int = 0,
     val name: String,
     val icon: String,
-    val description: String
+    val description: String,
+    /**
+     * Optional Cloudinary (or any HTTPS) URL for category tile artwork. When set, the
+     * Discover screen's CategoryTile prefers this over [icon] (emoji). Null = use emoji.
+     */
+    val image_url: String? = null
 )

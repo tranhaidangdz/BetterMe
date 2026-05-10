@@ -9,6 +9,6 @@ import com.example.betterme.domain.repository.ImageUploadRepository
  * are not configured (e.g., open-source contributors building without secrets).
  */
 class LocalImageUploadRepositoryImpl : ImageUploadRepository {
-    override suspend fun upload(localUri: Uri, folder: ImageUploadRepository.Folder): String =
+    override suspend fun upload(localUri: Uri, folder: ImageUploadRepository.Folder): String? =
         localUri.toString()
 }

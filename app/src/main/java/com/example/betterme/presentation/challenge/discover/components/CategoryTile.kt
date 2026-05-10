@@ -16,8 +16,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import com.example.betterme.presentation.challenge.model.CategoryTileUi
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
@@ -43,7 +45,18 @@ fun CategoryTile(
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = model.emoji, fontSize = 28.sp)
+        if (!model.imageUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = model.imageUrl,
+                contentDescription = model.name,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .height(36.dp)
+                    .fillMaxWidth()
+            )
+        } else {
+            Text(text = model.emoji, fontSize = 28.sp)
+        }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = model.name,

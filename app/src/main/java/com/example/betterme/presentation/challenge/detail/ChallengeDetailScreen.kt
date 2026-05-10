@@ -236,6 +236,7 @@ fun ChallengeDetailScreen(
                     RewardRow(
                         coins = state.rewardCoins,
                         badgeName = state.rewardBadgeName,
+                        badgeImageUrl = state.rewardBadgeImageUrl,
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }

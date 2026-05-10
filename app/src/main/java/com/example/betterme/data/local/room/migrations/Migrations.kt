@@ -29,6 +29,19 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
     }
 }
 
+/**
+ * v8 → v9 (Cloudinary-backed catalog artwork):
+ * adds nullable `image_url` columns to `achievements` and `categories`. Both default to
+ * NULL so existing rows backfill cleanly and UI fallbacks (emoji / drawable resource)
+ * keep working until URLs are populated.
+ */
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE achievements ADD COLUMN image_url TEXT")
+        db.execSQL("ALTER TABLE categories ADD COLUMN image_url TEXT")
+    }
+}
+
 /** Aggregated list passed to the Room builder. Add new migrations to this list as the
  *  schema evolves. */
-val ALL_MIGRATIONS = arrayOf(MIGRATION_7_8)
+val ALL_MIGRATIONS = arrayOf(MIGRATION_7_8, MIGRATION_8_9)

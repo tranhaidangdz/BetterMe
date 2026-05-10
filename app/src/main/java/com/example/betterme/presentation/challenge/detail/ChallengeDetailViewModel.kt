@@ -117,7 +117,7 @@ class ChallengeDetailViewModel(
             loadActiveSuspending(existing.id)
             return
         }
-        val rewardBadgeName = challenge.reward_badge_id?.let { achievementRepository.getById(it)?.title }
+        val rewardBadge = challenge.reward_badge_id?.let { achievementRepository.getById(it) }
         updateState {
             copy(
                 mode = DetailMode.Preview,
@@ -131,7 +131,8 @@ class ChallengeDetailViewModel(
                 accentColor = parseColor(challenge.color_hex),
                 difficulty = Difficulty.fromRaw(challenge.difficulty),
                 rewardCoins = challenge.reward_coins,
-                rewardBadgeName = rewardBadgeName,
+                rewardBadgeName = rewardBadge?.title,
+                rewardBadgeImageUrl = rewardBadge?.image_url,
                 durationDays = challenge.duration_days,
                 targetStreak = challenge.target_streak,
                 descriptionBullets = challenge.toBullets(),
@@ -160,7 +161,9 @@ class ChallengeDetailViewModel(
             updateState { copy(isLoading = false, errorMessage = "Không tìm thấy thử thách") }
             return
         }
-        val rewardBadgeName = challenge.reward_badge_id?.let { achievementRepository.getById(it)?.title }
+        val rewardBadge = challenge.reward_badge_id?.let { achievementRepository.getById(it) }
+        val rewardBadgeName = rewardBadge?.title
+        val rewardBadgeImageUrl = rewardBadge?.image_url
         val doneDates = challengeLogRepository.getDoneDates(userChallengeId)
         val weekStrip = buildWeekStrip(doneDates.toSet(), uc.start_date, challenge.target_streak)
         val daysRemaining = (challenge.target_streak - uc.current_streak).coerceAtLeast(0)
@@ -183,6 +186,7 @@ class ChallengeDetailViewModel(
                 difficulty = Difficulty.fromRaw(challenge.difficulty),
                 rewardCoins = challenge.reward_coins,
                 rewardBadgeName = rewardBadgeName,
+                rewardBadgeImageUrl = rewardBadgeImageUrl,
                 durationDays = challenge.duration_days,
                 targetStreak = challenge.target_streak,
                 currentStreak = uc.current_streak,

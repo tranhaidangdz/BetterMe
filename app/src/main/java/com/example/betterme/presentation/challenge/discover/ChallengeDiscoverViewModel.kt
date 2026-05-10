@@ -50,7 +50,8 @@ class ChallengeDiscoverViewModel(
                         name = cat.name,
                         emoji = cat.icon,
                         challengeCount = byCategory[cat.id]?.size ?: 0,
-                        accentColor = colorForCategory(cat.id)
+                        accentColor = colorForCategory(cat.id),
+                        imageUrl = cat.image_url
                     )
                 }
                 val now = System.currentTimeMillis()
