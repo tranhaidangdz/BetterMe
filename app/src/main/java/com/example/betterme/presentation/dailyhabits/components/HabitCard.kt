@@ -49,7 +49,7 @@ fun HabitCard(
             .background(BetterMeColors.White)
             .border(
                 width = 1.dp,
-                color = if (habit.isCompleted) BetterMeColors.Green.copy(alpha = 0.35f)
+                color = if (habit.isCheckedInToday) BetterMeColors.Green.copy(alpha = 0.35f)
                 else BetterMeColors.Primary.Primary.copy(alpha = 0.35f),
                 shape = RoundedCornerShape(14.dp)
             )
@@ -94,16 +94,16 @@ fun HabitCard(
                     .size(32.dp)
                     .clip(CircleShape)
                     .background(
-                        if (habit.isCompleted) BetterMeColors.Green
+                        if (habit.isCheckedInToday) BetterMeColors.Green
                         else BetterMeColors.Gray.Gray4
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Check,
-                    contentDescription = if (habit.isCompleted) "Đã check-in hôm nay"
+                    contentDescription = if (habit.isCheckedInToday) "Đã check-in hôm nay"
                     else "Chưa check-in hôm nay",
-                    tint = if (habit.isCompleted) BetterMeColors.White
+                    tint = if (habit.isCheckedInToday) BetterMeColors.White
                     else BetterMeColors.Text.TextTertiary,
                     modifier = Modifier.size(18.dp)
                 )

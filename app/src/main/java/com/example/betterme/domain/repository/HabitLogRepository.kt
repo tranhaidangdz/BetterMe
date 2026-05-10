@@ -7,6 +7,9 @@ interface HabitLogRepository {
 
     fun getLogs(habitId: Int): Flow<List<HabitLogEntity>>
 
+    /** Change-signal Flow — fires on any mutation of the `habit_logs` table. */
+    fun observeAllLogs(): Flow<List<HabitLogEntity>>
+
     suspend fun getLogByDate(habitId: Int, date: Long): HabitLogEntity?
 
     suspend fun addLog(log: HabitLogEntity)

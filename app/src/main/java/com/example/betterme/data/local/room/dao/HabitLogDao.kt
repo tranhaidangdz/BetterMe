@@ -26,6 +26,14 @@ interface HabitLogDao {
     @Query("SELECT * FROM habit_logs WHERE habit_id = :habitId ORDER BY date DESC")
     fun getLogsByHabit(habitId: Int): Flow<List<HabitLogEntity>>
 
+    /**
+     * Used purely as a change signal — Room emits a fresh list every time `habit_logs` is
+     * mutated, which lets list-style screens (Daily Habits, Tasks tab) recompute journey
+     * completion + per-day check-in state reactively after any check-in lands.
+     */
+    @Query("SELECT * FROM habit_logs")
+    fun observeAllLogs(): Flow<List<HabitLogEntity>>
+
     @Query("SELECT * FROM habit_logs WHERE habit_id = :habitId AND date = :date")
     suspend fun getLogByDate(habitId: Int, date: Long): HabitLogEntity?
 

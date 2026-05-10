@@ -3,15 +3,36 @@ package com.example.betterme.presentation.dailyhabits
 import androidx.lifecycle.viewModelScope
 import com.example.betterme.base.BaseMviViewModel
 import com.example.betterme.data.local.datastore.DataStoreManager
+import com.example.betterme.data.local.room.entities.HabitEntity
 import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitLogRepository
 import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.presentation.dailyhabits.model.HabitUiModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+
+/**
+ * Backs the Tasks bottom-nav tab.
+ *
+ * The visible list is computed reactively from three sources:
+ * 1. The user's habits ([HabitRepository.getHabits]) — Flow, emits on add/edit/delete.
+ * 2. Every mutation of the habit-logs table ([HabitLogRepository.observeAllLogs])
+ *    — used purely as a change signal so a check-in landing anywhere in the app pushes
+ *    a fresh emission through this VM and the Tasks list updates without a manual
+ *    reload. The list itself isn't consumed; only its existence as a Flow.
+ * 3. The currently selected date ([selectedDate]) — drives "isCheckedInToday" lookups.
+ *
+ * Combining these three with [combine] means the visible list is always derived from
+ * fresh DB state. Journey-completion is recomputed on every emission via
+ * `countCompleted(habit.id)`, so a habit that just hit its target appears under
+ * "Đã hoàn thành" the moment the check-in commits.
+ */
+private const val DAY_MS: Long = 24L * 60L * 60L * 1000L
 
 class DailyHabitsViewModel(
     private val dataStoreManager: DataStoreManager,
@@ -19,6 +40,8 @@ class DailyHabitsViewModel(
     private val habitLogRepository: HabitLogRepository,
     private val categoryRepository: CategoryRepository,
 ) : BaseMviViewModel<DailyHabitsIntent, DailyHabitsState, DailyHabitsEvent>() {
+
+    private val selectedDateMillis = MutableStateFlow(startOfDay(Calendar.getInstance()))
 
     override fun initState(): DailyHabitsState = DailyHabitsState()
 
@@ -28,86 +51,76 @@ class DailyHabitsViewModel(
 
     override fun processIntent(intent: DailyHabitsIntent) {
         when (intent) {
-            DailyHabitsIntent.LoadData -> loadData()
+            DailyHabitsIntent.LoadData -> bootstrap()
             is DailyHabitsIntent.SelectDate -> selectDate(intent.index)
             is DailyHabitsIntent.SelectFilter -> selectFilter(intent.filter)
         }
     }
 
-    // ============================================================
-    // LOAD — Tạo danh sách 7 ngày (3 trước + hôm nay + 3 sau)
-    //        + load habits thực từ Room
-    // ============================================================
-    private fun loadData() {
+    /**
+     * One-time setup of the date strip + the long-lived combine that keeps the visible
+     * list in sync with Room. Subsequent re-emissions don't re-run this — they flow
+     * through the [combine] below.
+     */
+    private fun bootstrap() {
         viewModelScope.launch {
             updateState { copy(isLoading = true) }
+            val todayIndex = 3
+            val dates = (-3..3).map { offset ->
+                val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, offset) }
+                DateUiModel(
+                    month = SimpleDateFormat("MMM", Locale("vi")).format(cal.time),
+                    day = SimpleDateFormat("dd", Locale.getDefault()).format(cal.time),
+                    weekDay = SimpleDateFormat("EEE", Locale("vi")).format(cal.time),
+                    dateMillis = startOfDay(cal),
+                    isToday = offset == 0
+                )
+            }
+            updateState {
+                copy(
+                    dates = dates,
+                    todayIndex = todayIndex,
+                    selectedDateIndex = todayIndex
+                )
+            }
+            selectedDateMillis.value = dates[todayIndex].dateMillis
 
-            try {
-                // 1. Tạo danh sách ngày thực tế (7 ngày)
-                val today = Calendar.getInstance()
-                val todayIndex = 3 // Hôm nay nằm ở vị trí thứ 4 (index 3)
-                val dates = (-3..3).map { offset ->
-                    val cal = Calendar.getInstance().apply {
-                        add(Calendar.DAY_OF_YEAR, offset)
-                    }
-                    DateUiModel(
-                        month = SimpleDateFormat("MMM", Locale("vi")).format(cal.time),
-                        day = SimpleDateFormat("dd", Locale.getDefault()).format(cal.time),
-                        weekDay = SimpleDateFormat("EEE", Locale("vi")).format(cal.time),
-                        dateMillis = getStartOfDay(cal),
-                        isToday = offset == 0
-                    )
-                }
+            val userId = dataStoreManager.getCurrentUserId().first().orEmpty()
+            if (userId.isBlank()) {
+                updateState { copy(isLoading = false) }
+                return@launch
+            }
 
-                // 2. Load habits + check-in status cho ngày được chọn (mặc định = hôm nay)
-                val selectedDate = dates[todayIndex]
-                val habits = loadHabitsForDate(selectedDate.dateMillis)
+            val categoryMap = runCatching {
+                categoryRepository.getAll().first().associateBy { it.id }
+            }.getOrDefault(emptyMap())
 
+            // The third flow is a change-signal Flow. We don't care about its payload;
+            // we map to Unit so the combine is invalidated whenever it emits.
+            combine(
+                habitRepository.getHabits(userId),
+                selectedDateMillis,
+                habitLogRepository.observeAllLogs()
+            ) { habits, dateMs, _ ->
+                buildUiHabits(habits, dateMs, categoryMap)
+            }.collect { uiHabits ->
                 updateState {
                     copy(
                         isLoading = false,
-                        dates = dates,
-                        todayIndex = todayIndex,
-                        selectedDateIndex = todayIndex,
-                        selectedFilter = DailyHabitFilter.ALL,
-                        allHabits = habits,
-                        visibleHabits = habits
+                        allHabits = uiHabits,
+                        visibleHabits = applyFilter(currentState.selectedFilter, uiHabits)
                     )
                 }
-            } catch (e: Exception) {
-                updateState { copy(isLoading = false) }
             }
         }
     }
 
-    // ============================================================
-    // SELECT DATE — Load lại habits cho ngày mới
-    // ============================================================
     private fun selectDate(index: Int) {
         if (index !in currentState.dates.indices) return
-        viewModelScope.launch {
-            updateState { copy(isLoading = true, selectedDateIndex = index) }
-
-            try {
-                val selectedDate = currentState.dates[index]
-                val habits = loadHabitsForDate(selectedDate.dateMillis)
-
-                updateState {
-                    copy(
-                        isLoading = false,
-                        allHabits = habits,
-                        visibleHabits = applyFilter(currentState.selectedFilter, habits)
-                    )
-                }
-            } catch (e: Exception) {
-                updateState { copy(isLoading = false) }
-            }
-        }
+        updateState { copy(selectedDateIndex = index) }
+        selectedDateMillis.value = currentState.dates[index].dateMillis
     }
 
-    // ============================================================
-    // FILTER — Lọc theo trạng thái
-    // ============================================================
     private fun selectFilter(filter: DailyHabitFilter) {
         updateState {
             copy(
@@ -117,66 +130,70 @@ class DailyHabitsViewModel(
         }
     }
 
-    // ============================================================
-    // HELPER — Load habits kèm trạng thái check-in cho 1 ngày
-    // ============================================================
-    private suspend fun loadHabitsForDate(dateMillis: Long): List<HabitUiModel> {
-        val userId = dataStoreManager.getCurrentUserId().first() ?: return emptyList()
-
-        // Lấy tất cả habits của user (đang active trong ngày được chọn)
-        val allHabits = habitRepository.getHabits(userId).first()
-            .filter { habit ->
-                // Chỉ hiện habit mà ngày được chọn nằm trong khoảng [start_date, end_date]
-                habit.start_date <= dateMillis &&
-                        (habit.end_date == null || habit.end_date >= dateMillis)
-            }
-
-        // Lấy danh sách habitId đã DONE trong ngày
-        val completedIds = habitLogRepository.getCompletedHabitIdsByDate(dateMillis).toSet()
-
-        // Lấy tất cả categories để map tên + icon
-        val categories = try {
-            categoryRepository.getAll().first().associateBy { it.id }
-        } catch (_: Exception) {
-            emptyMap()
+    /**
+     * Builds the row list for [dateMs]. For every active-on-that-date habit:
+     * - looks up DONE-count vs the planned duration to decide journey completion
+     * - looks up the selected day's check-in status
+     * Open-ended habits (no `end_date`) never auto-complete the journey.
+     */
+    private suspend fun buildUiHabits(
+        habits: List<HabitEntity>,
+        dateMs: Long,
+        categoryMap: Map<Int, com.example.betterme.data.local.room.entities.CategoryEntity>
+    ): List<HabitUiModel> {
+        val activeOnDate = habits.filter { habit ->
+            habit.start_date <= dateMs &&
+                (habit.end_date == null || habit.end_date >= dateMs)
         }
+        val completedOnDate = habitLogRepository.getCompletedHabitIdsByDate(dateMs).toSet()
 
-        return allHabits.map { habit ->
-            val category = habit.category_id?.let { categories[it] }
-            val isCompleted = habit.id in completedIds
+        return activeOnDate.map { habit ->
+            val durationDays = if (habit.end_date != null) {
+                (((habit.end_date - habit.start_date) / DAY_MS) + 1).toInt().coerceAtLeast(1)
+            } else {
+                Int.MAX_VALUE
+            }
+            val doneCount = habitLogRepository.countCompleted(habit.id)
+            val isJourneyComplete = doneCount >= durationDays
+
+            val category = habit.category_id?.let { categoryMap[it] }
+            val checkedInToday = habit.id in completedOnDate
+
+            val statusLabel = when {
+                isJourneyComplete -> "Đã hoàn thành"
+                checkedInToday -> "Đã check-in hôm nay"
+                else -> "Đang thực hiện"
+            }
 
             HabitUiModel(
                 id = habit.id,
                 category = category?.name ?: "Không phân loại",
                 title = habit.title,
                 time = habit.reminder_time ?: "",
-                statusLabel = if (isCompleted) "Đã hoàn thành" else "Đang thực hiện",
-                isCompleted = isCompleted,
+                statusLabel = statusLabel,
+                isCheckedInToday = checkedInToday,
+                isJourneyComplete = isJourneyComplete,
                 icon = category?.icon ?: "📌"
             )
         }
     }
 
-    // ============================================================
-    // HELPER — Áp dụng filter lên danh sách habits
-    // ============================================================
+    /**
+     * "Đang thực hiện" filters out habits whose journey has finished — they belong in
+     * "Đã hoàn thành". A habit cannot appear in both buckets at the same time.
+     */
     private fun applyFilter(filter: DailyHabitFilter, habits: List<HabitUiModel>): List<HabitUiModel> {
         return when (filter) {
             DailyHabitFilter.ALL -> habits
-            DailyHabitFilter.IN_PROGRESS -> habits.filter { !it.isCompleted }
-            DailyHabitFilter.DONE -> habits.filter { it.isCompleted }
+            DailyHabitFilter.IN_PROGRESS -> habits.filter { !it.isJourneyComplete }
+            DailyHabitFilter.DONE -> habits.filter { it.isJourneyComplete }
         }
     }
 
-    // ============================================================
-    // HELPER — Lấy start of day (00:00:00) millis
-    // ============================================================
-    private fun getStartOfDay(calendar: Calendar): Long {
-        return calendar.apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-    }
+    private fun startOfDay(calendar: Calendar): Long = calendar.apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 }

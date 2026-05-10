@@ -11,6 +11,8 @@ class HabitLogRepositoryImpl(
     override fun getLogs(habitId: Int) =
         dao.getLogsByHabit(habitId)
 
+    override fun observeAllLogs() = dao.observeAllLogs()
+
     override suspend fun getLogByDate(habitId: Int, date: Long) =
         dao.getLogByDate(habitId, date)
 
