@@ -156,7 +156,14 @@ fun ChallengeDiscoverScreen(
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
-                items(state.categories.chunked(3), key = { it.firstOrNull()?.categoryId ?: 0 }) { row ->
+                // Prefix keys with "cat-row-" so they cannot collide with the integer
+                // challenge IDs used by the "Mới" items() block below — LazyColumn requires
+                // every key in the same scroll container to be globally unique, otherwise
+                // it crashes with "Two items used the same key".
+                items(
+                    state.categories.chunked(3),
+                    key = { row -> "cat-row-${row.firstOrNull()?.categoryId ?: 0}" }
+                ) { row ->
                     Row(
                         modifier = Modifier
                             .padding(horizontal = 16.dp),
@@ -185,7 +192,7 @@ fun ChallengeDiscoverScreen(
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
-            items(visibleNewest, key = { it.challengeId }) { row ->
+            items(visibleNewest, key = { "new-${it.challengeId}" }) { row ->
                 NewChallengeRow(
                     model = row,
                     onClick = routeOpen,

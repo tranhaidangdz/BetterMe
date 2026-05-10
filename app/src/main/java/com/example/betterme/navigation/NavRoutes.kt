@@ -1,6 +1,9 @@
 package com.example.betterme.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
@@ -100,6 +103,13 @@ fun NavRoutes()
                         backStack.replaceTop(Destination.SignIn)
                     }
                 )
+            }
+
+            // Settings is declared in [Destination] but doesn't yet have a real screen —
+            // until it does, render an empty placeholder rather than crashing the
+            // NavDisplay with "no entry for this key". Tapping Back returns to Main.
+            entry<Destination.Settings> {
+                Box(modifier = Modifier.fillMaxSize()) { }
             }
 
         }

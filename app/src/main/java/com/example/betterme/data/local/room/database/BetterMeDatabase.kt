@@ -33,6 +33,7 @@ import com.example.betterme.data.local.room.entities.UserAchievementEntity
 import com.example.betterme.data.local.room.entities.UserCategoryEntity
 import com.example.betterme.data.local.room.entities.UserChallengeEntity
 import com.example.betterme.data.local.room.entities.UserEntity
+import com.example.betterme.data.local.room.migrations.ALL_MIGRATIONS
 
 @Database(
     entities = [
@@ -86,7 +87,13 @@ abstract class BetterMeDatabase : RoomDatabase() {
                     BetterMeDatabase::class.java,
                     "better_me_db"
                 )
-                    .fallbackToDestructiveMigration() // dev phase
+                    // Explicit migrations (v7+) preserve user data across schema bumps.
+                    // Pre-v7 schemas predate this catalog and only hit destructive migration
+                    // as a last resort — that path will only fire on a version we did not
+                    // ship a path for.
+                    .addMigrations(*ALL_MIGRATIONS)
+                    .fallbackToDestructiveMigrationFrom(1, 2, 3, 4, 5, 6)
+                    .fallbackToDestructiveMigrationOnDowngrade()
                     .build()
 
                 INSTANCE = instance
