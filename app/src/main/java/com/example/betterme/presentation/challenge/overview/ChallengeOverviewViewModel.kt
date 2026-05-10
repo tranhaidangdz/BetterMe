@@ -8,6 +8,7 @@ import com.example.betterme.data.local.room.entities.ChallengeEntity
 import com.example.betterme.data.local.room.entities.UserChallengeEntity
 import com.example.betterme.data.local.room.relation.UserChallengeWithDetails
 import com.example.betterme.domain.repository.AchievementRepository
+import com.example.betterme.domain.repository.ChallengeLogRepository
 import com.example.betterme.domain.repository.ChallengeRepository
 import com.example.betterme.domain.repository.UserChallengeRepository
 import com.example.betterme.domain.usecase.challenge.ToggleStartReminderUseCase
@@ -33,6 +34,7 @@ class ChallengeOverviewViewModel(
     private val userChallengeRepository: UserChallengeRepository,
     private val challengeRepository: ChallengeRepository,
     private val achievementRepository: AchievementRepository,
+    private val challengeLogRepository: ChallengeLogRepository,
     private val toggleStartReminderUseCase: ToggleStartReminderUseCase
 ) : BaseMviViewModel<ChallengeOverviewIntent, ChallengeOverviewState, ChallengeOverviewEvent>() {
 
@@ -69,8 +71,12 @@ class ChallengeOverviewViewModel(
             combine(joinedFlow, upcomingChallengesFlow, reminderEnabledIds) { joined, upcomingPool, reminderIds ->
                 Triple(joined, upcomingPool, reminderIds)
             }.collect { (joined, upcomingPool, reminderIds) ->
+                val today = DateUtils.startOfDay()
                 val active = joined.filter { it.userChallenge.status == "ACTIVE" }
-                    .map { it.toProgressUi() }
+                    .map { details ->
+                        val log = challengeLogRepository.getLogByDate(details.userChallenge.id, today)
+                        details.toProgressUi(isCheckedInToday = log?.status == "DONE")
+                    }
                 val completed = joined.filter {
                     it.userChallenge.status == "COMPLETED" || it.userChallenge.status == "ABANDONED"
                 }.map { it.toCompletedUi(achievementRepository) }
@@ -111,8 +117,9 @@ class ChallengeOverviewViewModel(
 
     // ---- mappers ----
 
-    private fun UserChallengeWithDetails.toProgressUi(): ChallengeProgressUiModel {
+    private fun UserChallengeWithDetails.toProgressUi(isCheckedInToday: Boolean): ChallengeProgressUiModel {
         val c = challenge
+        val daysRemaining = (c.target_streak - userChallenge.current_streak).coerceAtLeast(0)
         return ChallengeProgressUiModel(
             userChallengeId = userChallenge.id,
             challengeId = c.id,
@@ -125,7 +132,9 @@ class ChallengeOverviewViewModel(
             progressPct = userChallenge.progress_pct,
             rewardCoins = c.reward_coins,
             rewardBadgeName = null, // resolved by detail screen if needed
-            isGroup = c.is_group
+            isGroup = c.is_group,
+            daysRemaining = daysRemaining,
+            isCheckedInToday = isCheckedInToday
         )
     }
 

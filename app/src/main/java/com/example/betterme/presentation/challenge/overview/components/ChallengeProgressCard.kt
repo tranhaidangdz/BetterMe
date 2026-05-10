@@ -100,6 +100,38 @@ fun ChallengeProgressCard(
             )
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // ===== STATUS ROW: days remaining + today check-in pill =====
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "⏳ Còn ${model.daysRemaining} ngày",
+                style = BetterMeTypography.Body.Small.Medium,
+                color = BetterMeColors.Text.TextTertiary
+            )
+            val (statusLabel, statusColor) = if (model.isCheckedInToday) {
+                "✓ Đã check-in" to Color(0xFF10B981)
+            } else {
+                "Chưa check-in hôm nay" to Color(0xFFF59E0B)
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(statusColor.copy(alpha = 0.14f))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = statusLabel,
+                    style = BetterMeTypography.Body.Small.Medium,
+                    color = statusColor
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(12.dp))
 
         // ===== CONTINUE BUTTON =====

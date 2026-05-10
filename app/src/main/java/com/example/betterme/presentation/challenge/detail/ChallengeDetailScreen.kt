@@ -171,6 +171,7 @@ fun ChallengeDetailScreen(
                 item {
                     ChallengeHeroCard(
                         title = state.title,
+                        subtitle = state.description,
                         iconEmoji = state.iconEmoji,
                         accentColor = state.accentColor,
                         difficulty = state.difficulty,
@@ -178,69 +179,25 @@ fun ChallengeDetailScreen(
                     )
                 }
 
-                if (state.motivationalQuote.isNotBlank()) {
-                    item {
-                        Text(
-                            text = "“${state.motivationalQuote}”",
-                            style = BetterMeTypography.Body.Medium,
-                            color = state.accentColor,
-                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
-                        )
-                    }
+                item {
+                    val completedDays = if (state.mode == DetailMode.Preview) 0 else state.currentStreak
+                    val totalDays = if (state.targetStreak > 0) state.targetStreak else state.durationDays
+                    val pct = if (state.mode == DetailMode.Preview) 0 else state.progressPct
+                    val remaining = if (state.mode == DetailMode.Preview) totalDays else state.daysRemaining
+                    ChallengeStatsRow(
+                        completedDays = completedDays,
+                        totalDays = totalDays,
+                        completionPct = pct,
+                        daysRemaining = remaining,
+                        accentColor = state.accentColor,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
                 }
 
                 if (state.mode == DetailMode.Active || state.mode == DetailMode.Completed) {
                     item {
-                        com.example.betterme.presentation.challenge.detail.components.StreakCounterCard(
-                            currentStreak = state.currentStreak,
-                            bestStreak = state.bestStreak,
-                            daysRemaining = state.daysRemaining,
-                            motivationalText = com.example.betterme.presentation.challenge.detail.components
-                                .motivationalForProgress(state.progressPct, state.difficulty.raw),
-                            accentColor = state.accentColor,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-                    item {
-                        ChallengeStatsRow(
-                            progressLabel = "${state.currentStreak}/${state.targetStreak}",
-                            progressSub = "ngày",
-                            rateLabel = "${state.progressPct}%",
-                            rateSub = "tỷ lệ",
-                            remainingLabel = "${state.daysRemaining}",
-                            remainingSub = "còn lại",
-                            accentColor = state.accentColor,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-                    item {
-                        com.example.betterme.presentation.challenge.detail.components.ReminderEtaRow(
-                            reminderTimeLabel = state.reminderTimeLabel,
-                            estimatedCompletionLabel = state.estimatedCompletionLabel,
-                            accentColor = state.accentColor,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            onReminderClick = { showReminderPicker = true }
-                        )
-                    }
-                    item {
                         Text(
-                            text = "Cột mốc",
-                            style = BetterMeTypography.Title.Small.Bold,
-                            color = BetterMeColors.Text.TextPrimary,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-                    item {
-                        com.example.betterme.presentation.challenge.detail.components.MilestoneRow(
-                            milestones = state.milestones,
-                            progressPct = state.progressPct,
-                            accentColor = state.accentColor,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-                    item {
-                        Text(
-                            text = "Lịch sử check-in",
+                            text = "Lịch sử",
                             style = BetterMeTypography.Title.Small.Bold,
                             color = BetterMeColors.Text.TextPrimary,
                             modifier = Modifier.padding(horizontal = 16.dp)
@@ -249,13 +206,6 @@ fun ChallengeDetailScreen(
                     item {
                         WeekStreakRow(
                             days = state.weekStrip,
-                            accentColor = state.accentColor,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-                    item {
-                        com.example.betterme.presentation.challenge.detail.components.CheckInHistoryCard(
-                            items = state.checkInHistory,
                             accentColor = state.accentColor,
                             modifier = Modifier.padding(horizontal = 16.dp)
                         )
@@ -293,10 +243,11 @@ fun ChallengeDetailScreen(
                     )
                 }
 
-                item { Spacer(modifier = Modifier.height(8.dp)) }
+                item { Spacer(modifier = Modifier.height(12.dp)) }
             }
 
-            // Bottom CTA: PREVIEW = Tham gia, ACTIVE = Tiếp tục, COMPLETED = no bar.
+            // Sticky bottom CTA. Active mode disables the button when today's check-in
+            // is already done so the streak cannot be double-counted.
             when (state.mode) {
                 DetailMode.Preview -> {
                     ContinueChallengeBottomBar(
@@ -306,9 +257,17 @@ fun ChallengeDetailScreen(
                     )
                 }
                 DetailMode.Active -> {
+                    val alreadyCheckedInToday = state.weekStrip.any {
+                        it.isToday && it.status == com.example.betterme.presentation.challenge.model.DayStatus.Done
+                    }
+                    val (label, enabled) = when {
+                        state.isSavingCheckIn -> "Đang lưu..." to false
+                        alreadyCheckedInToday -> "Hôm nay đã check-in" to false
+                        else -> "Check-in hôm nay" to true
+                    }
                     ContinueChallengeBottomBar(
-                        label = "Tiếp tục thử thách",
-                        enabled = !state.isSavingCheckIn,
+                        label = label,
+                        enabled = enabled,
                         onClick = { viewModel.processIntent(ChallengeDetailIntent.StartCheckIn) }
                     )
                 }

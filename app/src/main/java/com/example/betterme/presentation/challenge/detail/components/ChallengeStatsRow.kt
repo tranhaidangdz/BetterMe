@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -17,18 +18,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
 
+/**
+ * Three-column stat card on the Challenge Detail screen — matches the design's
+ * "Tiến độ / Tỷ lệ hoàn thành / Thời gian còn lại" layout. Each cell is a small label on
+ * top, the big value (accent color), and an optional unit underneath. Soft shadow + white
+ * card to lift it off the background.
+ */
 @Composable
 fun ChallengeStatsRow(
-    progressLabel: String,    // "5/7"
-    progressSub: String,      // "ngày"
-    rateLabel: String,        // "71%"
-    rateSub: String,          // "tỷ lệ"
-    remainingLabel: String,   // "2 ngày"
-    remainingSub: String,     // "còn lại"
+    completedDays: Int,
+    totalDays: Int,
+    completionPct: Int,
+    daysRemaining: Int,
     accentColor: Color,
     modifier: Modifier = Modifier
 ) {
@@ -43,30 +50,69 @@ fun ChallengeStatsRow(
             )
             .clip(RoundedCornerShape(16.dp))
             .background(BetterMeColors.White)
-            .padding(vertical = 16.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly
+            .padding(vertical = 16.dp, horizontal = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        StatItem(progressLabel, progressSub, accentColor)
+        StatCell(
+            header = "Tiến độ",
+            value = "$completedDays/$totalDays",
+            unit = "ngày",
+            accent = accentColor,
+            modifier = Modifier.weight(1f)
+        )
         VDivider()
-        StatItem(rateLabel, rateSub, accentColor)
+        StatCell(
+            header = "Tỷ lệ hoàn thành",
+            value = "$completionPct%",
+            unit = "",
+            accent = accentColor,
+            modifier = Modifier.weight(1f)
+        )
         VDivider()
-        StatItem(remainingLabel, remainingSub, accentColor)
+        StatCell(
+            header = "Thời gian còn lại",
+            value = "$daysRemaining",
+            unit = "ngày",
+            accent = accentColor,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
 @Composable
-private fun StatItem(value: String, label: String, accent: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun StatCell(
+    header: String,
+    value: String,
+    unit: String,
+    accent: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = header,
+            style = BetterMeTypography.Body.Small.Medium,
+            color = BetterMeColors.Text.TextTertiary,
+            textAlign = TextAlign.Center,
+            maxLines = 2
+        )
+        Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = value,
             style = BetterMeTypography.Headline.Small.Bold,
-            color = accent
+            color = accent,
+            fontWeight = FontWeight.Bold
         )
-        Text(
-            text = label,
-            style = BetterMeTypography.Body.Small.Medium,
-            color = BetterMeColors.Text.TextTertiary
-        )
+        if (unit.isNotBlank()) {
+            Text(
+                text = unit,
+                style = BetterMeTypography.Body.Small.Medium,
+                color = BetterMeColors.Text.TextTertiary
+            )
+        }
     }
 }
 
@@ -74,7 +120,7 @@ private fun StatItem(value: String, label: String, accent: Color) {
 private fun VDivider() {
     Box(
         modifier = Modifier
-            .height(40.dp)
+            .height(54.dp)
             .width(1.dp)
             .background(BetterMeColors.Border.BorderLight)
     )

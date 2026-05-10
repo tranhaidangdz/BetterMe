@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -28,6 +27,18 @@ import com.example.betterme.presentation.challenge.model.DayStatus
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
 
+/**
+ * Weekly check-in calendar row used on the Challenge Detail screen.
+ *
+ * Status colors match the design spec:
+ * - Done = solid green ✓
+ * - Today = solid accent (blue) with a small dot
+ * - Missed = solid gray
+ * - Future = white outline circle
+ *
+ * Each cell shows the weekday label (T2…CN) on top, a "dd/m" date label, then the status
+ * disc. Soft white card with a subtle shadow.
+ */
 @Composable
 fun WeekStreakRow(
     days: List<DayCellUi>,
@@ -45,7 +56,7 @@ fun WeekStreakRow(
             )
             .clip(RoundedCornerShape(16.dp))
             .background(BetterMeColors.White)
-            .padding(horizontal = 8.dp, vertical = 14.dp),
+            .padding(horizontal = 6.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
         days.forEach { d ->
@@ -63,29 +74,28 @@ private fun DayCell(day: DayCellUi, accent: Color, modifier: Modifier) {
         Text(
             text = day.label,
             style = BetterMeTypography.Body.Small.Medium,
-            color = BetterMeColors.Text.TextTertiary
+            color = BetterMeColors.Text.TextTertiary,
+            fontWeight = FontWeight.Medium
         )
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = day.dateLabel,
             style = BetterMeTypography.Body.Small.Medium,
             color = BetterMeColors.Text.TextTertiary
         )
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Box(
             modifier = Modifier
-                .size(28.dp)
+                .size(30.dp)
                 .clip(CircleShape)
                 .then(
                     when (day.status) {
-                        DayStatus.Done -> Modifier.background(accent)
-                        DayStatus.Today -> Modifier
-                            .background(BetterMeColors.White)
-                            .border(2.dp, accent, CircleShape)
-                        DayStatus.Missed -> Modifier
-                            .background(BetterMeColors.Gray.Gray3)
+                        DayStatus.Done -> Modifier.background(DoneGreen)
+                        DayStatus.Today -> Modifier.background(accent)
+                        DayStatus.Missed -> Modifier.background(MissedGray)
                         DayStatus.Future -> Modifier
                             .background(BetterMeColors.White)
-                            .border(1.dp, BetterMeColors.Border.BorderLight, CircleShape)
+                            .border(1.5.dp, FutureBorder, CircleShape)
                     }
                 ),
             contentAlignment = Alignment.Center
@@ -93,16 +103,24 @@ private fun DayCell(day: DayCellUi, accent: Color, modifier: Modifier) {
             when (day.status) {
                 DayStatus.Done -> Text(
                     text = "✓",
-                    color = BetterMeColors.White,
+                    color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
                 DayStatus.Today -> Text(
                     text = "•",
-                    color = accent,
+                    color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
-                else -> Unit
+                DayStatus.Missed -> Text(
+                    text = "·",
+                    color = Color.White
+                )
+                DayStatus.Future -> Unit
             }
         }
     }
 }
+
+private val DoneGreen = Color(0xFF22C55E)
+private val MissedGray = Color(0xFFE5E7EB)
+private val FutureBorder = Color(0xFFCBD5E1)

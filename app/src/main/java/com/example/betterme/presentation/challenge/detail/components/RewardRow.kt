@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,11 +20,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
 
+/**
+ * Reward strip on the Challenge Detail screen — two horizontal cells (coin / badge)
+ * separated by a thin divider. Each cell is icon-on-the-left + text on the right (label
+ * above value), matching the supplied design.
+ */
 @Composable
 fun RewardRow(
     coins: Int,
@@ -40,50 +48,83 @@ fun RewardRow(
             )
             .clip(RoundedCornerShape(16.dp))
             .background(BetterMeColors.White)
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(text = "🪙", fontSize = 28.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "+$coins",
-                style = BetterMeTypography.Title.Medium.Bold,
-                color = BetterMeColors.Text.TextPrimary
-            )
-            Text(
-                text = "Xu",
-                style = BetterMeTypography.Body.Small.Medium,
-                color = BetterMeColors.Text.TextTertiary
-            )
-        }
+        RewardCell(
+            iconBg = Color(0xFFFEF3C7),
+            iconEmoji = "🪙",
+            value = "$coins",
+            label = "Xu",
+            modifier = Modifier.weight(1f)
+        )
         Box(
             modifier = Modifier
-                .height(60.dp)
+                .height(48.dp)
                 .width(1.dp)
                 .background(BetterMeColors.Border.BorderLight)
         )
-        Column(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = Alignment.CenterHorizontally
+        RewardCell(
+            iconBg = Color(0xFFDBEAFE),
+            iconEmoji = "💧",
+            value = badgeName ?: "—",
+            label = "Huy hiệu",
+            valueOnTop = false,
+            modifier = Modifier.weight(1f).padding(start = 12.dp)
+        )
+    }
+}
+
+@Composable
+private fun RewardCell(
+    iconBg: Color,
+    iconEmoji: String,
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+    valueOnTop: Boolean = true
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(iconBg),
+            contentAlignment = Alignment.Center
         ) {
-            Text(text = "🏅", fontSize = 28.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Huy hiệu",
-                style = BetterMeTypography.Body.Small.Medium,
-                color = BetterMeColors.Text.TextTertiary
-            )
-            Text(
-                text = badgeName ?: "—",
-                style = BetterMeTypography.Title.Small.Bold,
-                color = BetterMeColors.Text.TextPrimary,
-                maxLines = 1
-            )
+            Text(text = iconEmoji, fontSize = 20.sp)
+        }
+        Column {
+            if (valueOnTop) {
+                Text(
+                    text = value,
+                    style = BetterMeTypography.Title.Medium.Bold,
+                    color = BetterMeColors.Text.TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = label,
+                    style = BetterMeTypography.Body.Small.Medium,
+                    color = BetterMeColors.Text.TextTertiary
+                )
+            } else {
+                Text(
+                    text = label,
+                    style = BetterMeTypography.Body.Small.Medium,
+                    color = BetterMeColors.Text.TextTertiary
+                )
+                Text(
+                    text = value,
+                    style = BetterMeTypography.Title.Small.Bold,
+                    color = BetterMeColors.Text.TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+            }
         }
     }
 }

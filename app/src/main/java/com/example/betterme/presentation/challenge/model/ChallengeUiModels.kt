@@ -18,7 +18,9 @@ data class ChallengeProgressUiModel(
     val progressPct: Int,
     val rewardCoins: Int,
     val rewardBadgeName: String?,
-    val isGroup: Boolean
+    val isGroup: Boolean,
+    val daysRemaining: Int = 0,
+    val isCheckedInToday: Boolean = false
 )
 
 /**
