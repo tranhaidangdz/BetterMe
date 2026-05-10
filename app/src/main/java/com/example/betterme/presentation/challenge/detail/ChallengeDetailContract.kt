@@ -22,6 +22,8 @@ data class ChallengeDetailState(
     val userChallengeId: Int? = null,
     val title: String = "",
     val description: String = "",
+    /** Short, single-line variant used as the hero subtitle (e.g. "2 lít nước/ngày trong 7 ngày"). */
+    val shortDescription: String = "",
     val iconEmoji: String = "🏆",
     val accentColor: Color = Color(0xFF0077FF),
     val difficulty: Difficulty = Difficulty.EASY,

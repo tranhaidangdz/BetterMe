@@ -109,118 +109,130 @@ class ChallengeDetailViewModel(
     }
 
     private fun loadPreview(challengeId: Int) {
-        viewModelScope.launch {
-            updateState { copy(isLoading = true, challengeId = challengeId) }
-            val challenge = challengeRepository.getById(challengeId)
-            if (challenge == null) {
-                updateState { copy(isLoading = false, errorMessage = "Không tìm thấy thử thách") }
-                return@launch
-            }
-            val userId = dataStoreManager.getCurrentUserId().first().orEmpty()
-            // If already joined, prefer ACTIVE detail.
-            val existing = if (userId.isNotBlank()) {
-                userChallengeRepository.getByUserAndChallenge(userId, challengeId)
-            } else null
-            if (existing != null && existing.status == "ACTIVE") {
-                loadActive(existing.id)
-                return@launch
-            }
-            val rewardBadgeName = challenge.reward_badge_id?.let { achievementRepository.getById(it)?.title }
-            updateState {
-                copy(
-                    mode = DetailMode.Preview,
-                    isLoading = false,
-                    challengeId = challenge.id,
-                    userChallengeId = null,
-                    title = challenge.title,
-                    description = challenge.description,
-                    iconEmoji = challenge.icon_emoji,
-                    accentColor = parseColor(challenge.color_hex),
-                    difficulty = Difficulty.fromRaw(challenge.difficulty),
-                    rewardCoins = challenge.reward_coins,
-                    rewardBadgeName = rewardBadgeName,
-                    durationDays = challenge.duration_days,
-                    targetStreak = challenge.target_streak,
-                    descriptionBullets = challenge.toBullets(),
-                    isGroup = challenge.is_group,
-                    weekStrip = emptyWeek(),
-                    motivationalQuote = challenge.motivational_quote,
-                    completionMessage = challenge.completion_message
-                )
-            }
+        viewModelScope.launch { loadPreviewSuspending(challengeId) }
+    }
+
+    /** Suspending sibling of [loadPreview] used by callers that need to await completion. */
+    private suspend fun loadPreviewSuspending(challengeId: Int) {
+        updateState { copy(isLoading = true, challengeId = challengeId) }
+        val challenge = challengeRepository.getById(challengeId)
+        if (challenge == null) {
+            updateState { copy(isLoading = false, errorMessage = "Không tìm thấy thử thách") }
+            return
+        }
+        val userId = dataStoreManager.getCurrentUserId().first().orEmpty()
+        // If already joined, prefer ACTIVE detail.
+        val existing = if (userId.isNotBlank()) {
+            userChallengeRepository.getByUserAndChallenge(userId, challengeId)
+        } else null
+        if (existing != null && existing.status == "ACTIVE") {
+            loadActiveSuspending(existing.id)
+            return
+        }
+        val rewardBadgeName = challenge.reward_badge_id?.let { achievementRepository.getById(it)?.title }
+        updateState {
+            copy(
+                mode = DetailMode.Preview,
+                isLoading = false,
+                challengeId = challenge.id,
+                userChallengeId = null,
+                title = challenge.title,
+                description = challenge.description,
+                shortDescription = challenge.short_description,
+                iconEmoji = challenge.icon_emoji,
+                accentColor = parseColor(challenge.color_hex),
+                difficulty = Difficulty.fromRaw(challenge.difficulty),
+                rewardCoins = challenge.reward_coins,
+                rewardBadgeName = rewardBadgeName,
+                durationDays = challenge.duration_days,
+                targetStreak = challenge.target_streak,
+                descriptionBullets = challenge.toBullets(),
+                isGroup = challenge.is_group,
+                weekStrip = emptyWeek(),
+                motivationalQuote = challenge.motivational_quote,
+                completionMessage = challenge.completion_message
+            )
         }
     }
 
     private fun loadActive(userChallengeId: Int) {
-        viewModelScope.launch {
-            updateState { copy(isLoading = true, userChallengeId = userChallengeId) }
-            val uc = userChallengeRepository.getById(userChallengeId)
-            val challenge = uc?.challenge_id?.let { challengeRepository.getById(it) }
-            if (uc == null || challenge == null) {
-                updateState { copy(isLoading = false, errorMessage = "Không tìm thấy thử thách") }
-                return@launch
-            }
-            val rewardBadgeName = challenge.reward_badge_id?.let { achievementRepository.getById(it)?.title }
-            val doneDates = challengeLogRepository.getDoneDates(userChallengeId)
-            val weekStrip = buildWeekStrip(doneDates.toSet(), uc.start_date, challenge.target_streak)
-            val daysRemaining = (challenge.target_streak - uc.current_streak).coerceAtLeast(0)
-            val mode = when (uc.status) {
-                "COMPLETED", "ABANDONED" -> DetailMode.Completed
-                else -> DetailMode.Active
-            }
+        viewModelScope.launch { loadActiveSuspending(userChallengeId) }
+    }
 
-            // ----- Detail-flow extras -----
-            val milestones = com.example.betterme.presentation.challenge.detail.components
-                .defaultMilestones(uc.progress_pct)
-            val historyLogs = challengeLogRepository.observeLogs(userChallengeId)
-                .first()
-                .filter { it.status == "DONE" }
-                .sortedByDescending { it.date }
-                .take(5)
-            val historyItems = historyLogs.map { log ->
-                com.example.betterme.presentation.challenge.detail.components.CheckInHistoryItemUi(
-                    dateLabel = formatDate(log.date),
-                    timeLabel = formatTime(log.created_at),
-                    note = log.note
-                )
-            }
-            // Reminder + ETA labels
-            val reminder = reminderRepository.getActiveByTarget("USER_CHALLENGE", uc.id)
-            val reminderLabel = reminder?.time ?: "08:00"
-            val etaMs = uc.start_date + (challenge.target_streak - 1).coerceAtLeast(0).toLong() *
-                24L * 60L * 60L * 1000L
-            val etaLabel = formatDate(etaMs)
+    /**
+     * Suspending sibling of [loadActive]. Lets callers like `join()` await the new state
+     * so the bottom-bar lock stays held until the detail screen has fully transitioned to
+     * Active mode — no flicker through "still in Preview" mid-recomposition.
+     */
+    private suspend fun loadActiveSuspending(userChallengeId: Int) {
+        updateState { copy(isLoading = true, userChallengeId = userChallengeId) }
+        val uc = userChallengeRepository.getById(userChallengeId)
+        val challenge = uc?.challenge_id?.let { challengeRepository.getById(it) }
+        if (uc == null || challenge == null) {
+            updateState { copy(isLoading = false, errorMessage = "Không tìm thấy thử thách") }
+            return
+        }
+        val rewardBadgeName = challenge.reward_badge_id?.let { achievementRepository.getById(it)?.title }
+        val doneDates = challengeLogRepository.getDoneDates(userChallengeId)
+        val weekStrip = buildWeekStrip(doneDates.toSet(), uc.start_date, challenge.target_streak)
+        val daysRemaining = (challenge.target_streak - uc.current_streak).coerceAtLeast(0)
+        val mode = when (uc.status) {
+            "COMPLETED", "ABANDONED" -> DetailMode.Completed
+            else -> DetailMode.Active
+        }
 
-            updateState {
-                copy(
-                    mode = mode,
-                    isLoading = false,
-                    challengeId = challenge.id,
-                    userChallengeId = uc.id,
-                    title = challenge.title,
-                    description = challenge.description,
-                    iconEmoji = challenge.icon_emoji,
-                    accentColor = parseColor(challenge.color_hex),
-                    difficulty = Difficulty.fromRaw(challenge.difficulty),
-                    rewardCoins = challenge.reward_coins,
-                    rewardBadgeName = rewardBadgeName,
-                    durationDays = challenge.duration_days,
-                    targetStreak = challenge.target_streak,
-                    currentStreak = uc.current_streak,
-                    bestStreak = uc.best_streak,
-                    progressPct = uc.progress_pct,
-                    daysRemaining = daysRemaining,
-                    isGroup = challenge.is_group,
-                    weekStrip = weekStrip,
-                    descriptionBullets = challenge.toBullets(),
-                    motivationalQuote = challenge.motivational_quote,
-                    completionMessage = challenge.completion_message,
-                    milestones = milestones,
-                    checkInHistory = historyItems,
-                    reminderTimeLabel = reminderLabel,
-                    estimatedCompletionLabel = etaLabel
-                )
-            }
+        // ----- Detail-flow extras -----
+        val milestones = com.example.betterme.presentation.challenge.detail.components
+            .defaultMilestones(uc.progress_pct)
+        val historyLogs = challengeLogRepository.observeLogs(userChallengeId)
+            .first()
+            .filter { it.status == "DONE" }
+            .sortedByDescending { it.date }
+            .take(5)
+        val historyItems = historyLogs.map { log ->
+            com.example.betterme.presentation.challenge.detail.components.CheckInHistoryItemUi(
+                dateLabel = formatDate(log.date),
+                timeLabel = formatTime(log.created_at),
+                note = log.note
+            )
+        }
+        // Reminder + ETA labels
+        val reminder = reminderRepository.getActiveByTarget("USER_CHALLENGE", uc.id)
+        val reminderLabel = reminder?.time ?: "08:00"
+        val etaMs = uc.start_date + (challenge.target_streak - 1).coerceAtLeast(0).toLong() *
+            24L * 60L * 60L * 1000L
+        val etaLabel = formatDate(etaMs)
+
+        updateState {
+            copy(
+                mode = mode,
+                isLoading = false,
+                challengeId = challenge.id,
+                userChallengeId = uc.id,
+                title = challenge.title,
+                description = challenge.description,
+                shortDescription = challenge.short_description,
+                iconEmoji = challenge.icon_emoji,
+                accentColor = parseColor(challenge.color_hex),
+                difficulty = Difficulty.fromRaw(challenge.difficulty),
+                rewardCoins = challenge.reward_coins,
+                rewardBadgeName = rewardBadgeName,
+                durationDays = challenge.duration_days,
+                targetStreak = challenge.target_streak,
+                currentStreak = uc.current_streak,
+                bestStreak = uc.best_streak,
+                progressPct = uc.progress_pct,
+                daysRemaining = daysRemaining,
+                isGroup = challenge.is_group,
+                weekStrip = weekStrip,
+                descriptionBullets = challenge.toBullets(),
+                motivationalQuote = challenge.motivational_quote,
+                completionMessage = challenge.completion_message,
+                milestones = milestones,
+                checkInHistory = historyItems,
+                reminderTimeLabel = reminderLabel,
+                estimatedCompletionLabel = etaLabel
+            )
         }
     }
 
@@ -255,7 +267,9 @@ class ChallengeDetailViewModel(
                 // Reminder scheduling is best-effort — never block the join transition if
                 // WorkManager refuses (e.g., on devices with restricted power policies).
                 runCatching { scheduleReminderUseCase(ucId, currentState.title) }
-                loadActive(ucId)
+                // Await the suspending variant so the lock stays held until state.mode
+                // has fully transitioned to Active — no flash of "still in Preview" CTA.
+                loadActiveSuspending(ucId)
                 sendEvent(ChallengeDetailEvent.ShowMessage("Đã tham gia thử thách"))
             } catch (e: Exception) {
                 android.util.Log.e("ChallengeDetailVM", "Join failed", e)
@@ -265,8 +279,8 @@ class ChallengeDetailViewModel(
                     )
                 )
             } finally {
-                // Always release the lock — loadActive sets isLoading=false on its own
-                // happy path, and the catch branch needs the same release.
+                // Always release the lock, including paths where loadActive errored
+                // after the row was already inserted.
                 updateState { copy(isJoining = false) }
             }
         }

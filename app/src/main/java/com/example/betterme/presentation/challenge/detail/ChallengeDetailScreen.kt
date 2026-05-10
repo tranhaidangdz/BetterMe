@@ -171,7 +171,9 @@ fun ChallengeDetailScreen(
                 item {
                     ChallengeHeroCard(
                         title = state.title,
-                        subtitle = state.description,
+                        // Prefer the curated short description; fall back to the long one
+                        // so legacy challenges without short_description still render.
+                        subtitle = state.shortDescription.ifBlank { state.description },
                         iconEmoji = state.iconEmoji,
                         accentColor = state.accentColor,
                         difficulty = state.difficulty,
@@ -247,11 +249,23 @@ fun ChallengeDetailScreen(
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
-                item {
-                    DescriptionBulletList(
-                        bullets = state.descriptionBullets,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
+                if (state.description.isNotBlank()) {
+                    item {
+                        Text(
+                            text = state.description,
+                            style = BetterMeTypography.Body.Medium,
+                            color = BetterMeColors.Text.TextSecondary,
+                            modifier = Modifier.padding(horizontal = 24.dp)
+                        )
+                    }
+                }
+                if (state.descriptionBullets.isNotEmpty()) {
+                    item {
+                        DescriptionBulletList(
+                            bullets = state.descriptionBullets,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
                 }
 
                 item { Spacer(modifier = Modifier.height(12.dp)) }
