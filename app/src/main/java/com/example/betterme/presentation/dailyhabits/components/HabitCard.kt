@@ -28,10 +28,17 @@ import com.example.betterme.presentation.dailyhabits.model.HabitUiModel
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
 
+/**
+ * Habit row used by the Tasks screen.
+ *
+ * The trailing check icon is purely a status indicator (gray = not yet checked in for the
+ * selected day, green = already checked in for that day). It is intentionally NOT clickable
+ * — daily check-in goes through the camera-based flow on HabitDetailScreen. Tapping
+ * anywhere on the row opens the detail screen.
+ */
 @Composable
 fun HabitCard(
     habit: HabitUiModel,
-    onToggleCompletion: () -> Unit = {},
     onCardClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -80,7 +87,8 @@ fun HabitCard(
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Check-in button
+            // Status indicator only — NOT a check-in button. Gray when not yet checked in
+            // for the selected day; green after a successful check-in via the detail screen.
             Box(
                 modifier = Modifier
                     .size(32.dp)
@@ -88,13 +96,13 @@ fun HabitCard(
                     .background(
                         if (habit.isCompleted) BetterMeColors.Green
                         else BetterMeColors.Gray.Gray4
-                    )
-                    .clickable { onToggleCompletion() },
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Check,
-                    contentDescription = if (habit.isCompleted) "Hoàn thành" else "Chưa hoàn thành",
+                    contentDescription = if (habit.isCompleted) "Đã check-in hôm nay"
+                    else "Chưa check-in hôm nay",
                     tint = if (habit.isCompleted) BetterMeColors.White
                     else BetterMeColors.Text.TextTertiary,
                     modifier = Modifier.size(18.dp)
