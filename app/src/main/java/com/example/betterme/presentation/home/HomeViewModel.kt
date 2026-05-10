@@ -8,8 +8,10 @@ import com.example.betterme.data.provider.GoogleAuthClient
 import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitLogRepository
 import com.example.betterme.domain.repository.HabitRepository
+import com.example.betterme.domain.repository.ChallengeLogRepository
 import com.example.betterme.domain.repository.NotificationRepository
 import com.example.betterme.domain.repository.UserCategoryRepository
+import com.example.betterme.domain.repository.UserChallengeRepository
 import com.example.betterme.domain.repository.UserRepository
 import com.example.betterme.presentation.home.model.CantMiss
 import com.example.betterme.presentation.home.model.HomeProgress
@@ -27,7 +29,9 @@ class HomeViewModel(
     private val habitLogRepository: HabitLogRepository,
     private val googleAuthClient: GoogleAuthClient,
     private val userRepository: UserRepository,
-    private val notificationRepository: NotificationRepository
+    private val notificationRepository: NotificationRepository,
+    private val userChallengeRepository: UserChallengeRepository,
+    private val challengeLogRepository: ChallengeLogRepository
 ) : BaseMviViewModel<HomeIntent, HomeState, HomeEvent>() {
 
     private companion object {
@@ -165,10 +169,22 @@ class HomeViewModel(
                 ((completedHabits.toFloat() / totalHabits) * 100).toInt()
             } else 0
 
+            // 7. Today's challenge check-in tracker — count active challenges and how many
+            //    already have a DONE log for today.
+            val activeChallenges = if (userId.isNotBlank()) {
+                userChallengeRepository.observeByStatus(userId, "ACTIVE").first()
+            } else emptyList()
+            val checkedInToday = activeChallenges.count { uc ->
+                val log = challengeLogRepository.getLogByDate(uc.id, today)
+                log?.status == "DONE"
+            }
+
             val progress = HomeProgress(
                 totalHabits = totalHabits,
                 completedHabits = completedHabits,
-                percentage = percentage
+                percentage = percentage,
+                totalChallenges = activeChallenges.size,
+                checkedInChallenges = checkedInToday
             )
 
             updateState {

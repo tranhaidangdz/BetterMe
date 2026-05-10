@@ -36,7 +36,7 @@ fun HomeProgressCard(
         label = "progress"
     )
 
-    Box(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
@@ -112,5 +112,73 @@ fun HomeProgressCard(
                 )
             }
         }
+
+        // Today's challenge check-in tracker — only shown when the user has at least one
+        // active challenge. Sits below the habit progress so the existing layout stays.
+        if (progress.totalChallenges > 0) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(Color.White.copy(alpha = 0.18f))
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            ChallengeCheckInTracker(
+                checkedIn = progress.checkedInChallenges,
+                total = progress.totalChallenges,
+                percentage = progress.challengePercentage
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChallengeCheckInTracker(checkedIn: Int, total: Int, percentage: Int) {
+    val animatedFraction by animateFloatAsState(
+        targetValue = (percentage / 100f).coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 800),
+        label = "challenge-progress"
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = "🏆", style = BetterMeTypography.Title.Small.Bold)
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            val label = when {
+                checkedIn == 0 -> "Hôm nay $total thử thách đang chờ check-in"
+                checkedIn >= total -> "Tuyệt vời! Đã check-in tất cả $total thử thách 🎉"
+                else -> "Đã check-in $checkedIn/$total thử thách hôm nay"
+            }
+            Text(
+                text = label,
+                style = BetterMeTypography.Body.Small.Medium,
+                color = Color.White
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(Color.White.copy(alpha = 0.22f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(animatedFraction)
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Color.White)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = "$percentage%",
+            style = BetterMeTypography.Title.Small.Bold,
+            color = Color.White
+        )
     }
 }
