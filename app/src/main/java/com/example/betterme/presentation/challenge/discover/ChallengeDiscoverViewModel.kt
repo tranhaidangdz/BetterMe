@@ -33,6 +33,7 @@ class ChallengeDiscoverViewModel(
                 runSearch(intent.q)
             }
             is ChallengeDiscoverIntent.SelectCategory -> updateState { copy(selectedCategoryId = intent.id) }
+            is ChallengeDiscoverIntent.SelectDifficulty -> updateState { copy(selectedDifficulty = intent.difficulty) }
         }
     }
 

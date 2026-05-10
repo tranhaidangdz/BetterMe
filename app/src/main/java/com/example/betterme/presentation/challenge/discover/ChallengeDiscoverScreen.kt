@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.example.betterme.R
 import com.example.betterme.presentation.challenge.discover.components.CategoryFilterChips
 import com.example.betterme.presentation.challenge.discover.components.CategoryTile
+import com.example.betterme.presentation.challenge.discover.components.DifficultyFilterChips
 import com.example.betterme.presentation.challenge.discover.components.DiscoverSearchBar
 import com.example.betterme.presentation.challenge.discover.components.FeaturedChallengeCard
 import com.example.betterme.presentation.challenge.discover.components.NewChallengeRow
@@ -47,13 +48,16 @@ fun ChallengeDiscoverScreen(
         if (isGroup) onOpenGroupChallenge(id) else onOpenChallengeDetail(id)
     }
 
-    val visibleNewest = if (state.query.isBlank()) {
-        if (state.selectedCategoryId == null) state.newest
-        else state.newest.filter { challenge ->
-            // We don't have category id on NewChallengeUiModel; rely on the searchResults path.
-            true
+    // Pick the source list based on whether the user is searching, then apply the
+    // difficulty filter on top. (Category filter still routes through the VM's
+    // search field; we don't have category_id on the UI model so we keep the original
+    // behaviour for that.)
+    val visibleNewest = (if (state.query.isBlank()) state.newest else state.searchResults)
+        .let { list ->
+            val d = state.selectedDifficulty
+            if (d == null) list else list.filter { it.difficulty == d }
         }
-    } else state.searchResults
+    val visibleFeatured = state.featured // featured doesn't carry difficulty in the UI model
 
     Box(
         modifier = Modifier
@@ -79,6 +83,12 @@ fun ChallengeDiscoverScreen(
                     query = state.query,
                     onQueryChange = { viewModel.processIntent(ChallengeDiscoverIntent.UpdateQuery(it)) },
                     modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+            item {
+                DifficultyFilterChips(
+                    selected = state.selectedDifficulty,
+                    onSelect = { viewModel.processIntent(ChallengeDiscoverIntent.SelectDifficulty(it)) }
                 )
             }
             item {
