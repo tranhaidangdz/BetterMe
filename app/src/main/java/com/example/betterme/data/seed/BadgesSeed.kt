@@ -275,6 +275,64 @@ object BadgesSeed {
             criteria_type = "MANUAL",
             criteria_value = 0,
             sort_order = 20
+        ),
+
+        // ==== 5. Huy hiệu kỷ luật (21-25) ====
+        // Discipline category. No PNG art yet — emoji fallback handles render.
+        AchievementEntity(
+            id = 21,
+            title = "Cây Thép",
+            description = "Kỷ luật bền vững 21 ngày",
+            category = "DISCIPLINE",
+            icon_emoji = "⚙️",
+            color_hex = "#475569",
+            criteria_type = "STREAK",
+            criteria_value = 21,
+            sort_order = 21
+        ),
+        AchievementEntity(
+            id = 22,
+            title = "Người Tự Chủ",
+            description = "Cai dopamine 21 ngày",
+            category = "DISCIPLINE",
+            icon_emoji = "🧘‍♂️",
+            color_hex = "#0EA5E9",
+            criteria_type = "STREAK",
+            criteria_value = 21,
+            sort_order = 22
+        ),
+        AchievementEntity(
+            id = 23,
+            title = "Monk Mode",
+            description = "60 ngày kỷ luật cực đoan",
+            category = "DISCIPLINE",
+            icon_emoji = "🛕",
+            color_hex = "#7C3AED",
+            criteria_type = "STREAK",
+            criteria_value = 60,
+            sort_order = 23
+        ),
+        AchievementEntity(
+            id = 24,
+            title = "Bậc Thầy Tự Kỷ Luật",
+            description = "Vượt qua mọi cám dỗ",
+            category = "DISCIPLINE",
+            icon_emoji = "⚔️",
+            color_hex = "#9333EA",
+            criteria_type = "CHALLENGE_COMPLETED",
+            criteria_value = 5,
+            sort_order = 24
+        ),
+        AchievementEntity(
+            id = 25,
+            title = "Huyền Thoại Sống",
+            description = "Chinh phục thử thách 90 ngày",
+            category = "DISCIPLINE",
+            icon_emoji = "👑",
+            color_hex = "#EAB308",
+            criteria_type = "STREAK",
+            criteria_value = 90,
+            sort_order = 25
         )
     )
 }
