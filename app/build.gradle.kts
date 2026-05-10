@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -6,6 +8,19 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.google.services)
 }
+
+// Cloudinary credentials live in local.properties (gitignored) so secrets stay off the
+// remote. If the file is missing or the keys aren't set, the app still builds — it just
+// falls back to keeping the on-device URI for check-in photos. To enable cloud uploads,
+// add to local.properties:
+//   CLOUDINARY_CLOUD_NAME=your_cloud_name
+//   CLOUDINARY_UPLOAD_PRESET=your_unsigned_preset
+val cloudinaryProps: Properties = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) load(f.inputStream())
+}
+val cloudinaryCloudName: String = cloudinaryProps.getProperty("CLOUDINARY_CLOUD_NAME", "")
+val cloudinaryUploadPreset: String = cloudinaryProps.getProperty("CLOUDINARY_UPLOAD_PRESET", "")
 
 android {
     namespace = "com.example.betterme"
@@ -19,6 +34,9 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "CLOUDINARY_CLOUD_NAME", "\"$cloudinaryCloudName\"")
+        buildConfigField("String", "CLOUDINARY_UPLOAD_PRESET", "\"$cloudinaryUploadPreset\"")
     }
 
     buildTypes {
@@ -36,6 +54,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     kotlinOptions {
         jvmTarget = "11"
@@ -113,4 +132,7 @@ dependencies {
 
     // Location (GPS for check-in anti-cheat)
     implementation(libs.play.services.location)
+
+    // Cloudinary (image upload + delivery)
+    implementation(libs.cloudinary.android)
 }

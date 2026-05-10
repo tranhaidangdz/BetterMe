@@ -9,6 +9,7 @@ import com.example.betterme.data.local.room.entities.UserChallengeEntity
 import com.example.betterme.domain.repository.AchievementRepository
 import com.example.betterme.domain.repository.ChallengeLogRepository
 import com.example.betterme.domain.repository.ChallengeRepository
+import com.example.betterme.domain.repository.ImageUploadRepository
 import com.example.betterme.domain.repository.UserChallengeRepository
 import com.example.betterme.domain.usecase.challenge.CheckInChallengeUseCase
 import com.example.betterme.domain.usecase.challenge.JoinChallengeUseCase
@@ -33,7 +34,8 @@ class ChallengeDetailViewModel(
     private val joinChallengeUseCase: JoinChallengeUseCase,
     private val leaveChallengeUseCase: LeaveChallengeUseCase,
     private val checkInChallengeUseCase: CheckInChallengeUseCase,
-    private val scheduleReminderUseCase: ScheduleChallengeReminderUseCase
+    private val scheduleReminderUseCase: ScheduleChallengeReminderUseCase,
+    private val imageUploadRepository: ImageUploadRepository
 ) : BaseMviViewModel<ChallengeDetailIntent, ChallengeDetailState, ChallengeDetailEvent>() {
 
     override fun initState() = ChallengeDetailState()
@@ -239,10 +241,28 @@ class ChallengeDetailViewModel(
                 sendEvent(ChallengeDetailEvent.ShowMessage("Vui lòng đăng nhập"))
                 return@launch
             }
-            val ucId = joinChallengeUseCase(userId, currentState.challengeId)
-            scheduleReminderUseCase(ucId.toInt(), currentState.title)
-            loadActive(ucId.toInt())
-            sendEvent(ChallengeDetailEvent.ShowMessage("Đã tham gia thử thách"))
+            if (currentState.challengeId <= 0) {
+                sendEvent(ChallengeDetailEvent.ShowMessage("Không tìm thấy thử thách"))
+                return@launch
+            }
+
+            updateState { copy(isLoading = true) }
+            try {
+                val ucId = joinChallengeUseCase(userId, currentState.challengeId).toInt()
+                // Reminder scheduling is best-effort — never block the join transition if
+                // WorkManager refuses (e.g., on devices with restricted power policies).
+                runCatching { scheduleReminderUseCase(ucId, currentState.title) }
+                loadActive(ucId)
+                sendEvent(ChallengeDetailEvent.ShowMessage("Đã tham gia thử thách"))
+            } catch (e: Exception) {
+                android.util.Log.e("ChallengeDetailVM", "Join failed", e)
+                updateState { copy(isLoading = false) }
+                sendEvent(
+                    ChallengeDetailEvent.ShowMessage(
+                        "Tham gia thử thách thất bại: ${e.message ?: "lỗi không xác định"}"
+                    )
+                )
+            }
         }
     }
 
@@ -250,10 +270,19 @@ class ChallengeDetailViewModel(
         val ucId = currentState.userChallengeId ?: return
         viewModelScope.launch {
             updateState { copy(isSavingCheckIn = true) }
+            // Upload the photo to Cloudinary first (passthrough when not configured) so
+            // the value we persist on the log is the durable URL, not a transient
+            // FileProvider URI that becomes useless after the cache rotates.
+            val resolvedImage = currentState.checkInPhotoUri?.let { uri ->
+                imageUploadRepository.upload(
+                    localUri = uri,
+                    folder = ImageUploadRepository.Folder.ChallengeCheckIn
+                )
+            }
             val res = checkInChallengeUseCase(
                 userChallengeId = ucId,
                 note = currentState.checkInNote.ifBlank { null },
-                imageUri = currentState.checkInPhotoUri?.toString(),
+                imageUri = resolvedImage,
                 latitude = currentState.checkInLatitude,
                 longitude = currentState.checkInLongitude
             )

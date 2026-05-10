@@ -10,14 +10,17 @@ import com.example.betterme.data.local.datastore.DataStoreManager
 import com.example.betterme.data.local.datastore.DataStoreManagerImpl
 import com.example.betterme.data.local.room.database.BetterMeDatabase
 import com.example.betterme.data.provider.GoogleAuthClient
+import com.example.betterme.BuildConfig
 import com.example.betterme.data.repository.AIChatRepositoryImpl
 import com.example.betterme.data.repository.AchievementRepositoryImpl
 import com.example.betterme.data.repository.CategoryRepositoryImpl
 import com.example.betterme.data.repository.ChallengeLogRepositoryImpl
 import com.example.betterme.data.repository.ChallengeRepositoryImpl
+import com.example.betterme.data.repository.CloudinaryImageUploadRepositoryImpl
 import com.example.betterme.data.repository.GroupTeamRepositoryImpl
 import com.example.betterme.data.repository.HabitLogRepositoryImpl
 import com.example.betterme.data.repository.HabitRepositoryImpl
+import com.example.betterme.data.repository.LocalImageUploadRepositoryImpl
 import com.example.betterme.data.repository.ReminderRepositoryImpl
 import com.example.betterme.data.repository.NotificationRepositoryImpl
 import com.example.betterme.data.repository.UserAchievementRepositoryImpl
@@ -32,6 +35,7 @@ import com.example.betterme.domain.repository.ChallengeRepository
 import com.example.betterme.domain.repository.GroupTeamRepository
 import com.example.betterme.domain.repository.HabitLogRepository
 import com.example.betterme.domain.repository.HabitRepository
+import com.example.betterme.domain.repository.ImageUploadRepository
 import com.example.betterme.domain.repository.NotificationRepository
 import com.example.betterme.domain.repository.ReminderRepository
 import com.example.betterme.domain.repository.UserAchievementRepository
@@ -184,6 +188,18 @@ val repositoryModule = module {
 
     single<UserRepository> {
         UserRepositoryImpl(get())
+    }
+
+    // Image upload repo: Cloudinary if configured, local-passthrough otherwise. Pick at
+    // DI time so the rest of the app never has to branch on whether the cloud is set up.
+    single<ImageUploadRepository> {
+        val cloudName = BuildConfig.CLOUDINARY_CLOUD_NAME
+        val preset = BuildConfig.CLOUDINARY_UPLOAD_PRESET
+        if (cloudName.isNotBlank() && preset.isNotBlank()) {
+            CloudinaryImageUploadRepositoryImpl(uploadPreset = preset)
+        } else {
+            LocalImageUploadRepositoryImpl()
+        }
     }
 }
 

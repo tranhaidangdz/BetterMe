@@ -9,6 +9,7 @@ import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitLogRepository
 import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.domain.repository.ChallengeLogRepository
+import com.example.betterme.domain.repository.ImageUploadRepository
 import com.example.betterme.domain.repository.NotificationRepository
 import com.example.betterme.domain.repository.UserCategoryRepository
 import com.example.betterme.domain.repository.UserChallengeRepository
@@ -31,7 +32,8 @@ class HomeViewModel(
     private val userRepository: UserRepository,
     private val notificationRepository: NotificationRepository,
     private val userChallengeRepository: UserChallengeRepository,
-    private val challengeLogRepository: ChallengeLogRepository
+    private val challengeLogRepository: ChallengeLogRepository,
+    private val imageUploadRepository: ImageUploadRepository
 ) : BaseMviViewModel<HomeIntent, HomeState, HomeEvent>() {
 
     private companion object {
@@ -210,9 +212,20 @@ class HomeViewModel(
 
     private fun updateUserPhoto(photoUri: String) {
         viewModelScope.launch {
-            dataStoreManager.updateUserPhotoUrl(photoUri)
-            persistProfileToLocalUserTable(updatedPhotoUrl = photoUri)
-            updateState { copy(userPhotoUrl = photoUri) }
+            // Upload to Cloudinary so the avatar survives reinstalls and is reachable from
+            // any device the user signs into. If the value is already an HTTPS URL (e.g.,
+            // returned from Google Sign-In), the uploader transparently passes it through.
+            val resolved = if (photoUri.startsWith("http://") || photoUri.startsWith("https://")) {
+                photoUri
+            } else {
+                imageUploadRepository.upload(
+                    localUri = android.net.Uri.parse(photoUri),
+                    folder = ImageUploadRepository.Folder.Profile
+                )
+            }
+            dataStoreManager.updateUserPhotoUrl(resolved)
+            persistProfileToLocalUserTable(updatedPhotoUrl = resolved)
+            updateState { copy(userPhotoUrl = resolved) }
         }
     }
 

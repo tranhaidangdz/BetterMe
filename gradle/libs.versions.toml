@@ -52,6 +52,9 @@ googleid = "1.2.0"
 foundation = "1.10.6"
 playServicesLocation = "21.3.0"
 
+# Cloudinary
+cloudinaryAndroid = "2.5.0"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -125,6 +128,9 @@ androidx-compose-foundation = { group = "androidx.compose.foundation", name = "f
 
 # Location
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+
+# Cloudinary (image upload + delivery)
+cloudinary-android = { module = "com.cloudinary:cloudinary-android", version.ref = "cloudinaryAndroid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

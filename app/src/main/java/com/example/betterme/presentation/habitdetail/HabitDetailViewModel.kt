@@ -8,6 +8,7 @@ import com.example.betterme.data.local.room.entities.HabitLogEntity
 import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitLogRepository
 import com.example.betterme.domain.repository.HabitRepository
+import com.example.betterme.domain.repository.ImageUploadRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -18,7 +19,8 @@ class HabitDetailViewModel(
     private val dataStoreManager: DataStoreManager,
     private val habitRepository: HabitRepository,
     private val habitLogRepository: HabitLogRepository,
-    private val categoryRepository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    private val imageUploadRepository: ImageUploadRepository
 ) : BaseMviViewModel<HabitDetailIntent, HabitDetailState, HabitDetailEvent>() {
 
     override fun initState(): HabitDetailState = HabitDetailState()
@@ -192,7 +194,15 @@ class HabitDetailViewModel(
                 val today = getStartOfDay(Calendar.getInstance())
                 val existingLog = habitLogRepository.getLogByDate(state.habitId, today)
 
-                val imageUriStr = state.checkInPhotoUri?.toString()
+                // Upload to Cloudinary first (passthrough when not configured) so the
+                // value we persist is the durable cloud URL, not a transient local
+                // FileProvider URI that becomes invalid after the cache rotates.
+                val imageUriStr = state.checkInPhotoUri?.let { uri ->
+                    imageUploadRepository.upload(
+                        localUri = uri,
+                        folder = ImageUploadRepository.Folder.HabitCheckIn
+                    )
+                }
 
                 if (existingLog != null) {
                     // Cập nhật log hiện tại

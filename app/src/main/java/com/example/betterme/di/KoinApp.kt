@@ -5,9 +5,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import android.util.Log
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.cloudinary.android.MediaManager
+import com.example.betterme.BuildConfig
 import com.example.betterme.data.worker.ChallengeReminderWorker
 import com.example.betterme.data.worker.MidnightCleanupWorker
 import com.google.firebase.FirebaseApp
@@ -32,6 +35,24 @@ class KoinApp : Application() {
         }
         registerNotificationChannels()
         scheduleDailyMidnightCleanup()
+        initCloudinary()
+    }
+
+    /**
+     * Initialize Cloudinary's MediaManager once per process so the SDK is ready by the
+     * time the first upload fires. Quietly skips when no `cloud_name` is configured —
+     * the DI module then picks the local-passthrough repository instead.
+     */
+    private fun initCloudinary() {
+        val cloudName = BuildConfig.CLOUDINARY_CLOUD_NAME
+        if (cloudName.isBlank()) return
+        try {
+            MediaManager.init(this, mapOf("cloud_name" to cloudName))
+        } catch (e: IllegalStateException) {
+            // MediaManager.init throws if it's already been initialized (e.g., process
+            // restart in tests) — that's a no-op for our purposes.
+            Log.d("KoinApp", "Cloudinary already initialized: ${e.message}")
+        }
     }
 
     /**
