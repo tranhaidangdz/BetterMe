@@ -179,6 +179,17 @@ fun ChallengeDetailScreen(
 
                 if (state.mode == DetailMode.Active || state.mode == DetailMode.Completed) {
                     item {
+                        com.example.betterme.presentation.challenge.detail.components.StreakCounterCard(
+                            currentStreak = state.currentStreak,
+                            bestStreak = state.bestStreak,
+                            daysRemaining = state.daysRemaining,
+                            motivationalText = com.example.betterme.presentation.challenge.detail.components
+                                .motivationalForProgress(state.progressPct, state.difficulty.raw),
+                            accentColor = state.accentColor,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                    item {
                         ChallengeStatsRow(
                             progressLabel = "${state.currentStreak}/${state.targetStreak}",
                             progressSub = "ngày",
@@ -324,6 +335,8 @@ fun ChallengeDetailScreen(
                 challengeTitle = celebration.challengeTitle,
                 coinsEarned = celebration.coinsEarned,
                 badgeName = celebration.badgeName,
+                difficultyRaw = state.difficulty.raw,
+                durationDays = state.durationDays,
                 onShare = { _: SharePlatform ->
                     viewModel.processIntent(ChallengeDetailIntent.Share)
                 },

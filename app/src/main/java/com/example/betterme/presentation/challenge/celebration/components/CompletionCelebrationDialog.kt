@@ -54,7 +54,9 @@ fun CompletionCelebrationDialog(
     badgeName: String?,
     onShare: (SharePlatform) -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    difficultyRaw: String = "EASY",
+    durationDays: Int = 7
 ) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -109,9 +111,10 @@ fun CompletionCelebrationDialog(
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Bạn đã hoàn thành thử thách",
+                text = motivationalCompletionText(difficultyRaw, durationDays),
                 style = BetterMeTypography.Body.Medium,
-                color = Color.White.copy(alpha = 0.7f)
+                color = Color.White.copy(alpha = 0.78f),
+                textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(28.dp))
 
@@ -202,3 +205,15 @@ fun CompletionCelebrationDialog(
         }
     }
 }
+
+/**
+ * Tier-aware celebration subtitle. Legendary completions warrant a stronger line so the
+ * dialog rewards the effort proportionally.
+ */
+private fun motivationalCompletionText(difficultyRaw: String, durationDays: Int): String =
+    when (difficultyRaw) {
+        "LEGENDARY" -> "$durationDays ngày liên tiếp — bạn vừa làm điều mà rất ít người dám thử."
+        "HARD" -> "Bạn đã hoàn thành một thử thách khó. Phiên bản tốt hơn của bạn đã thành hình."
+        "MEDIUM" -> "Đều đặn trong $durationDays ngày — đó là kỷ luật, không phải may mắn."
+        else -> "Bạn đã hoàn thành thử thách. Một bước nữa trên hành trình tốt hơn mỗi ngày."
+    }
