@@ -33,7 +33,6 @@ sealed class DailyHabitsIntent : MviIntent {
     data object LoadData : DailyHabitsIntent()
     data class SelectDate(val index: Int) : DailyHabitsIntent()
     data class SelectFilter(val filter: DailyHabitFilter) : DailyHabitsIntent()
-    data class ToggleHabitCompletion(val habitId: Int) : DailyHabitsIntent()
 }
 
 sealed class DailyHabitsEvent : MviSingleEvent

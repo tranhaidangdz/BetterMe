@@ -117,9 +117,6 @@ fun DailyHabitsContent(
             ) { habit ->
                 HabitCard(
                     habit = habit,
-                    onToggleCompletion = {
-                        onIntent(DailyHabitsIntent.ToggleHabitCompletion(habit.id))
-                    },
                     onCardClick = { onHabitClick(habit.id) }
                 )
             }

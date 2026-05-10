@@ -3,7 +3,6 @@ package com.example.betterme.presentation.dailyhabits
 import androidx.lifecycle.viewModelScope
 import com.example.betterme.base.BaseMviViewModel
 import com.example.betterme.data.local.datastore.DataStoreManager
-import com.example.betterme.data.local.room.entities.HabitLogEntity
 import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitLogRepository
 import com.example.betterme.domain.repository.HabitRepository
@@ -32,7 +31,6 @@ class DailyHabitsViewModel(
             DailyHabitsIntent.LoadData -> loadData()
             is DailyHabitsIntent.SelectDate -> selectDate(intent.index)
             is DailyHabitsIntent.SelectFilter -> selectFilter(intent.filter)
-            is DailyHabitsIntent.ToggleHabitCompletion -> toggleCompletion(intent.habitId)
         }
     }
 
@@ -116,49 +114,6 @@ class DailyHabitsViewModel(
                 selectedFilter = filter,
                 visibleHabits = applyFilter(filter, allHabits)
             )
-        }
-    }
-
-    // ============================================================
-    // TOGGLE CHECK-IN — Đánh dấu hoàn thành / bỏ hoàn thành
-    // ============================================================
-    private fun toggleCompletion(habitId: Int) {
-        viewModelScope.launch {
-            try {
-                val selectedDate = currentState.dates[currentState.selectedDateIndex]
-                val dateMillis = selectedDate.dateMillis
-
-                val existingLog = habitLogRepository.getLogByDate(habitId, dateMillis)
-
-                if (existingLog != null && existingLog.status == "DONE") {
-                    // Bỏ hoàn thành → xóa log
-                    habitLogRepository.deleteLog(existingLog)
-                } else if (existingLog != null) {
-                    // Cập nhật status thành DONE
-                    habitLogRepository.updateLog(existingLog.copy(status = "DONE"))
-                } else {
-                    // Tạo log mới
-                    habitLogRepository.addLog(
-                        HabitLogEntity(
-                            habit_id = habitId,
-                            date = dateMillis,
-                            status = "DONE",
-                            note = null,
-                            image = null,
-                            created_at = System.currentTimeMillis()
-                        )
-                    )
-                }
-
-                // Reload habits cho ngày hiện tại
-                val habits = loadHabitsForDate(dateMillis)
-                updateState {
-                    copy(
-                        allHabits = habits,
-                        visibleHabits = applyFilter(selectedFilter, habits)
-                    )
-                }
-            } catch (_: Exception) { }
         }
     }
 
