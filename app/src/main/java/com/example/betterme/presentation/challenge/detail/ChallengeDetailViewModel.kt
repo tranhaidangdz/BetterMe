@@ -92,6 +92,17 @@ class ChallengeDetailViewModel(
                     if (s.rewardBadgeName != null) " + huy hiệu ${s.rewardBadgeName}!" else "!"
                 sendEvent(ChallengeDetailEvent.LaunchShareSheet(message))
             }
+            is ChallengeDetailIntent.ChangeReminderTime -> changeReminderTime(intent.hour, intent.minute)
+        }
+    }
+
+    private fun changeReminderTime(hour: Int, minute: Int) {
+        val ucId = currentState.userChallengeId ?: return
+        viewModelScope.launch {
+            scheduleReminderUseCase(ucId, currentState.title, hour, minute)
+            val newLabel = "%02d:%02d".format(hour, minute)
+            updateState { copy(reminderTimeLabel = newLabel) }
+            sendEvent(ChallengeDetailEvent.ShowMessage("Đã đặt nhắc lúc $newLabel"))
         }
     }
 

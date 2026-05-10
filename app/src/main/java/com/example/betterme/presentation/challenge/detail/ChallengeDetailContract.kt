@@ -75,6 +75,7 @@ sealed class ChallengeDetailIntent : MviIntent {
     data object DismissCelebration : ChallengeDetailIntent()
     data object LeaveChallenge : ChallengeDetailIntent()
     data object Share : ChallengeDetailIntent()
+    data class ChangeReminderTime(val hour: Int, val minute: Int) : ChallengeDetailIntent()
 }
 
 sealed class ChallengeDetailEvent : MviSingleEvent {

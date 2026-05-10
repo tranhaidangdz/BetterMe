@@ -29,7 +29,9 @@ import com.example.betterme.presentation.statistics.StatisticsScreen
 import com.example.betterme.presentation.main.model.MainTab
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
+import com.example.betterme.utils.DeepLinkBus
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 
 @Composable
 fun MainScreen(
@@ -38,6 +40,22 @@ fun MainScreen(
     viewModel: MainViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
+
+    val deepLinkBus = koinInject<DeepLinkBus>()
+    LaunchedEffect(Unit) {
+        deepLinkBus.events.collect { event ->
+            when (event) {
+                is DeepLinkBus.Event.OpenUserChallenge ->
+                    viewModel.processIntent(
+                        MainIntent.OpenChallengeDetail(event.userChallengeId, isPreview = false)
+                    )
+                is DeepLinkBus.Event.OpenChallengePreview ->
+                    viewModel.processIntent(
+                        MainIntent.OpenChallengeDetail(event.challengeId, isPreview = true)
+                    )
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Content area

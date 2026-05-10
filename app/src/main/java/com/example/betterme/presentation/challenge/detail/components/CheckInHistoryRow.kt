@@ -1,6 +1,7 @@
 package com.example.betterme.presentation.challenge.detail.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -115,7 +116,8 @@ fun ReminderEtaRow(
     reminderTimeLabel: String,
     estimatedCompletionLabel: String,
     accentColor: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onReminderClick: (() -> Unit)? = null
 ) {
     Row(
         modifier = modifier
@@ -131,19 +133,37 @@ fun ReminderEtaRow(
             .padding(16.dp),
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
-        InfoCell("⏰ Nhắc hằng ngày", reminderTimeLabel, accentColor)
+        InfoCell(
+            label = "⏰ Nhắc hằng ngày",
+            value = reminderTimeLabel,
+            accent = accentColor,
+            modifier = if (onReminderClick != null)
+                Modifier.clickable { onReminderClick() } else Modifier
+        )
         Box(
             modifier = Modifier
                 .size(width = 1.dp, height = 32.dp)
                 .background(BetterMeColors.Border.BorderLight)
         )
-        InfoCell("📅 Hoàn thành dự kiến", estimatedCompletionLabel, accentColor)
+        InfoCell(
+            label = "📅 Hoàn thành dự kiến",
+            value = estimatedCompletionLabel,
+            accent = accentColor
+        )
     }
 }
 
 @Composable
-private fun InfoCell(label: String, value: String, accent: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun InfoCell(
+    label: String,
+    value: String,
+    accent: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Text(
             text = label,
             style = BetterMeTypography.Body.Small.Medium,

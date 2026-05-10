@@ -66,6 +66,7 @@ import com.example.betterme.presentation.categorydetail.CategoryDetailViewModel
 import com.example.betterme.presentation.habitdetail.HabitDetailViewModel
 import com.example.betterme.presentation.splash.SplashViewModel
 import com.example.betterme.presentation.statistics.StatisticsViewModel
+import com.example.betterme.utils.DeepLinkBus
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
@@ -100,6 +101,9 @@ val appModule = module {
 
     // WorkManager
     single { WorkManager.getInstance(get<Context>()) }
+
+    // App-wide deep-link bus (notification taps → MainScreen routing)
+    single { DeepLinkBus() }
 }
 
 val roomModule = module {
