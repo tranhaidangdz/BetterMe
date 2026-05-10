@@ -6,6 +6,7 @@ import com.example.betterme.data.local.datastore.DataStoreManager
 import com.example.betterme.data.local.room.entities.HabitEntity
 import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitRepository
+import com.example.betterme.domain.repository.UserCategoryRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -13,6 +14,7 @@ class AddHabitViewModel(
     private val dataStoreManager: DataStoreManager,
     private val habitRepository: HabitRepository,
     private val categoryRepository: CategoryRepository,
+    private val userCategoryRepository: UserCategoryRepository,
 ) : BaseMviViewModel<AddHabitIntent, AddHabitState, AddHabitEvent>() {
 
     override fun initState(): AddHabitState = AddHabitState()
@@ -59,8 +61,16 @@ class AddHabitViewModel(
     private fun loadCategories() {
         viewModelScope.launch {
             try {
-                val categories = categoryRepository.getSelectedCategories().first()
-                updateState { copy(categories = categories) }
+                val userId = dataStoreManager.getCurrentUserId().first().orEmpty()
+                val categories = if (userId.isNotBlank()) {
+                    userCategoryRepository.getSelectedCategories(userId)
+                } else emptyList()
+                // Fall back to the full catalog if the user has no selections yet so they can
+                // still pick a category when adding a habit before completing onboarding.
+                val resolved = categories.ifEmpty {
+                    categoryRepository.getAll().first()
+                }
+                updateState { copy(categories = resolved) }
             } catch (e: Exception) {
                 sendEvent(AddHabitEvent.ShowError("Không thể tải danh mục: ${e.message}"))
             }

@@ -2,15 +2,19 @@ package com.example.betterme.presentation.onboarding.habitselection
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.betterme.data.local.datastore.DataStoreManager
 import com.example.betterme.data.local.fake.fakeCategories
 import com.example.betterme.data.local.room.entities.CategoryEntity
 import com.example.betterme.domain.repository.CategoryRepository
+import com.example.betterme.domain.repository.UserCategoryRepository
 import com.example.betterme.presentation.onboarding.model.CategoryUiModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 class HabitSelectionViewModel(
-    private val repository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    private val userCategoryRepository: UserCategoryRepository,
+    private val dataStoreManager: DataStoreManager
 ) : ViewModel() {
 
     companion object {
@@ -26,8 +30,8 @@ class HabitSelectionViewModel(
     private val selectedIds = mutableSetOf<Int>()
 
     init {
+        seedCategoriesIfEmpty()
         observeCategories()
-        insertFakeData()
     }
 
     fun onIntent(intent: HabitSelectionIntent) {
@@ -39,7 +43,16 @@ class HabitSelectionViewModel(
 
     private fun observeCategories() {
         viewModelScope.launch {
-            repository.getAll().collect { list ->
+            // Pre-load this user's existing selection set (if any) so re-entering the screen
+            // shows previously-selected items pre-checked. Critically, never includes
+            // selections from other users on the same device.
+            val userId = dataStoreManager.getCurrentUserId().first().orEmpty()
+            if (userId.isNotBlank()) {
+                selectedIds.clear()
+                selectedIds.addAll(userCategoryRepository.getSelectedIds(userId))
+            }
+
+            categoryRepository.getAll().collect { list ->
                 updateState(list)
             }
         }
@@ -91,8 +104,13 @@ class HabitSelectionViewModel(
             return
         }
         viewModelScope.launch {
-            // Lưu trạng thái chọn vào DB trước khi navigate
-            repository.saveSelections(selectedIds)
+            val userId = dataStoreManager.getCurrentUserId().first().orEmpty()
+            if (userId.isBlank()) {
+                emitError("Không tìm thấy thông tin người dùng")
+                return@launch
+            }
+            // Persist selection scoped to THIS user only.
+            userCategoryRepository.saveSelections(userId, selectedIds)
             _event.emit(
                 HabitSelectionEvent.NavigateNext(selectedIds.toSet())
             )
@@ -105,11 +123,11 @@ class HabitSelectionViewModel(
         }
     }
 
-    private fun insertFakeData() {
+    private fun seedCategoriesIfEmpty() {
         viewModelScope.launch {
-            val current = repository.getAll().first()
+            val current = categoryRepository.getAll().first()
             if (current.isEmpty()) {
-                repository.insertAll(fakeCategories())
+                categoryRepository.insertAll(fakeCategories())
             }
         }
     }

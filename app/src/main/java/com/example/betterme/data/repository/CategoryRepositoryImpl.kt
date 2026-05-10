@@ -24,13 +24,4 @@ class CategoryRepositoryImpl(
 
     override suspend fun getById(id: Int) =
         dao.getById(id)
-
-    override suspend fun saveSelections(selectedIds: Set<Int>) =
-        dao.updateSelections(selectedIds.toList())
-
-    override suspend fun clearAllSelections() =
-        dao.clearAllSelections()
-
-    override fun getSelectedCategories() =
-        dao.getSelectedCategories()
 }

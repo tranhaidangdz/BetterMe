@@ -34,11 +34,11 @@ interface HabitDao {
     @Query("SELECT * FROM habits WHERE id = :habitId")
     suspend fun getHabitById(habitId: Int): HabitEntity?
 
-    @Query("SELECT * FROM habits WHERE category_id = :categoryId")
-    fun getHabitsByCategory(categoryId: Int): Flow<List<HabitEntity>>
+    @Query("SELECT * FROM habits WHERE category_id = :categoryId AND user_id = :userId")
+    fun getHabitsByCategoryForUser(categoryId: Int, userId: String): Flow<List<HabitEntity>>
 
-    @Query("SELECT COUNT(*) FROM habits WHERE category_id = :categoryId")
-    suspend fun getHabitCountByCategory(categoryId: Int): Int
+    @Query("SELECT COUNT(*) FROM habits WHERE category_id = :categoryId AND user_id = :userId")
+    suspend fun getHabitCountByCategoryForUser(categoryId: Int, userId: String): Int
 
     @Query("DELETE FROM habits WHERE user_id = :userId")
     suspend fun deleteAllByUserId(userId: String)

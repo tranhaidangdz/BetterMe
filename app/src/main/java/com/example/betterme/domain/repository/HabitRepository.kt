@@ -17,7 +17,9 @@ interface HabitRepository {
 
     suspend fun deleteHabitById(id: Int)
 
-    suspend fun getHabitCountByCategory(categoryId: Int): Int
+    fun getHabitsByCategoryForUser(categoryId: Int, userId: String): Flow<List<HabitEntity>>
+
+    suspend fun getHabitCountByCategoryForUser(categoryId: Int, userId: String): Int
 
     suspend fun deleteAllByUserId(userId: String)
 }
