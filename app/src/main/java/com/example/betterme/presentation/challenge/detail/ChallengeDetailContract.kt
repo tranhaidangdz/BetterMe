@@ -4,8 +4,6 @@ import android.net.Uri
 import com.example.betterme.base.MviIntent
 import com.example.betterme.base.MviSingleEvent
 import com.example.betterme.base.MviViewState
-import com.example.betterme.presentation.challenge.detail.components.CheckInHistoryItemUi
-import com.example.betterme.presentation.challenge.detail.components.MilestoneUi
 import com.example.betterme.presentation.challenge.model.CelebrationUi
 import com.example.betterme.presentation.challenge.model.DayCellUi
 import com.example.betterme.presentation.challenge.shared.Difficulty
@@ -42,13 +40,6 @@ data class ChallengeDetailState(
     val motivationalQuote: String = "",
     val completionMessage: String = "",
 
-    // Detail-flow extras
-    val milestones: List<MilestoneUi> = emptyList(),
-    val checkInHistory: List<CheckInHistoryItemUi> = emptyList(),
-    val reminderTimeLabel: String = "08:00",
-    val estimatedCompletionLabel: String = "—",
-    val bestStreak: Int = 0,
-
     // Check-in flow
     val checkInStep: CheckInStep = CheckInStep.Idle,
     val checkInPhotoUri: Uri? = null,
@@ -81,7 +72,6 @@ sealed class ChallengeDetailIntent : MviIntent {
     data object DismissCelebration : ChallengeDetailIntent()
     data object LeaveChallenge : ChallengeDetailIntent()
     data object Share : ChallengeDetailIntent()
-    data class ChangeReminderTime(val hour: Int, val minute: Int) : ChallengeDetailIntent()
 }
 
 sealed class ChallengeDetailEvent : MviSingleEvent {

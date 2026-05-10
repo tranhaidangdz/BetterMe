@@ -77,7 +77,6 @@ fun ChallengeDetailScreen(
     val context = LocalContext.current
 
     var photoUri by remember { mutableStateOf<Uri?>(null) }
-    var showReminderPicker by remember { mutableStateOf(false) }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
@@ -344,21 +343,6 @@ fun ChallengeDetailScreen(
                     viewModel.processIntent(ChallengeDetailIntent.Share)
                 },
                 onDismiss = { viewModel.processIntent(ChallengeDetailIntent.DismissCelebration) }
-            )
-        }
-
-        if (showReminderPicker && state.mode == DetailMode.Active) {
-            val parts = state.reminderTimeLabel.split(":")
-            val initH = parts.getOrNull(0)?.toIntOrNull() ?: 8
-            val initM = parts.getOrNull(1)?.toIntOrNull() ?: 0
-            com.example.betterme.presentation.challenge.detail.components.ReminderTimePickerSheet(
-                initialHour = initH,
-                initialMinute = initM,
-                accentColor = state.accentColor,
-                onDismiss = { showReminderPicker = false },
-                onConfirm = { h, m ->
-                    viewModel.processIntent(ChallengeDetailIntent.ChangeReminderTime(h, m))
-                }
             )
         }
 

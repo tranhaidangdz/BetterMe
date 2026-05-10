@@ -30,7 +30,6 @@ class ChallengeDetailViewModel(
     private val userChallengeRepository: UserChallengeRepository,
     private val challengeLogRepository: ChallengeLogRepository,
     private val achievementRepository: AchievementRepository,
-    private val reminderRepository: com.example.betterme.domain.repository.ReminderRepository,
     private val joinChallengeUseCase: JoinChallengeUseCase,
     private val leaveChallengeUseCase: LeaveChallengeUseCase,
     private val checkInChallengeUseCase: CheckInChallengeUseCase,
@@ -94,17 +93,6 @@ class ChallengeDetailViewModel(
                     if (s.rewardBadgeName != null) " + huy hiệu ${s.rewardBadgeName}!" else "!"
                 sendEvent(ChallengeDetailEvent.LaunchShareSheet(message))
             }
-            is ChallengeDetailIntent.ChangeReminderTime -> changeReminderTime(intent.hour, intent.minute)
-        }
-    }
-
-    private fun changeReminderTime(hour: Int, minute: Int) {
-        val ucId = currentState.userChallengeId ?: return
-        viewModelScope.launch {
-            scheduleReminderUseCase(ucId, currentState.title, hour, minute)
-            val newLabel = "%02d:%02d".format(hour, minute)
-            updateState { copy(reminderTimeLabel = newLabel) }
-            sendEvent(ChallengeDetailEvent.ShowMessage("Đã đặt nhắc lúc $newLabel"))
         }
     }
 
@@ -181,28 +169,6 @@ class ChallengeDetailViewModel(
             else -> DetailMode.Active
         }
 
-        // ----- Detail-flow extras -----
-        val milestones = com.example.betterme.presentation.challenge.detail.components
-            .defaultMilestones(uc.progress_pct)
-        val historyLogs = challengeLogRepository.observeLogs(userChallengeId)
-            .first()
-            .filter { it.status == "DONE" }
-            .sortedByDescending { it.date }
-            .take(5)
-        val historyItems = historyLogs.map { log ->
-            com.example.betterme.presentation.challenge.detail.components.CheckInHistoryItemUi(
-                dateLabel = formatDate(log.date),
-                timeLabel = formatTime(log.created_at),
-                note = log.note
-            )
-        }
-        // Reminder + ETA labels
-        val reminder = reminderRepository.getActiveByTarget("USER_CHALLENGE", uc.id)
-        val reminderLabel = reminder?.time ?: "08:00"
-        val etaMs = uc.start_date + (challenge.target_streak - 1).coerceAtLeast(0).toLong() *
-            24L * 60L * 60L * 1000L
-        val etaLabel = formatDate(etaMs)
-
         updateState {
             copy(
                 mode = mode,
@@ -220,27 +186,16 @@ class ChallengeDetailViewModel(
                 durationDays = challenge.duration_days,
                 targetStreak = challenge.target_streak,
                 currentStreak = uc.current_streak,
-                bestStreak = uc.best_streak,
                 progressPct = uc.progress_pct,
                 daysRemaining = daysRemaining,
                 isGroup = challenge.is_group,
                 weekStrip = weekStrip,
                 descriptionBullets = challenge.toBullets(),
                 motivationalQuote = challenge.motivational_quote,
-                completionMessage = challenge.completion_message,
-                milestones = milestones,
-                checkInHistory = historyItems,
-                reminderTimeLabel = reminderLabel,
-                estimatedCompletionLabel = etaLabel
+                completionMessage = challenge.completion_message
             )
         }
     }
-
-    private fun formatDate(ms: Long): String =
-        java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale("vi")).format(java.util.Date(ms))
-
-    private fun formatTime(ms: Long): String =
-        java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(ms))
 
     private fun reloadActive(id: Int) {
         loadActive(id)
