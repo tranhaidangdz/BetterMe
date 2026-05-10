@@ -92,7 +92,7 @@ private fun DayCell(day: DayCellUi, accent: Color, modifier: Modifier) {
                     when (day.status) {
                         DayStatus.Done -> Modifier.background(DoneGreen)
                         DayStatus.Today -> Modifier.background(accent)
-                        DayStatus.Missed -> Modifier.background(MissedGray)
+                        DayStatus.Missed -> Modifier.background(MissedRed)
                         DayStatus.Future -> Modifier
                             .background(BetterMeColors.White)
                             .border(1.5.dp, FutureBorder, CircleShape)
@@ -112,8 +112,9 @@ private fun DayCell(day: DayCellUi, accent: Color, modifier: Modifier) {
                     fontWeight = FontWeight.Bold
                 )
                 DayStatus.Missed -> Text(
-                    text = "·",
-                    color = Color.White
+                    text = "✕",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
                 )
                 DayStatus.Future -> Unit
             }
@@ -122,5 +123,6 @@ private fun DayCell(day: DayCellUi, accent: Color, modifier: Modifier) {
 }
 
 private val DoneGreen = Color(0xFF22C55E)
-private val MissedGray = Color(0xFFE5E7EB)
+// Missed = solid red per design spec ("Red = missed day").
+private val MissedRed = Color(0xFFEF4444)
 private val FutureBorder = Color(0xFFCBD5E1)

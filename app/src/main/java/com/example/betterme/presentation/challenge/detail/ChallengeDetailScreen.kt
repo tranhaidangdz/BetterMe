@@ -179,6 +179,17 @@ fun ChallengeDetailScreen(
                     )
                 }
 
+                if (state.motivationalQuote.isNotBlank()) {
+                    item {
+                        Text(
+                            text = "“${state.motivationalQuote}”",
+                            style = BetterMeTypography.Body.Small.Medium,
+                            color = state.accentColor,
+                            modifier = Modifier.padding(horizontal = 24.dp)
+                        )
+                    }
+                }
+
                 item {
                     val completedDays = if (state.mode == DetailMode.Preview) 0 else state.currentStreak
                     val totalDays = if (state.targetStreak > 0) state.targetStreak else state.durationDays
@@ -250,9 +261,14 @@ fun ChallengeDetailScreen(
             // is already done so the streak cannot be double-counted.
             when (state.mode) {
                 DetailMode.Preview -> {
+                    val (joinLabel, joinEnabled) = when {
+                        state.isJoining -> "Đang tham gia..." to false
+                        state.isLoading -> "Tham gia thử thách" to false
+                        else -> "Tham gia thử thách" to true
+                    }
                     ContinueChallengeBottomBar(
-                        label = "Tham gia thử thách",
-                        enabled = !state.isLoading,
+                        label = joinLabel,
+                        enabled = joinEnabled,
                         onClick = { viewModel.processIntent(ChallengeDetailIntent.JoinChallenge) }
                     )
                 }

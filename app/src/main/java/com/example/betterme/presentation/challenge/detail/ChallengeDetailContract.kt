@@ -58,6 +58,10 @@ data class ChallengeDetailState(
     val isSavingCheckIn: Boolean = false,
     val celebration: CelebrationUi? = null,
 
+    // True while a Join is in-flight. Drives the bottom-bar lock so a tap-storm cannot
+    // trigger multiple Join coroutines before the first one finishes.
+    val isJoining: Boolean = false,
+
     val errorMessage: String? = null
 ) : MviViewState
 

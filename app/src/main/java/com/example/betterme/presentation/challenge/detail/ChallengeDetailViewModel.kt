@@ -235,6 +235,9 @@ class ChallengeDetailViewModel(
     }
 
     private fun join() {
+        // Re-entrancy guard: ignore taps that arrive while a join is already in flight.
+        if (currentState.isJoining) return
+
         viewModelScope.launch {
             val userId = dataStoreManager.getCurrentUserId().first().orEmpty()
             if (userId.isBlank()) {
@@ -246,7 +249,7 @@ class ChallengeDetailViewModel(
                 return@launch
             }
 
-            updateState { copy(isLoading = true) }
+            updateState { copy(isJoining = true) }
             try {
                 val ucId = joinChallengeUseCase(userId, currentState.challengeId).toInt()
                 // Reminder scheduling is best-effort — never block the join transition if
@@ -256,12 +259,15 @@ class ChallengeDetailViewModel(
                 sendEvent(ChallengeDetailEvent.ShowMessage("Đã tham gia thử thách"))
             } catch (e: Exception) {
                 android.util.Log.e("ChallengeDetailVM", "Join failed", e)
-                updateState { copy(isLoading = false) }
                 sendEvent(
                     ChallengeDetailEvent.ShowMessage(
                         "Tham gia thử thách thất bại: ${e.message ?: "lỗi không xác định"}"
                     )
                 )
+            } finally {
+                // Always release the lock — loadActive sets isLoading=false on its own
+                // happy path, and the catch branch needs the same release.
+                updateState { copy(isJoining = false) }
             }
         }
     }
@@ -289,10 +295,20 @@ class ChallengeDetailViewModel(
             updateState { copy(isSavingCheckIn = false) }
             when (res) {
                 is CheckInChallengeUseCase.Result.Progress -> {
+                    // Flip today's strip cell to Done immediately so the calendar reflects
+                    // the new state without waiting for the success-sheet dismissal to
+                    // trigger a full reload.
+                    val refreshedStrip = currentState.weekStrip.map { day ->
+                        if (day.isToday) day.copy(status = com.example.betterme.presentation.challenge.model.DayStatus.Done)
+                        else day
+                    }
+                    val newRemaining = (currentState.targetStreak - res.newStreak).coerceAtLeast(0)
                     updateState {
                         copy(
                             currentStreak = res.newStreak,
                             progressPct = res.progressPct,
+                            daysRemaining = newRemaining,
+                            weekStrip = refreshedStrip,
                             checkInStep = CheckInStep.Success
                         )
                     }
