@@ -1,6 +1,7 @@
 package com.example.betterme.presentation.home.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
@@ -18,6 +19,7 @@ import com.example.betterme.presentation.theme.BetterMeTypography
 fun CantMissCard(
     item: CantMiss,
     cardColor: Color,
+    onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -25,6 +27,7 @@ fun CantMissCard(
             .width(170.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(cardColor.copy(alpha = 0.12f))
+            .clickable { onClick() }
             .padding(16.dp)
     ) {
         Text(

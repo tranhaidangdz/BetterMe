@@ -8,6 +8,7 @@ import com.example.betterme.data.provider.GoogleAuthClient
 import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitLogRepository
 import com.example.betterme.domain.repository.HabitRepository
+import com.example.betterme.domain.repository.UserCategoryRepository
 import com.example.betterme.domain.repository.UserRepository
 import com.example.betterme.presentation.home.model.CantMiss
 import com.example.betterme.presentation.home.model.HomeProgress
@@ -20,11 +21,16 @@ import kotlin.random.Random
 class HomeViewModel(
     private val dataStoreManager: DataStoreManager,
     private val categoryRepository: CategoryRepository,
+    private val userCategoryRepository: UserCategoryRepository,
     private val habitRepository: HabitRepository,
     private val habitLogRepository: HabitLogRepository,
     private val googleAuthClient: GoogleAuthClient,
     private val userRepository: UserRepository
 ) : BaseMviViewModel<HomeIntent, HomeState, HomeEvent>() {
+
+    private companion object {
+        const val DAY_MS: Long = 24L * 60L * 60L * 1000L
+    }
 
     override fun initState(): HomeState = HomeState()
 
@@ -53,15 +59,20 @@ class HomeViewModel(
             val userPhotoUrl = user?.photoUrl ?: ""
             val userId = user?.id ?: dataStoreManager.getCurrentUserId().first() ?: ""
 
-            // 2. Lấy selected categories từ DB
-            val selectedCategories = categoryRepository.getSelectedCategories().first()
+            // 2. Lấy selected categories từ DB — scoped chặt theo userId hiện tại,
+            //    KHÔNG dùng global flag (đã từng leak giữa các tài khoản trên cùng device).
+            val selectedCategories = if (userId.isNotBlank()) {
+                userCategoryRepository.getSelectedCategories(userId)
+            } else emptyList()
             val allCategories = categoryRepository.getAll().first()
             val colors = BetterMeColors.ListColors.list
             val randomizedColors = colors.shuffled()
 
-            // 3. Build category groups với habit count thực
+            // 3. Build category groups với habit count thực — đếm theo userId.
             val categoryGroups = selectedCategories.mapIndexed { index, category ->
-                val habitCount = habitRepository.getHabitCountByCategory(category.id)
+                val habitCount = if (userId.isNotBlank()) {
+                    habitRepository.getHabitCountByCategoryForUser(category.id, userId)
+                } else 0
                 HomeCategoryGroup(
                     categoryId = category.id,
                     categoryName = category.name.uppercase(),
@@ -79,29 +90,43 @@ class HomeViewModel(
             } else {
                 emptyList()
             }
-            // 4. Tính dữ liệu check-in hôm nay
             val today = getStartOfDay()
             val completedHabitIds = habitLogRepository.getCompletedHabitIdsByDate(today)
 
-            // 5. Build "Đang thực hiện" — chỉ hiện habits chưa hoàn thành hôm nay
-            val cantMissList = habits
-                .filter { it.id !in completedHabitIds }
-                .mapNotNull { habit ->
-                    val category = allCategories.find { it.id == habit.category_id }
-
-                    // Tiến độ thực: số ngày DONE / tổng ngày từ start → nay
-                    val doneCount = habitLogRepository.countCompleted(habit.id)
-                    val totalDays = ((today - habit.start_date) / (24 * 60 * 60 * 1000)).toInt().coerceAtLeast(1)
-                    val habitProgress = ((doneCount.toFloat() / totalDays) * 100).toInt().coerceIn(0, 100)
-
-                    CantMiss(
-                        categoryId = category?.id ?: -1,
-                        categoryName = category?.name ?: "Khác",
-                        categoryIcon = category?.icon ?: "📝",
-                        habitTitle = habit.title,
-                        progress = habitProgress
-                    )
+            // 5. Build "Đang thực hiện" — show every habit whose journey is still in
+            //    progress, regardless of whether the user already checked in today.
+            //    A habit's journey is COMPLETE when total DONE days >= its planned duration.
+            //    Open-ended habits (no end_date) never finish automatically.
+            val cantMissList = habits.mapNotNull { habit ->
+                val durationDays = if (habit.end_date != null) {
+                    (((habit.end_date - habit.start_date) / DAY_MS) + 1).toInt().coerceAtLeast(1)
+                } else {
+                    Int.MAX_VALUE
                 }
+                val doneCount = habitLogRepository.countCompleted(habit.id)
+                if (doneCount >= durationDays) {
+                    // Journey finished — drop from Home.
+                    return@mapNotNull null
+                }
+
+                val category = allCategories.find { it.id == habit.category_id }
+                val habitProgress = if (durationDays == Int.MAX_VALUE) {
+                    // Open-ended habit: show "elapsed" days instead of journey %.
+                    val elapsed = (((today - habit.start_date) / DAY_MS) + 1).toInt().coerceAtLeast(1)
+                    ((doneCount.toFloat() / elapsed) * 100).toInt().coerceIn(0, 100)
+                } else {
+                    ((doneCount.toFloat() / durationDays) * 100).toInt().coerceIn(0, 100)
+                }
+
+                CantMiss(
+                    habitId = habit.id,
+                    categoryId = category?.id ?: -1,
+                    categoryName = category?.name ?: "Khác",
+                    categoryIcon = category?.icon ?: "📝",
+                    habitTitle = habit.title,
+                    progress = habitProgress
+                )
+            }
 
             // 6. Tính progress tổng cho card trên cùng
             val totalHabits = habits.size

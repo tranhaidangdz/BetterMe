@@ -44,6 +44,7 @@ import org.koin.androidx.compose.koinViewModel
 fun HomeScreen(
     refreshVersion: Int = 0,
     onCategoryClick: (Int, String, String) -> Unit = { _, _, _ -> },
+    onHabitClick: (Int) -> Unit = {},
     onViewProgress: () -> Unit = {},
     onLogoutSuccess: () -> Unit = {},
     viewModel: HomeViewModel = koinViewModel()
@@ -69,6 +70,7 @@ fun HomeScreen(
     HomeContent(
         state = state,
         onCategoryClick = onCategoryClick,
+        onHabitClick = onHabitClick,
         onViewProgress = onViewProgress,
         onShowEditProfile = { viewModel.processIntent(HomeIntent.ShowEditProfile) },
         onDismissEditProfile = { viewModel.processIntent(HomeIntent.DismissEditProfile) },
@@ -84,6 +86,7 @@ fun HomeScreen(
 fun HomeContent(
     state: HomeState,
     onCategoryClick: (Int, String, String) -> Unit = { _, _, _ -> },
+    onHabitClick: (Int) -> Unit = {},
     onViewProgress: () -> Unit = {},
     onShowEditProfile: () -> Unit = {},
     onDismissEditProfile: () -> Unit = {},
@@ -197,11 +200,12 @@ fun HomeContent(
                 ) {
                     itemsIndexed(
                         items = state.cantMissList,
-                        key = { index, item -> "${item.categoryId}_${index}" }
+                        key = { _, item -> item.habitId }
                     ) { index, item ->
                         CantMissCard(
                             item = item,
-                            cardColor = colors[index % colors.size]
+                            cardColor = colors[index % colors.size],
+                            onClick = { onHabitClick(item.habitId) }
                         )
                     }
                 }

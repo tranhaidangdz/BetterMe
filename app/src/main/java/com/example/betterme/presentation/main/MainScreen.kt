@@ -56,6 +56,9 @@ fun MainScreen(
                             categoryIcon = categoryIcon
                         )
                     )
+                },
+                onHabitClick = { habitId ->
+                    viewModel.processIntent(MainIntent.OpenHabitDetail(habitId))
                 }
             )
             MainTab.HABITS -> DailyHabitsScreen(
