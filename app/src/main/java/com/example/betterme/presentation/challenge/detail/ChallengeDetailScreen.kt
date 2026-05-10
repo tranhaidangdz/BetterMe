@@ -191,8 +191,32 @@ fun ChallengeDetailScreen(
                         )
                     }
                     item {
+                        com.example.betterme.presentation.challenge.detail.components.ReminderEtaRow(
+                            reminderTimeLabel = state.reminderTimeLabel,
+                            estimatedCompletionLabel = state.estimatedCompletionLabel,
+                            accentColor = state.accentColor,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                    item {
                         Text(
-                            text = "Lịch sử",
+                            text = "Cột mốc",
+                            style = BetterMeTypography.Title.Small.Bold,
+                            color = BetterMeColors.Text.TextPrimary,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                    item {
+                        com.example.betterme.presentation.challenge.detail.components.MilestoneRow(
+                            milestones = state.milestones,
+                            progressPct = state.progressPct,
+                            accentColor = state.accentColor,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                    item {
+                        Text(
+                            text = "Lịch sử check-in",
                             style = BetterMeTypography.Title.Small.Bold,
                             color = BetterMeColors.Text.TextPrimary,
                             modifier = Modifier.padding(horizontal = 16.dp)
@@ -201,6 +225,13 @@ fun ChallengeDetailScreen(
                     item {
                         WeekStreakRow(
                             days = state.weekStrip,
+                            accentColor = state.accentColor,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                    item {
+                        com.example.betterme.presentation.challenge.detail.components.CheckInHistoryCard(
+                            items = state.checkInHistory,
                             accentColor = state.accentColor,
                             modifier = Modifier.padding(horizontal = 16.dp)
                         )

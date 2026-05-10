@@ -4,6 +4,8 @@ import android.net.Uri
 import com.example.betterme.base.MviIntent
 import com.example.betterme.base.MviSingleEvent
 import com.example.betterme.base.MviViewState
+import com.example.betterme.presentation.challenge.detail.components.CheckInHistoryItemUi
+import com.example.betterme.presentation.challenge.detail.components.MilestoneUi
 import com.example.betterme.presentation.challenge.model.CelebrationUi
 import com.example.betterme.presentation.challenge.model.DayCellUi
 import com.example.betterme.presentation.challenge.shared.Difficulty
@@ -33,6 +35,13 @@ data class ChallengeDetailState(
     val isGroup: Boolean = false,
     val weekStrip: List<DayCellUi> = emptyList(),
     val descriptionBullets: List<String> = emptyList(),
+
+    // Detail-flow extras
+    val milestones: List<MilestoneUi> = emptyList(),
+    val checkInHistory: List<CheckInHistoryItemUi> = emptyList(),
+    val reminderTimeLabel: String = "08:00",
+    val estimatedCompletionLabel: String = "—",
+    val bestStreak: Int = 0,
 
     // Check-in flow
     val checkInStep: CheckInStep = CheckInStep.Idle,
