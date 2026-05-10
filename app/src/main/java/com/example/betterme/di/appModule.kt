@@ -19,6 +19,7 @@ import com.example.betterme.data.repository.GroupTeamRepositoryImpl
 import com.example.betterme.data.repository.HabitLogRepositoryImpl
 import com.example.betterme.data.repository.HabitRepositoryImpl
 import com.example.betterme.data.repository.ReminderRepositoryImpl
+import com.example.betterme.data.repository.NotificationRepositoryImpl
 import com.example.betterme.data.repository.UserAchievementRepositoryImpl
 import com.example.betterme.data.repository.UserCategoryRepositoryImpl
 import com.example.betterme.data.repository.UserChallengeRepositoryImpl
@@ -31,6 +32,7 @@ import com.example.betterme.domain.repository.ChallengeRepository
 import com.example.betterme.domain.repository.GroupTeamRepository
 import com.example.betterme.domain.repository.HabitLogRepository
 import com.example.betterme.domain.repository.HabitRepository
+import com.example.betterme.domain.repository.NotificationRepository
 import com.example.betterme.domain.repository.ReminderRepository
 import com.example.betterme.domain.repository.UserAchievementRepository
 import com.example.betterme.domain.repository.UserCategoryRepository
@@ -117,6 +119,7 @@ val roomModule = module {
     single { get<BetterMeDatabase>().groupTeamDao() }
     single { get<BetterMeDatabase>().achievementDao() }
     single { get<BetterMeDatabase>().userAchievementDao() }
+    single { get<BetterMeDatabase>().notificationDao() }
     single { get<BetterMeDatabase>().aiChatDao() }
     single { get<BetterMeDatabase>().userDao() }
 }
@@ -165,6 +168,10 @@ val repositoryModule = module {
 
     single<UserAchievementRepository> {
         UserAchievementRepositoryImpl(get())
+    }
+
+    single<NotificationRepository> {
+        NotificationRepositoryImpl(get())
     }
 
     single<AIChatRepository> {

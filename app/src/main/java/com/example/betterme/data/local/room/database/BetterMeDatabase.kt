@@ -13,6 +13,7 @@ import com.example.betterme.data.local.room.dao.ChallengeLogDao
 import com.example.betterme.data.local.room.dao.GroupTeamDao
 import com.example.betterme.data.local.room.dao.HabitDao
 import com.example.betterme.data.local.room.dao.HabitLogDao
+import com.example.betterme.data.local.room.dao.NotificationDao
 import com.example.betterme.data.local.room.dao.ReminderDao
 import com.example.betterme.data.local.room.dao.UserAchievementDao
 import com.example.betterme.data.local.room.dao.UserCategoryDao
@@ -26,6 +27,7 @@ import com.example.betterme.data.local.room.entities.ChallengeLogEntity
 import com.example.betterme.data.local.room.entities.GroupTeamEntity
 import com.example.betterme.data.local.room.entities.HabitEntity
 import com.example.betterme.data.local.room.entities.HabitLogEntity
+import com.example.betterme.data.local.room.entities.NotificationEntity
 import com.example.betterme.data.local.room.entities.ReminderEntity
 import com.example.betterme.data.local.room.entities.UserAchievementEntity
 import com.example.betterme.data.local.room.entities.UserCategoryEntity
@@ -46,9 +48,10 @@ import com.example.betterme.data.local.room.entities.UserEntity
         GroupTeamEntity::class,
         AchievementEntity::class,
         UserAchievementEntity::class,
+        NotificationEntity::class,
         AIChatEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -66,6 +69,7 @@ abstract class BetterMeDatabase : RoomDatabase() {
     abstract fun groupTeamDao(): GroupTeamDao
     abstract fun achievementDao(): AchievementDao
     abstract fun userAchievementDao(): UserAchievementDao
+    abstract fun notificationDao(): NotificationDao
     abstract fun aiChatDao(): AIChatDao
     abstract fun userDao(): UserDao
 

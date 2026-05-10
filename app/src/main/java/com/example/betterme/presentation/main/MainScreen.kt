@@ -59,6 +59,12 @@ fun MainScreen(
                 },
                 onHabitClick = { habitId ->
                     viewModel.processIntent(MainIntent.OpenHabitDetail(habitId))
+                },
+                onChallengeDetailClick = { ucId ->
+                    viewModel.processIntent(MainIntent.OpenChallengeDetail(ucId, isPreview = false))
+                },
+                onChallengePreviewClick = { challengeId ->
+                    viewModel.processIntent(MainIntent.OpenChallengeDetail(challengeId, isPreview = true))
                 }
             )
             MainTab.HABITS -> DailyHabitsScreen(

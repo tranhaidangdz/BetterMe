@@ -8,6 +8,7 @@ import com.example.betterme.data.provider.GoogleAuthClient
 import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitLogRepository
 import com.example.betterme.domain.repository.HabitRepository
+import com.example.betterme.domain.repository.NotificationRepository
 import com.example.betterme.domain.repository.UserCategoryRepository
 import com.example.betterme.domain.repository.UserRepository
 import com.example.betterme.presentation.home.model.CantMiss
@@ -25,7 +26,8 @@ class HomeViewModel(
     private val habitRepository: HabitRepository,
     private val habitLogRepository: HabitLogRepository,
     private val googleAuthClient: GoogleAuthClient,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val notificationRepository: NotificationRepository
 ) : BaseMviViewModel<HomeIntent, HomeState, HomeEvent>() {
 
     private companion object {
@@ -36,6 +38,7 @@ class HomeViewModel(
 
     init {
         processIntent(HomeIntent.LoadData)
+        observeNotifications()
     }
 
     override fun processIntent(intent: HomeIntent) {
@@ -46,6 +49,33 @@ class HomeViewModel(
             is HomeIntent.UpdateUserName -> updateUserName(intent.name)
             is HomeIntent.UpdateUserPhoto -> updateUserPhoto(intent.photoUri)
             HomeIntent.Logout -> logout()
+            HomeIntent.OpenNotificationCenter -> updateState { copy(showNotificationCenter = true) }
+            HomeIntent.DismissNotificationCenter -> updateState { copy(showNotificationCenter = false) }
+            is HomeIntent.MarkNotificationRead -> viewModelScope.launch {
+                notificationRepository.markAsRead(intent.id)
+            }
+            HomeIntent.MarkAllNotificationsRead -> viewModelScope.launch {
+                val userId = dataStoreManager.getCurrentUserId().first().orEmpty()
+                if (userId.isNotBlank()) notificationRepository.markAllReadForUser(userId)
+            }
+        }
+    }
+
+    private fun observeNotifications() {
+        viewModelScope.launch {
+            val userId = dataStoreManager.getCurrentUserId().first().orEmpty()
+            if (userId.isBlank()) return@launch
+            kotlinx.coroutines.flow.combine(
+                notificationRepository.observeForUser(userId),
+                notificationRepository.observeUnreadCount(userId)
+            ) { list, unread -> list to unread }.collect { (list, unread) ->
+                updateState {
+                    copy(
+                        notifications = list,
+                        unreadNotificationCount = unread
+                    )
+                }
+            }
         }
     }
 

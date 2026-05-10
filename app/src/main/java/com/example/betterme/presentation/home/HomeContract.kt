@@ -3,6 +3,7 @@ package com.example.betterme.presentation.home
 import com.example.betterme.base.MviIntent
 import com.example.betterme.base.MviSingleEvent
 import com.example.betterme.base.MviViewState
+import com.example.betterme.data.local.room.entities.NotificationEntity
 import com.example.betterme.presentation.home.model.CantMiss
 import com.example.betterme.presentation.home.model.HomeProgress
 
@@ -13,7 +14,11 @@ data class HomeState(
     val progress: HomeProgress = HomeProgress(),
     val cantMissList: List<CantMiss> = emptyList(),
     val categoryGroups: List<HomeCategoryGroup> = emptyList(),
-    val showEditProfileDialog: Boolean = false
+    val showEditProfileDialog: Boolean = false,
+    // ----- Notification center -----
+    val notifications: List<NotificationEntity> = emptyList(),
+    val unreadNotificationCount: Int = 0,
+    val showNotificationCenter: Boolean = false
 ) : MviViewState
 
 data class HomeCategoryGroup(
@@ -31,9 +36,15 @@ sealed class HomeIntent : MviIntent {
     data class UpdateUserName(val name: String) : HomeIntent()
     data class UpdateUserPhoto(val photoUri: String) : HomeIntent()
     data object Logout : HomeIntent()
+    data object OpenNotificationCenter : HomeIntent()
+    data object DismissNotificationCenter : HomeIntent()
+    data class MarkNotificationRead(val id: Int) : HomeIntent()
+    data object MarkAllNotificationsRead : HomeIntent()
 }
 
 sealed class HomeEvent : MviSingleEvent {
     data object NavigateToSignIn : HomeEvent()
     data class ShowError(val message: String) : HomeEvent()
+    data class OpenChallengeDetail(val userChallengeId: Int) : HomeEvent()
+    data class OpenChallengePreview(val challengeId: Int) : HomeEvent()
 }

@@ -33,6 +33,8 @@ import com.example.betterme.presentation.home.components.CantMissCard
 import com.example.betterme.presentation.home.components.EditProfileDialog
 import com.example.betterme.presentation.home.components.HomeCard
 import com.example.betterme.presentation.home.components.HomeProgressCard
+import com.example.betterme.presentation.home.components.NotificationBell
+import com.example.betterme.presentation.home.components.NotificationCenterSheet
 import com.example.betterme.presentation.home.model.CantMiss
 import com.example.betterme.presentation.home.model.HomeProgress
 import com.example.betterme.presentation.theme.BetterMeColors
@@ -45,6 +47,8 @@ fun HomeScreen(
     refreshVersion: Int = 0,
     onCategoryClick: (Int, String, String) -> Unit = { _, _, _ -> },
     onHabitClick: (Int) -> Unit = {},
+    onChallengeDetailClick: (Int) -> Unit = {},
+    onChallengePreviewClick: (Int) -> Unit = {},
     onViewProgress: () -> Unit = {},
     onLogoutSuccess: () -> Unit = {},
     viewModel: HomeViewModel = koinViewModel()
@@ -59,6 +63,8 @@ fun HomeScreen(
                 is HomeEvent.ShowError ->
                     android.widget.Toast.makeText(context, event.message, android.widget.Toast.LENGTH_SHORT)
                         .show()
+                is HomeEvent.OpenChallengeDetail -> onChallengeDetailClick(event.userChallengeId)
+                is HomeEvent.OpenChallengePreview -> onChallengePreviewClick(event.challengeId)
             }
         }
     }
@@ -78,6 +84,14 @@ fun HomeScreen(
         onSaveProfile = { name, photoUri ->
             viewModel.processIntent(HomeIntent.UpdateUserName(name))
             viewModel.processIntent(HomeIntent.UpdateUserPhoto(photoUri))
+        },
+        onOpenNotificationCenter = { viewModel.processIntent(HomeIntent.OpenNotificationCenter) },
+        onDismissNotificationCenter = { viewModel.processIntent(HomeIntent.DismissNotificationCenter) },
+        onMarkNotificationRead = { id -> viewModel.processIntent(HomeIntent.MarkNotificationRead(id)) },
+        onMarkAllNotificationsRead = { viewModel.processIntent(HomeIntent.MarkAllNotificationsRead) },
+        onChallengeNotificationClick = { ucId, challengeId ->
+            if (ucId != null) onChallengeDetailClick(ucId)
+            else if (challengeId != null) onChallengePreviewClick(challengeId)
         }
     )
 }
@@ -91,7 +105,12 @@ fun HomeContent(
     onShowEditProfile: () -> Unit = {},
     onDismissEditProfile: () -> Unit = {},
     onLogout: () -> Unit = {},
-    onSaveProfile: (String, String) -> Unit = { _, _ -> }
+    onSaveProfile: (String, String) -> Unit = { _, _ -> },
+    onOpenNotificationCenter: () -> Unit = {},
+    onDismissNotificationCenter: () -> Unit = {},
+    onMarkNotificationRead: (Int) -> Unit = {},
+    onMarkAllNotificationsRead: () -> Unit = {},
+    onChallengeNotificationClick: (Int?, Int?) -> Unit = { _, _ -> }
 ) {
     val colors = BetterMeColors.ListColors.list
 
@@ -103,6 +122,20 @@ fun HomeContent(
             onDismiss = onDismissEditProfile,
             onSave = onSaveProfile,
             onLogout = onLogout
+        )
+    }
+
+    // Notification Center
+    if (state.showNotificationCenter) {
+        NotificationCenterSheet(
+            notifications = state.notifications,
+            onItemClick = { item ->
+                onMarkNotificationRead(item.id)
+                onChallengeNotificationClick(item.user_challenge_id, item.challenge_id)
+                onDismissNotificationCenter()
+            },
+            onMarkAllRead = onMarkAllNotificationsRead,
+            onDismiss = onDismissNotificationCenter
         )
     }
 
@@ -168,14 +201,10 @@ fun HomeContent(
                         color = BetterMeColors.Text.TextPrimary
                     )
                 }
-                IconButton(onClick = { }) {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = "Thông báo",
-                        tint = BetterMeColors.Text.TextPrimary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+                NotificationBell(
+                    unreadCount = state.unreadNotificationCount,
+                    onClick = onOpenNotificationCenter
+                )
             }
         }
 
