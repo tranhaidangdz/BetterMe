@@ -43,13 +43,15 @@ class ChallengeBadgesViewModel(
             combine(achievementRepository.observeAll(), earnedFlow) { all, earned ->
                 val earnedById = earned.associateBy { it.achievement_id }
                 // Section titles match the numbered headings in the design mockup,
-                // plus a fifth Discipline category introduced for the 50-challenge expansion.
+                // plus the Discipline + Mental Wellness categories introduced for the
+                // 6-bucket curated content expansion.
                 val sectionOrder = listOf(
                     "BASIC" to "1. Huy hiệu cơ bản",
                     "HEALTH" to "2. Huy hiệu sức khỏe",
                     "LEARNING" to "3. Huy hiệu học tập",
-                    "DISCIPLINE" to "4. Huy hiệu kỷ luật",
-                    "SPECIAL" to "5. Huy hiệu đặc biệt"
+                    "MENTAL_WELLNESS" to "4. Huy hiệu sức khỏe tinh thần",
+                    "DISCIPLINE" to "5. Huy hiệu kỷ luật",
+                    "SPECIAL" to "6. Huy hiệu đặc biệt"
                 )
                 sectionOrder.map { (key, label) ->
                     val list = all.filter { it.category == key }

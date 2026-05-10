@@ -48,6 +48,17 @@ data class ChallengeEntity(
     val participant_count: Int = 0,
     val start_date: Long? = null,
     val end_date: Long? = null,
+    /**
+     * Motivational tagline shown on the Challenge Detail hero. Curated per-challenge in
+     * [com.example.betterme.data.seed.ChallengesSeed]; never empty for production rows.
+     */
+    val motivational_quote: String = "",
+    /**
+     * One-line celebration copy shown in the completion dialog after the user finishes
+     * the entire journey. Combined with the tier-aware system message in
+     * `CompletionCelebrationDialog` to keep messaging on-brand per challenge.
+     */
+    val completion_message: String = "",
     val sort_order: Int = 0,
     val created_at: Long = System.currentTimeMillis()
 )

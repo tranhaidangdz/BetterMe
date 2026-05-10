@@ -56,7 +56,8 @@ fun CompletionCelebrationDialog(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     difficultyRaw: String = "EASY",
-    durationDays: Int = 7
+    durationDays: Int = 7,
+    completionMessage: String = ""
 ) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -111,9 +112,11 @@ fun CompletionCelebrationDialog(
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = motivationalCompletionText(difficultyRaw, durationDays),
+                text = completionMessage.ifBlank {
+                    motivationalCompletionText(difficultyRaw, durationDays)
+                },
                 style = BetterMeTypography.Body.Medium,
-                color = Color.White.copy(alpha = 0.78f),
+                color = Color.White.copy(alpha = 0.85f),
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(28.dp))

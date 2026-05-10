@@ -177,6 +177,17 @@ fun ChallengeDetailScreen(
                     )
                 }
 
+                if (state.motivationalQuote.isNotBlank()) {
+                    item {
+                        Text(
+                            text = "“${state.motivationalQuote}”",
+                            style = BetterMeTypography.Body.Medium,
+                            color = state.accentColor,
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
                 if (state.mode == DetailMode.Active || state.mode == DetailMode.Completed) {
                     item {
                         com.example.betterme.presentation.challenge.detail.components.StreakCounterCard(
@@ -337,6 +348,7 @@ fun ChallengeDetailScreen(
                 badgeName = celebration.badgeName,
                 difficultyRaw = state.difficulty.raw,
                 durationDays = state.durationDays,
+                completionMessage = state.completionMessage,
                 onShare = { _: SharePlatform ->
                     viewModel.processIntent(ChallengeDetailIntent.Share)
                 },

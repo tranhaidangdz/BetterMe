@@ -36,6 +36,10 @@ data class ChallengeDetailState(
     val weekStrip: List<DayCellUi> = emptyList(),
     val descriptionBullets: List<String> = emptyList(),
 
+    // Curated copy from ChallengesSeed (production catalog)
+    val motivationalQuote: String = "",
+    val completionMessage: String = "",
+
     // Detail-flow extras
     val milestones: List<MilestoneUi> = emptyList(),
     val checkInHistory: List<CheckInHistoryItemUi> = emptyList(),

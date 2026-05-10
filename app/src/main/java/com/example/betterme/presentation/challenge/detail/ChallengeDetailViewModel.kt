@@ -130,7 +130,9 @@ class ChallengeDetailViewModel(
                     targetStreak = challenge.target_streak,
                     descriptionBullets = challenge.toBullets(),
                     isGroup = challenge.is_group,
-                    weekStrip = emptyWeek()
+                    weekStrip = emptyWeek(),
+                    motivationalQuote = challenge.motivational_quote,
+                    completionMessage = challenge.completion_message
                 )
             }
         }
@@ -198,6 +200,8 @@ class ChallengeDetailViewModel(
                     isGroup = challenge.is_group,
                     weekStrip = weekStrip,
                     descriptionBullets = challenge.toBullets(),
+                    motivationalQuote = challenge.motivational_quote,
+                    completionMessage = challenge.completion_message,
                     milestones = milestones,
                     checkInHistory = historyItems,
                     reminderTimeLabel = reminderLabel,

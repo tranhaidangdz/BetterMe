@@ -333,6 +333,64 @@ object BadgesSeed {
             criteria_type = "STREAK",
             criteria_value = 90,
             sort_order = 25
+        ),
+
+        // ==== 6. Huy hiệu sức khỏe tinh thần (26-30) ====
+        // Mental Wellness category. No PNG art yet — emoji fallback handles render.
+        AchievementEntity(
+            id = 26,
+            title = "Tâm Tĩnh",
+            description = "Detox kỹ thuật số 21 ngày",
+            category = "MENTAL_WELLNESS",
+            icon_emoji = "🌊",
+            color_hex = "#0EA5E9",
+            criteria_type = "CHALLENGE_COMPLETED",
+            criteria_value = 1,
+            sort_order = 26
+        ),
+        AchievementEntity(
+            id = 27,
+            title = "Biết Ơn",
+            description = "14 ngày nuôi dưỡng lòng biết ơn",
+            category = "MENTAL_WELLNESS",
+            icon_emoji = "🌸",
+            color_hex = "#F472B6",
+            criteria_type = "CHALLENGE_COMPLETED",
+            criteria_value = 1,
+            sort_order = 27
+        ),
+        AchievementEntity(
+            id = 28,
+            title = "Tỉnh Thức",
+            description = "21 ngày thiền chánh niệm",
+            category = "MENTAL_WELLNESS",
+            icon_emoji = "🧘",
+            color_hex = "#14B8A6",
+            criteria_type = "CHALLENGE_COMPLETED",
+            criteria_value = 1,
+            sort_order = 28
+        ),
+        AchievementEntity(
+            id = 29,
+            title = "Tích Cực",
+            description = "30 ngày tư duy tích cực",
+            category = "MENTAL_WELLNESS",
+            icon_emoji = "☀️",
+            color_hex = "#FBBF24",
+            criteria_type = "CHALLENGE_COMPLETED",
+            criteria_value = 1,
+            sort_order = 29
+        ),
+        AchievementEntity(
+            id = 30,
+            title = "An Yên",
+            description = "60 ngày chinh phục bình an nội tâm",
+            category = "MENTAL_WELLNESS",
+            icon_emoji = "🪷",
+            color_hex = "#A78BFA",
+            criteria_type = "CHALLENGE_COMPLETED",
+            criteria_value = 1,
+            sort_order = 30
         )
     )
 }
