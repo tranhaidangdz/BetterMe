@@ -10,6 +10,7 @@ import com.example.betterme.domain.ai.AiHabitInsightRepository.AiSuggestResult
 import com.example.betterme.domain.ai.SuggestedHabit
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import retrofit2.HttpException
 
 /**
  * OpenRouter-backed implementation.
@@ -155,6 +156,11 @@ class AiHabitInsightRepositoryImpl(
             parseSuggestions(cleaned)
         } catch (e: java.net.SocketTimeoutException) {
             AiSuggestResult.Failure("Mạng chậm — AI hết thời gian chờ")
+        } catch (e: HttpException) {
+            // Retrofit throws this on any non-2xx response. The actual reason
+            // (invalid key, rate limit, payment required, model not found) is in
+            // the JSON error body — surface it instead of "HTTP 401".
+            AiSuggestResult.Failure(extractHttpErrorMessage(e))
         } catch (e: java.io.IOException) {
             AiSuggestResult.Failure("Không thể kết nối đến AI — kiểm tra mạng")
         } catch (e: Exception) {
@@ -226,6 +232,8 @@ class AiHabitInsightRepositoryImpl(
             }
         } catch (e: java.net.SocketTimeoutException) {
             AiResult.Failure("Mạng chậm — AI hết thời gian chờ")
+        } catch (e: HttpException) {
+            AiResult.Failure(extractHttpErrorMessage(e))
         } catch (e: java.io.IOException) {
             AiResult.Failure("Không thể kết nối đến AI — kiểm tra mạng")
         } catch (e: Exception) {
@@ -233,6 +241,51 @@ class AiHabitInsightRepositoryImpl(
             AiResult.Failure("Lỗi AI: ${e.message ?: "không xác định"}")
         }
     }
+
+    /**
+     * Pulls the OpenRouter error JSON out of an [HttpException] and returns the
+     * underlying reason. Without this, a 401 surfaces as the unhelpful string
+     * "HTTP 401 " (= [HttpException.message]) and the user has no way to tell an
+     * auth problem apart from a network problem.
+     *
+     * OpenRouter error body shape (per docs):
+     * `{ "error": { "message": "No auth credentials found", "code": 401 } }`
+     */
+    private fun extractHttpErrorMessage(e: HttpException): String {
+        val code = e.code()
+        val rawBody = try {
+            e.response()?.errorBody()?.string().orEmpty()
+        } catch (_: Throwable) {
+            ""
+        }
+        Log.w(TAG, "OpenRouter HTTP $code body=$rawBody")
+
+        // Try to parse `{ "error": { "message": "..." } }`; fall back to raw body.
+        val parsed = runCatching {
+            jsonParser.decodeFromString(ErrorEnvelope.serializer(), rawBody).error?.message
+        }.getOrNull()
+
+        val detail = parsed?.takeIf { it.isNotBlank() } ?: rawBody.take(160)
+
+        return when (code) {
+            401 -> "Khóa AI không hợp lệ (401). Kiểm tra OPENROUTER_API_KEY trong local.properties và build lại."
+            402 -> "Tài khoản OpenRouter cần nạp credit (402)${if (detail.isNotBlank()) ": $detail" else ""}"
+            403 -> "OpenRouter từ chối yêu cầu (403)${if (detail.isNotBlank()) ": $detail" else ""}"
+            404 -> "Model không tồn tại hoặc không truy cập được (404)${if (detail.isNotBlank()) ": $detail" else ""}"
+            429 -> "Đã vượt giới hạn miễn phí — thử lại sau (429)"
+            in 500..599 -> "OpenRouter đang gặp sự cố ($code) — thử lại sau"
+            else -> "Lỗi AI ($code)${if (detail.isNotBlank()) ": $detail" else ""}"
+        }
+    }
+
+    @Serializable
+    private data class ErrorEnvelope(val error: ErrorBody? = null)
+
+    @Serializable
+    private data class ErrorBody(
+        val message: String? = null,
+        val code: Int? = null
+    )
 
     private companion object {
         const val TAG = "AiHabitInsight"

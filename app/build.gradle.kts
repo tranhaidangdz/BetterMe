@@ -25,7 +25,11 @@ val cloudinaryUploadPreset: String = cloudinaryProps.getProperty("CLOUDINARY_UPL
 // OpenRouter API key, also from local.properties (gitignored). Falls back to empty
 // string so the app builds without it — AI features then no-op with a clear toast.
 //   OPENROUTER_API_KEY=sk-or-v1-...
-val openrouterApiKey: String = cloudinaryProps.getProperty("OPENROUTER_API_KEY", "")
+// .trim() — a stray newline or space in local.properties would silently produce
+// an invalid Bearer token at runtime. Properties.load() already strips trailing
+// whitespace per spec, but trimming again costs nothing and removes one class of
+// "I added the key but it still 401s" failures.
+val openrouterApiKey: String = cloudinaryProps.getProperty("OPENROUTER_API_KEY", "").trim()
 
 android {
     namespace = "com.example.betterme"

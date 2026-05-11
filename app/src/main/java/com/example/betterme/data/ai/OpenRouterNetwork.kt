@@ -1,5 +1,6 @@
 package com.example.betterme.data.ai
 
+import android.util.Log
 import com.example.betterme.BuildConfig
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
@@ -15,8 +16,9 @@ import java.util.concurrent.TimeUnit
  *
  * - JSON converter is configured with `ignoreUnknownKeys = true` so the OpenRouter
  *   response can grow new fields without breaking us.
- * - OkHttp logging is **debug-build-only** — never prints prompts or completions in
- *   release builds.
+ * - OkHttp logging is **debug-build-only** at HEADERS level so we can inspect the
+ *   request/response status without leaking the body. The Authorization header is
+ *   explicitly redacted so a debug build never prints the API key.
  * - Read timeout bumped to 60s because some free-tier models (Llama 70B, Gemini
  *   Flash) take 20-30s on cold starts.
  *
@@ -27,8 +29,17 @@ import java.util.concurrent.TimeUnit
 object OpenRouterNetwork {
 
     private const val BASE_URL = "https://openrouter.ai/api/v1/"
+    private const val TAG = "OpenRouterNetwork"
 
     fun create(apiKeyProvider: () -> String): OpenRouterApi {
+        // One-time diagnostic so "I added the key but it's not working" is answerable
+        // from Logcat alone. Masked — only length + first 10 chars surface.
+        if (BuildConfig.DEBUG) {
+            val key = apiKeyProvider()
+            val masked = if (key.length > 10) "${key.take(10)}…" else "(short or blank)"
+            Log.d(TAG, "OpenRouter key loaded: present=${key.isNotBlank()} length=${key.length} prefix=$masked")
+        }
+
         val json = Json {
             ignoreUnknownKeys = true
             isLenient = true
@@ -36,7 +47,7 @@ object OpenRouterNetwork {
         }
 
         val authInterceptor = Interceptor { chain ->
-            val key = apiKeyProvider()
+            val key = apiKeyProvider().trim()
             val request = chain.request().newBuilder().apply {
                 if (key.isNotBlank()) {
                     header("Authorization", "Bearer $key")
@@ -46,8 +57,12 @@ object OpenRouterNetwork {
         }
 
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC
+            // HEADERS shows status line + headers (request + response) — enough to
+            // see "401 Unauthorized" in Logcat without printing the API key or
+            // dumping potentially long completion bodies.
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.HEADERS
             else HttpLoggingInterceptor.Level.NONE
+            redactHeader("Authorization")
         }
 
         val client = OkHttpClient.Builder()
