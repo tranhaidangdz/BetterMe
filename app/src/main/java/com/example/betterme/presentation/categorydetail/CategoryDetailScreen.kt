@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.betterme.R
+import com.example.betterme.presentation.categorydetail.components.AiReviewCard
 import com.example.betterme.presentation.categorydetail.components.CategoryActionButton
 import com.example.betterme.presentation.categorydetail.components.CategorySummaryCard
 import com.example.betterme.presentation.categorydetail.components.HabitDetailCard
@@ -52,6 +53,7 @@ fun CategoryDetailScreen(
     onAiReviewClick: () -> Unit,
     onAddHabitClick: () -> Unit,
     onAiSuggestClick: () -> Unit,
+    onDismissAiReview: () -> Unit = {},
 ) {
     val palette = paletteFor(state.categoryId)
     // Fallback emoji set used when the habit doesn't expose its own. Kept here as a
@@ -85,7 +87,23 @@ fun CategoryDetailScreen(
                 state = state,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(16.dp))
+        }
+
+        // ===== AI REVIEW CARD =====
+        // Stays invisible (AnimatedVisibility wraps the card itself) while aiReview
+        // is Idle. Slides into view when the user taps the AI button below.
+        item(key = "ai_review") {
+            AiReviewCard(
+                state = state.aiReview,
+                accent = palette.accent,
+                onGenerateAgain = onAiReviewClick,
+                onDismiss = onDismissAiReview,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            if (state.aiReview !is AiReviewState.Idle) {
+                Spacer(Modifier.height(16.dp))
+            }
         }
 
         // ===== SECTION HEADER — "Danh sách thói quen" =====

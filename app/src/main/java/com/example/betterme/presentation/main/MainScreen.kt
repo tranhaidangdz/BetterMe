@@ -151,8 +151,16 @@ fun MainScreen(
                     viewModel.processIntent(MainIntent.OpenHabitDetail(habitId))
                 },
                 onAiReviewClick = {
-                    viewModel.processIntent(MainIntent.CloseCategoryDetail)
-                    viewModel.processIntent(MainIntent.SelectTab(MainTab.HOME))
+                    // Dispatch into the category VM so the AI review card renders
+                    // in-place. Doesn't close the screen — coaching stays in context.
+                    categoryDetailViewModel.processIntent(
+                        CategoryDetailIntent.GenerateAiReview
+                    )
+                },
+                onDismissAiReview = {
+                    categoryDetailViewModel.processIntent(
+                        CategoryDetailIntent.DismissAiReview
+                    )
                 },
                 onAddHabitClick = {
                     viewModel.processIntent(MainIntent.CloseCategoryDetail)

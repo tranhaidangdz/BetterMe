@@ -24,12 +24,22 @@ data class HabitDetailUiModel(
 // ============================================================
 // STATE
 // ============================================================
+/** Lifecycle of the AI review request shown inside the Category Detail screen. */
+sealed class AiReviewState {
+    data object Idle : AiReviewState()
+    data object Loading : AiReviewState()
+    data class Success(val text: String) : AiReviewState()
+    data class Error(val message: String) : AiReviewState()
+}
+
 data class CategoryDetailState(
     val isLoading: Boolean = false,
     val categoryId: Int = -1,
     val categoryName: String = "",
     val categoryIcon: String = "",
     val habits: List<HabitDetailUiModel> = emptyList(),
+    /** AI coaching review — Idle until the user taps "AI nhận xét". */
+    val aiReview: AiReviewState = AiReviewState.Idle,
 ) : MviViewState {
     /** Tổng số thói quen đã hoàn thành (completionPercent = 100) */
     val completedHabitCount: Int
@@ -54,6 +64,10 @@ sealed class CategoryDetailIntent : MviIntent {
         val categoryName: String,
         val categoryIcon: String
     ) : CategoryDetailIntent()
+    /** Generate an AI coaching review for the loaded category. */
+    data object GenerateAiReview : CategoryDetailIntent()
+    /** Clear the AI review back to Idle (e.g. after the user dismisses it). */
+    data object DismissAiReview : CategoryDetailIntent()
 }
 
 // ============================================================

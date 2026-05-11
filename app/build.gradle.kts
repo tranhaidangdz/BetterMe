@@ -22,6 +22,11 @@ val cloudinaryProps: Properties = Properties().apply {
 val cloudinaryCloudName: String = cloudinaryProps.getProperty("CLOUDINARY_CLOUD_NAME", "")
 val cloudinaryUploadPreset: String = cloudinaryProps.getProperty("CLOUDINARY_UPLOAD_PRESET", "")
 
+// OpenRouter API key, also from local.properties (gitignored). Falls back to empty
+// string so the app builds without it — AI features then no-op with a clear toast.
+//   OPENROUTER_API_KEY=sk-or-v1-...
+val openrouterApiKey: String = cloudinaryProps.getProperty("OPENROUTER_API_KEY", "")
+
 android {
     namespace = "com.example.betterme"
     compileSdk = 36
@@ -37,6 +42,7 @@ android {
 
         buildConfigField("String", "CLOUDINARY_CLOUD_NAME", "\"$cloudinaryCloudName\"")
         buildConfigField("String", "CLOUDINARY_UPLOAD_PRESET", "\"$cloudinaryUploadPreset\"")
+        buildConfigField("String", "OPENROUTER_API_KEY", "\"$openrouterApiKey\"")
     }
 
     buildTypes {
@@ -135,4 +141,10 @@ dependencies {
 
     // Cloudinary (image upload + delivery)
     implementation(libs.cloudinary.android)
+
+    // AI / OpenRouter (Retrofit + OkHttp + kotlinx-serialization JSON)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.kotlinx.serialization)
+    implementation(libs.okhttp.logging)
+    implementation(libs.kotlinx.serialization.json)
 }

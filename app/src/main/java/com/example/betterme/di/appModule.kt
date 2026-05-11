@@ -53,6 +53,11 @@ import com.example.betterme.domain.usecase.challenge.ToggleStartReminderUseCase
 import com.example.betterme.domain.usecase.habit.CancelHabitReminderUseCase
 import com.example.betterme.domain.usecase.habit.RescheduleAllHabitRemindersUseCase
 import com.example.betterme.domain.usecase.habit.ScheduleHabitReminderUseCase
+import com.example.betterme.data.ai.AiHabitInsightRepositoryImpl
+import com.example.betterme.data.ai.OpenRouterApi
+import com.example.betterme.data.ai.OpenRouterNetwork
+import com.example.betterme.domain.ai.AiHabitInsightRepository
+import com.example.betterme.domain.usecase.ai.GenerateHabitGroupReviewUseCase
 import com.example.betterme.domain.usecase.user.GetUserUseCase
 import com.example.betterme.domain.usecase.user.SaveUserUseCase
 import com.example.betterme.presentation.challenge.achievements.ChallengeAchievementsViewModel
@@ -193,6 +198,16 @@ val repositoryModule = module {
         UserRepositoryImpl(get())
     }
 
+    // AI / OpenRouter — single Retrofit instance with a key-provider lambda so a
+    // future settings screen can let users supply their own key without rebuilding
+    // the network stack. When BuildConfig.OPENROUTER_API_KEY is blank the API call
+    // will still go through but unauthenticated; OpenRouter returns 401 and the
+    // repo surfaces a clear error message.
+    single<OpenRouterApi> {
+        OpenRouterNetwork.create(apiKeyProvider = { BuildConfig.OPENROUTER_API_KEY })
+    }
+    single<AiHabitInsightRepository> { AiHabitInsightRepositoryImpl(get()) }
+
     // Image upload repo: Cloudinary if configured, local-passthrough otherwise. Pick at
     // DI time so the rest of the app never has to branch on whether the cloud is set up.
     single<ImageUploadRepository> {
@@ -232,6 +247,9 @@ val useCaseModule = module {
     factory { ScheduleHabitReminderUseCase(get<Context>()) }
     factory { CancelHabitReminderUseCase(get<Context>()) }
     factory { RescheduleAllHabitRemindersUseCase(get(), get(), get(), get()) }
+
+    // AI use cases
+    factory { GenerateHabitGroupReviewUseCase(get(), get(), get(), get()) }
 }
 
 val viewModelModule = module {

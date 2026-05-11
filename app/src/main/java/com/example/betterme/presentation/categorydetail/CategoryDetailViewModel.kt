@@ -3,8 +3,11 @@ package com.example.betterme.presentation.categorydetail
 import androidx.lifecycle.viewModelScope
 import com.example.betterme.base.BaseMviViewModel
 import com.example.betterme.data.local.datastore.DataStoreManager
+import com.example.betterme.domain.ai.AiCoachPersonality
+import com.example.betterme.domain.ai.AiHabitInsightRepository
 import com.example.betterme.domain.repository.HabitLogRepository
 import com.example.betterme.domain.repository.HabitRepository
+import com.example.betterme.domain.usecase.ai.GenerateHabitGroupReviewUseCase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
@@ -13,6 +16,7 @@ class CategoryDetailViewModel(
     private val dataStoreManager: DataStoreManager,
     private val habitRepository: HabitRepository,
     private val habitLogRepository: HabitLogRepository,
+    private val generateHabitGroupReview: GenerateHabitGroupReviewUseCase,
 ) : BaseMviViewModel<CategoryDetailIntent, CategoryDetailState, CategoryDetailEvent>() {
 
     override fun initState(): CategoryDetailState = CategoryDetailState()
@@ -24,6 +28,41 @@ class CategoryDetailViewModel(
                 intent.categoryName,
                 intent.categoryIcon
             )
+            CategoryDetailIntent.GenerateAiReview -> generateAiReview()
+            CategoryDetailIntent.DismissAiReview -> updateState {
+                copy(aiReview = AiReviewState.Idle)
+            }
+        }
+    }
+
+    /**
+     * Fire-and-forget AI review request. State transitions Idle → Loading → Success /
+     * Error. Re-entrancy guard: if a request is already in flight, additional taps
+     * are ignored so a tap-storm doesn't spawn parallel coroutines.
+     */
+    private fun generateAiReview() {
+        if (currentState.aiReview is AiReviewState.Loading) return
+        val categoryId = currentState.categoryId
+        val categoryName = currentState.categoryName
+        if (categoryId <= 0 || categoryName.isBlank()) return
+
+        viewModelScope.launch {
+            updateState { copy(aiReview = AiReviewState.Loading) }
+            val result = generateHabitGroupReview(
+                categoryId = categoryId,
+                categoryName = categoryName,
+                personality = AiCoachPersonality.Default
+            )
+            updateState {
+                copy(
+                    aiReview = when (result) {
+                        is AiHabitInsightRepository.AiResult.Success ->
+                            AiReviewState.Success(result.text)
+                        is AiHabitInsightRepository.AiResult.Failure ->
+                            AiReviewState.Error(result.message)
+                    }
+                )
+            }
         }
     }
 
