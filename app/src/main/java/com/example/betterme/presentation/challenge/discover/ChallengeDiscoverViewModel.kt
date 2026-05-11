@@ -10,8 +10,10 @@ import com.example.betterme.presentation.challenge.model.CategoryTileUi
 import com.example.betterme.presentation.challenge.model.FeaturedChallengeUiModel
 import com.example.betterme.presentation.challenge.model.NewChallengeUiModel
 import com.example.betterme.presentation.challenge.shared.Difficulty
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 
 class ChallengeDiscoverViewModel(
@@ -38,23 +40,35 @@ class ChallengeDiscoverViewModel(
     }
 
     private fun load() {
+        // 1-minute heartbeat that re-emits the current wall-clock time so any field
+        // derived from "now" (upcoming countdowns, "active vs future" partitioning)
+        // updates without a full reload. Combines with the data flows below so the
+        // visible list always reflects fresh time. delay(60_000) only ticks while
+        // viewModelScope is active — no leaks; cancelled with the screen.
+        val timeTicker = flow {
+            while (true) {
+                emit(System.currentTimeMillis())
+                delay(60_000)
+            }
+        }
         viewModelScope.launch {
             combine(
                 challengeRepository.observeAll(),
-                categoryRepository.getAll()
-            ) { challenges, categories -> challenges to categories }.collect { (challenges, categories) ->
-                val byCategory = challenges.groupBy { it.category_id }
-                val tiles = categories.map { cat ->
-                    CategoryTileUi(
-                        categoryId = cat.id,
-                        name = cat.name,
-                        emoji = cat.icon,
-                        challengeCount = byCategory[cat.id]?.size ?: 0,
-                        accentColor = colorForCategory(cat.id),
-                        imageUrl = cat.image_url
-                    )
-                }
-                val now = System.currentTimeMillis()
+                categoryRepository.getAll(),
+                timeTicker
+            ) { challenges, categories, now -> Triple(challenges, categories, now) }
+                .collect { (challenges, categories, now) ->
+                    val byCategory = challenges.groupBy { it.category_id }
+                    val tiles = categories.map { cat ->
+                        CategoryTileUi(
+                            categoryId = cat.id,
+                            name = cat.name,
+                            emoji = cat.icon,
+                            challengeCount = byCategory[cat.id]?.size ?: 0,
+                            accentColor = colorForCategory(cat.id),
+                            imageUrl = cat.image_url
+                        )
+                    }
                 // Featured = is_featured AND not in the future (those go in upcomingFeatured).
                 val featured = challenges.filter {
                     it.is_featured && (it.start_date == null || it.start_date <= now)

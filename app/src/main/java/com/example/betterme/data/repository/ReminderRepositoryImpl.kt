@@ -24,6 +24,8 @@ class ReminderRepositoryImpl(
     override suspend fun getActiveByTarget(type: String, id: Int) =
         dao.getActiveByTarget(type, id)
 
+    override suspend fun getAllActiveOfType(type: String) = dao.getAllActiveOfType(type)
+
     override suspend fun deleteByTarget(type: String, id: Int) = dao.deleteByTarget(type, id)
 
     override suspend fun setWorkId(id: Int, workId: String?) = dao.setWorkId(id, workId)

@@ -10,6 +10,7 @@ import com.example.betterme.data.local.room.relation.UserChallengeWithDetails
 import com.example.betterme.domain.repository.AchievementRepository
 import com.example.betterme.domain.repository.ChallengeLogRepository
 import com.example.betterme.domain.repository.ChallengeRepository
+import com.example.betterme.domain.repository.ReminderRepository
 import com.example.betterme.domain.repository.UserChallengeRepository
 import com.example.betterme.domain.usecase.challenge.ToggleStartReminderUseCase
 import com.example.betterme.presentation.challenge.model.ChallengeProgressUiModel
@@ -35,6 +36,7 @@ class ChallengeOverviewViewModel(
     private val challengeRepository: ChallengeRepository,
     private val achievementRepository: AchievementRepository,
     private val challengeLogRepository: ChallengeLogRepository,
+    private val reminderRepository: ReminderRepository,
     private val toggleStartReminderUseCase: ToggleStartReminderUseCase
 ) : BaseMviViewModel<ChallengeOverviewIntent, ChallengeOverviewState, ChallengeOverviewEvent>() {
 
@@ -61,6 +63,15 @@ class ChallengeOverviewViewModel(
                 updateState { copy(isLoading = false) }
                 return@launch
             }
+
+            // Hydrate the in-memory reminder-enabled set from Room so the bell on each
+            // upcoming row reflects the persisted state on screen entry. Without this,
+            // a user who armed a reminder in a previous session would see the bell as
+            // "off" until they re-tapped it.
+            reminderEnabledIds.value = reminderRepository
+                .getAllActiveOfType("CHALLENGE_START")
+                .map { it.target_id }
+                .toSet()
 
             val joinedFlow = userChallengeRepository.observeWithDetails(userId)
             val upcomingChallengesFlow = challengeRepository.observeAll().map { all ->

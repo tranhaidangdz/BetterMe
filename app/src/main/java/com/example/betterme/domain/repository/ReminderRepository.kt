@@ -21,6 +21,10 @@ interface ReminderRepository {
 
     suspend fun getActiveByTarget(type: String, id: Int): ReminderEntity?
 
+    /** Bulk fetch — all active reminders of a given target_type. Used to hydrate
+     *  per-type enabled sets without an N+1 lookup. */
+    suspend fun getAllActiveOfType(type: String): List<ReminderEntity>
+
     suspend fun deleteByTarget(type: String, id: Int)
 
     suspend fun setWorkId(id: Int, workId: String?)

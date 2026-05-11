@@ -27,6 +27,11 @@ interface ReminderDao {
     @Query("SELECT * FROM reminders WHERE target_type = :type AND target_id = :id AND is_active = 1 LIMIT 1")
     suspend fun getActiveByTarget(type: String, id: Int): ReminderEntity?
 
+    /** Bulk fetch: all active reminders of a given target_type. Used to hydrate per-type
+     *  enabled sets on screen entry without an N+1 lookup. */
+    @Query("SELECT * FROM reminders WHERE target_type = :type AND is_active = 1")
+    suspend fun getAllActiveOfType(type: String): List<ReminderEntity>
+
     @Query("DELETE FROM reminders WHERE target_type = :type AND target_id = :id")
     suspend fun deleteByTarget(type: String, id: Int)
 
