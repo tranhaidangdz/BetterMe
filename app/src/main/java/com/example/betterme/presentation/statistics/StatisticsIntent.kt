@@ -7,6 +7,9 @@ sealed class StatisticsIntent : MviIntent {
     data object LoadData : StatisticsIntent()
     data class SelectTab(val tab: StatisticsTab) : StatisticsIntent()
     data class ToggleSection(val section: ExpandedSection) : StatisticsIntent()
+    /** Picks a custom inclusive date range — both bounds are startOfDay millis.
+     *  Implicitly switches selectedTab to CUSTOM. */
+    data class SelectCustomRange(val start: Long, val end: Long) : StatisticsIntent()
 }
 
 sealed class StatisticsEvent : MviSingleEvent {

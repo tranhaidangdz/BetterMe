@@ -5,8 +5,19 @@ import com.example.betterme.base.MviViewState
 data class StatisticsState(
     val isLoading: Boolean = false,
     val selectedTab: StatisticsTab = StatisticsTab.WEEKLY,
+
+    /** Inclusive lower bound (startOfDay millis). When null, the tab's natural range is used. */
+    val customRangeStart: Long? = null,
+    /** Inclusive upper bound (startOfDay millis). When null, "today" is used. */
+    val customRangeEnd: Long? = null,
+    /** Resolved range used for the current emission — computed in the VM from selectedTab
+     *  + custom values. Surfaced on state so the UI can show "21/01 → 27/01" labels. */
+    val effectiveRangeStart: Long = 0,
+    val effectiveRangeEnd: Long = 0,
+
     val overview: OverviewStats = OverviewStats(),
     val streakAnalytics: StreakAnalytics = StreakAnalytics(),
+    val challengeStats: ChallengeStats = ChallengeStats(),
     val featuredHabits: List<FeaturedHabit> = emptyList(),
     val habitJourney: HabitJourney = HabitJourney(),
     val completedHabits: List<HabitStatusItem> = emptyList(),
@@ -19,8 +30,16 @@ data class StatisticsState(
 enum class StatisticsTab(val label: String) {
     WEEKLY("Tuần"),
     MONTHLY("Tháng"),
-    ALL_TIME("Tất cả")
+    ALL_TIME("Tất cả"),
+    CUSTOM("Tùy chọn")
 }
+
+data class ChallengeStats(
+    val joined: Int = 0,
+    val completed: Int = 0,
+    val active: Int = 0,
+    val completionRatePct: Int = 0
+)
 
 enum class ExpandedSection {
     COMPLETED, FAILED, ONGOING
