@@ -40,16 +40,16 @@ fun HomeProgressCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            // Slight elevation so the hero progress card sits visibly above the rest
-            // of the page surface, then a brand-tinted shadow to keep the lift soft
-            // rather than hard.
+            // Hero elevation matches Tokens.CardElevation.Hero (6dp). Neutral shadow
+            // colors come from Tokens.NeutralShadow — uniform with every other card
+            // on Home / Tasks / Habit Group so the lift hierarchy reads as one system.
             .shadow(
                 elevation = 6.dp,
-                shape = RoundedCornerShape(22.dp),
-                ambientColor = Color(0x33000000),
-                spotColor = Color(0x33000000)
+                shape = RoundedCornerShape(24.dp),
+                ambientColor = Color(0x14000000),
+                spotColor = Color(0x1F000000)
             )
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(24.dp))
             .background(
                 Brush.horizontalGradient(BetterMeColors.Gradient.HomeCard)
             )

@@ -1,6 +1,7 @@
 package com.example.betterme.presentation.home.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -11,23 +12,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.betterme.presentation.home.HomeCategoryGroup
 import com.example.betterme.presentation.theme.BetterMeColors
+import com.example.betterme.presentation.theme.BetterMeTokens
 import com.example.betterme.presentation.theme.BetterMeTypography
 
 /**
- * Premium category tile for the Home screen.
+ * Home category tile.
  *
- * Visual identity per category is carried by the accent color piped in from
- * [HomeCategoryGroup.color]: a soft vertical surface gradient inside a white card
- * (so each category reads as its own visual identity but the layout stays unified),
- * the category emoji in a tinted disc on the left, and a discreet "N nhiệm vụ" chip
- * on the right. Soft elevation lifts the card off the page without flat-color glare.
+ * Solid white surface, 1dp accent-tinted border, neutral shadow. Replaces the previous
+ * white→accent gradient + accent-tinted shadow combo that read as washed out against
+ * the pale-blue page background. Category identity is carried via the border, the
+ * tinted emoji disc, and the accent-tinted chevron pill — three discreet signals
+ * instead of a body-wide gradient.
  */
 @Composable
 fun HomeCard(
@@ -40,37 +41,32 @@ fun HomeCard(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = 4.dp,
-                shape = RoundedCornerShape(18.dp),
-                ambientColor = group.color.copy(alpha = 0.18f),
-                spotColor = group.color.copy(alpha = 0.22f)
+                elevation = BetterMeTokens.CardElevation.Body,
+                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Standard),
+                ambientColor = BetterMeTokens.NeutralShadow.Ambient,
+                spotColor = BetterMeTokens.NeutralShadow.Spot
             )
-            .clip(RoundedCornerShape(18.dp))
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color.White,
-                        group.color.copy(alpha = 0.08f)
-                    )
-                )
+            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Standard))
+            .background(Color.White)
+            .border(
+                width = 1.dp,
+                color = group.color.copy(alpha = BetterMeTokens.AccentAlpha.Medium),
+                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Standard)
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Emoji disc. Soft tinted disc that reads as the category's identity glyph;
-        // replaces the prior numbered-circle which felt clinical against the new layout.
+        // Tinted emoji disc — identity glyph for the category.
         Box(
             modifier = Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            group.color.copy(alpha = 0.28f),
-                            group.color.copy(alpha = 0.14f)
-                        )
-                    )
+                .background(group.color.copy(alpha = BetterMeTokens.AccentAlpha.Soft))
+                .border(
+                    width = 1.dp,
+                    color = group.color.copy(alpha = BetterMeTokens.AccentAlpha.Medium),
+                    shape = CircleShape
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -94,13 +90,10 @@ fun HomeCard(
             )
         }
 
-        // Count chip. Reads as the active hit-target: tap the card and you land on the
-        // category's habit list. Color-coordinated with the accent so the visual
-        // grouping feels intentional instead of arbitrary.
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(999.dp))
-                .background(group.color.copy(alpha = 0.16f))
+                .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
+                .background(group.color.copy(alpha = BetterMeTokens.AccentAlpha.Soft))
                 .padding(horizontal = 12.dp, vertical = 6.dp)
         ) {
             Text(

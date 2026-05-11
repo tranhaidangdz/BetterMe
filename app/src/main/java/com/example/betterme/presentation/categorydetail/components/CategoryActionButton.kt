@@ -1,6 +1,7 @@
 package com.example.betterme.presentation.categorydetail.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -11,23 +12,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.betterme.presentation.theme.BetterMeColors
+import com.example.betterme.presentation.theme.BetterMeTokens
 import com.example.betterme.presentation.theme.BetterMeTypography
 
 /**
- * Action row at the bottom of the Habit Group screen ("AI nhận xét", "Thêm thói quen",
- * "AI gợi ý"). Visually paired with the rest of the redesigned screen — white surface,
- * soft category-tinted gradient, accent-tinted shadow, tinted emoji disc, and a
- * subtle chevron pill on the right.
- *
- * The [accentColor] is piped from the category palette so each group's action rows
- * inherit the same identity color as its summary and habit cards. Falls back to a
- * neutral blue tint when no accent is supplied.
+ * Action row at the bottom of the Habit Group screen. White surface, accent-tinted
+ * border, neutral shadow — same grammar as HabitDetailCard so the screen reads as one
+ * vertical rhythm of rows. Accent identity lives in the icon disc and chevron pill;
+ * the body stays neutral so the label is fully readable on every category.
  */
 @Composable
 fun CategoryActionButton(
@@ -41,19 +38,17 @@ fun CategoryActionButton(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = 3.dp,
-                shape = RoundedCornerShape(16.dp),
-                ambientColor = accentColor.copy(alpha = 0.16f),
-                spotColor = accentColor.copy(alpha = 0.20f)
+                elevation = BetterMeTokens.CardElevation.Body,
+                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Body),
+                ambientColor = BetterMeTokens.NeutralShadow.Ambient,
+                spotColor = BetterMeTokens.NeutralShadow.Spot
             )
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color.White,
-                        accentColor.copy(alpha = 0.06f)
-                    )
-                )
+            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Body))
+            .background(Color.White)
+            .border(
+                width = 1.dp,
+                color = accentColor.copy(alpha = BetterMeTokens.AccentAlpha.Medium),
+                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Body)
             )
             .clickable { onClick() }
             .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -64,7 +59,7 @@ fun CategoryActionButton(
             modifier = Modifier
                 .size(38.dp)
                 .clip(CircleShape)
-                .background(accentColor.copy(alpha = 0.18f)),
+                .background(accentColor.copy(alpha = BetterMeTokens.AccentAlpha.Soft)),
             contentAlignment = Alignment.Center
         ) {
             Text(text = icon, fontSize = 18.sp)
@@ -78,8 +73,8 @@ fun CategoryActionButton(
         )
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(999.dp))
-                .background(accentColor.copy(alpha = 0.14f))
+                .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
+                .background(accentColor.copy(alpha = BetterMeTokens.AccentAlpha.Soft))
                 .padding(horizontal = 12.dp, vertical = 6.dp)
         ) {
             Text(

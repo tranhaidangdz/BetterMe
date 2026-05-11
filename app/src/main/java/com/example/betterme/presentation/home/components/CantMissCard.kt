@@ -1,6 +1,7 @@
 package com.example.betterme.presentation.home.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -12,21 +13,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.betterme.presentation.home.model.CantMiss
 import com.example.betterme.presentation.theme.BetterMeColors
+import com.example.betterme.presentation.theme.BetterMeTokens
 import com.example.betterme.presentation.theme.BetterMeTypography
 
 /**
- * Carousel card for the Home "Đang thực hiện" rail.
+ * "Đang thực hiện" carousel card. White surface, accent-tinted border, neutral
+ * shadow — same grammar as HomeCard and the Habit Group rows so the whole screen
+ * reads as one design system instead of three different card families.
  *
- * White surface with a soft category-tinted vertical gradient, a small accent disc
- * carrying the category icon, the habit title, a thin animated progress bar, and a
- * percentage pill anchored on the right. Soft elevation gives the cards visible
- * depth as the user scrolls horizontally.
+ * Accent identity is carried via: the border, the category-icon disc, the progress
+ * bar, and the percent pill. The card body itself is fully readable on every
+ * category — the previous gradient drift made low-percent rows look "washed out".
  */
 @Composable
 fun CantMissCard(
@@ -39,19 +41,17 @@ fun CantMissCard(
         modifier = modifier
             .width(180.dp)
             .shadow(
-                elevation = 4.dp,
-                shape = RoundedCornerShape(18.dp),
-                ambientColor = cardColor.copy(alpha = 0.18f),
-                spotColor = cardColor.copy(alpha = 0.22f)
+                elevation = BetterMeTokens.CardElevation.Body,
+                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Standard),
+                ambientColor = BetterMeTokens.NeutralShadow.Ambient,
+                spotColor = BetterMeTokens.NeutralShadow.Spot
             )
-            .clip(RoundedCornerShape(18.dp))
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color.White,
-                        cardColor.copy(alpha = 0.08f)
-                    )
-                )
+            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Standard))
+            .background(Color.White)
+            .border(
+                width = 1.dp,
+                color = cardColor.copy(alpha = BetterMeTokens.AccentAlpha.Medium),
+                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Standard)
             )
             .clickable { onClick() }
             .padding(14.dp)
@@ -61,7 +61,7 @@ fun CantMissCard(
                 modifier = Modifier
                     .size(28.dp)
                     .clip(CircleShape)
-                    .background(cardColor.copy(alpha = 0.18f)),
+                    .background(cardColor.copy(alpha = BetterMeTokens.AccentAlpha.Soft)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -92,9 +92,9 @@ fun CantMissCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(6.dp)
-                .clip(RoundedCornerShape(999.dp)),
+                .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill)),
             color = cardColor,
-            trackColor = cardColor.copy(alpha = 0.18f)
+            trackColor = cardColor.copy(alpha = BetterMeTokens.AccentAlpha.Soft)
         )
         Spacer(modifier = Modifier.height(8.dp))
         Row(
@@ -109,8 +109,8 @@ fun CantMissCard(
             )
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(cardColor.copy(alpha = 0.14f))
+                    .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
+                    .background(cardColor.copy(alpha = BetterMeTokens.AccentAlpha.Soft))
                     .padding(horizontal = 8.dp, vertical = 2.dp)
             ) {
                 Text(

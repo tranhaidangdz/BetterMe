@@ -3,8 +3,8 @@ package com.example.betterme.presentation.categorydetail.components
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -13,7 +13,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -21,26 +20,30 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.betterme.presentation.categorydetail.HabitDetailUiModel
 import com.example.betterme.presentation.theme.BetterMeColors
+import com.example.betterme.presentation.theme.BetterMeTokens
 import com.example.betterme.presentation.theme.BetterMeTypography
 
 /**
  * Habit row inside a Category Detail group.
  *
- * White surface with a soft accent-tinted vertical gradient (matches HomeCard /
- * CantMissCard / CategorySummaryCard so the whole flow reads as one design system),
- * an emoji disc on the left, the habit title with day-count subtitle, an animated
- * pill-style progress bar, and a percentage pill on the right.
+ * Solid white surface with a thin 1dp accent border (alpha = AccentAlpha.Medium),
+ * neutral shadow, 20dp corner radius. The previous version stacked a white→soft
+ * vertical gradient + accent-tinted shadow + per-row inline alphas; against the
+ * pale blue page background that read as "washed out" and made rows feel separate
+ * from the rest of the app.
  *
- * Completion state: when `completionPercent == 100`, the percentage pill flips to
- * solid accent with a white check glyph and the day-count subtitle reads "Hoàn thành".
- * The bar fills 100% with the accent color so the row still reads as "done" at a
- * glance even after the user scrolls past.
+ * The accent now lives in three deliberate places: the border (visual identity),
+ * the emoji disc tint, and the progress bar / percentage pill. The card body itself
+ * stays neutral so the title is fully readable and the row feels grounded.
+ *
+ * Completion state: at 100%, the percent pill flips to solid accent + white ✓ glyph,
+ * the day-count subtitle reads "Hoàn thành" in accent color, and the bar fills.
  */
 @Composable
 fun HabitDetailCard(
     habit: HabitDetailUiModel,
     emoji: String = "🎯",
-    cardColor: Color = Color.White,
+    cardColor: Color = Color.White,  // kept for API compatibility; ignored now
     accentColor: Color = BetterMeColors.Primary.Primary,
     modifier: Modifier = Modifier
 ) {
@@ -55,43 +58,29 @@ fun HabitDetailCard(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = 3.dp,
-                shape = RoundedCornerShape(18.dp),
-                ambientColor = accentColor.copy(alpha = 0.16f),
-                spotColor = accentColor.copy(alpha = 0.20f)
+                elevation = BetterMeTokens.CardElevation.Body,
+                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Standard),
+                ambientColor = BetterMeTokens.NeutralShadow.Ambient,
+                spotColor = BetterMeTokens.NeutralShadow.Spot
             )
-            .clip(RoundedCornerShape(18.dp))
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color.White,
-                        cardColor.copy(alpha = 0.65f)
-                    )
-                )
+            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Standard))
+            .background(Color.White)
+            .border(
+                width = 1.dp,
+                color = accentColor.copy(alpha = BetterMeTokens.AccentAlpha.Medium),
+                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Standard)
             )
             .padding(horizontal = 14.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Emoji disc — soft gradient identity, matches the Home design language.
-        Box(
-            modifier = Modifier
-                .size(46.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            accentColor.copy(alpha = 0.28f),
-                            accentColor.copy(alpha = 0.14f)
-                        )
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(text = emoji, fontSize = 22.sp)
-        }
+        CategoryEmojiDisc(
+            emoji = emoji,
+            accent = accentColor,
+            size = 46.dp,
+            fontSize = 22.sp
+        )
 
-        // Title + progress block
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = habit.title,
@@ -118,12 +107,12 @@ fun HabitDetailCard(
             )
         }
 
-        // Percentage pill — flips to solid accent + ✓ glyph at 100%.
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(999.dp))
+                .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
                 .background(
-                    if (isComplete) accentColor else accentColor.copy(alpha = 0.14f)
+                    if (isComplete) accentColor
+                    else accentColor.copy(alpha = BetterMeTokens.AccentAlpha.Soft)
                 )
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center
