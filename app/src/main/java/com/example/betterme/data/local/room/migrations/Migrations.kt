@@ -42,6 +42,31 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
     }
 }
 
+/**
+ * v9 → v10 (AI response cache):
+ * adds `ai_cache` table backing the 12h cache for Group Review + Suggestions.
+ * Unique index on `(categoryId, type)` is created here so the DAO's REPLACE
+ * insert resolves to the same row.
+ */
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS ai_cache (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                categoryId INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                content TEXT NOT NULL,
+                createdAt INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS index_ai_cache_categoryId_type ON ai_cache(categoryId, type)"
+        )
+    }
+}
+
 /** Aggregated list passed to the Room builder. Add new migrations to this list as the
  *  schema evolves. */
-val ALL_MIGRATIONS = arrayOf(MIGRATION_7_8, MIGRATION_8_9)
+val ALL_MIGRATIONS = arrayOf(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)

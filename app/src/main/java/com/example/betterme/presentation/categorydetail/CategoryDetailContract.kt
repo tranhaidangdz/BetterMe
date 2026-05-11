@@ -76,12 +76,12 @@ sealed class CategoryDetailIntent : MviIntent {
         val categoryName: String,
         val categoryIcon: String
     ) : CategoryDetailIntent()
-    /** Generate an AI coaching review for the loaded category. */
-    data object GenerateAiReview : CategoryDetailIntent()
+    /** Generate an AI coaching review. `forceRefresh=true` bypasses the 12h cache. */
+    data class GenerateAiReview(val forceRefresh: Boolean = false) : CategoryDetailIntent()
     /** Clear the AI review back to Idle (e.g. after the user dismisses it). */
     data object DismissAiReview : CategoryDetailIntent()
-    /** Generate AI habit suggestions for the loaded category. */
-    data object GenerateAiSuggestions : CategoryDetailIntent()
+    /** Generate AI habit suggestions. `forceRefresh=true` bypasses the 12h cache. */
+    data class GenerateAiSuggestions(val forceRefresh: Boolean = false) : CategoryDetailIntent()
     /** Clear the AI suggestions back to Idle. */
     data object DismissAiSuggestions : CategoryDetailIntent()
     /**
@@ -100,4 +100,6 @@ sealed class CategoryDetailIntent : MviIntent {
 sealed class CategoryDetailEvent : MviSingleEvent {
     data object NavigateToAiChat : CategoryDetailEvent()
     data object NavigateToAddHabit : CategoryDetailEvent()
+    /** Toast/snackbar shown when an AI suggestion is added as a real habit. */
+    data class HabitAddedFromSuggestion(val title: String) : CategoryDetailEvent()
 }

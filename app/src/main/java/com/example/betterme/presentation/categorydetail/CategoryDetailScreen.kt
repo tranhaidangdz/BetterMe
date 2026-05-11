@@ -52,9 +52,15 @@ fun CategoryDetailScreen(
     state: CategoryDetailState,
     onBack: () -> Unit,
     onHabitClick: (Int) -> Unit = {},
+    /** First tap on the "AI nhận xét" action — cache-first. */
     onAiReviewClick: () -> Unit,
+    /** "Tạo lại" inside the review card — forces a fresh OpenRouter call. */
+    onAiReviewRegenerate: () -> Unit = onAiReviewClick,
     onAddHabitClick: () -> Unit,
+    /** First tap on the "AI gợi ý" action — cache-first. */
     onAiSuggestClick: () -> Unit,
+    /** "Tạo lại" inside the suggestions card — forces a fresh OpenRouter call. */
+    onAiSuggestRegenerate: () -> Unit = onAiSuggestClick,
     onDismissAiReview: () -> Unit = {},
     onDismissAiSuggestions: () -> Unit = {},
     onAddAiSuggestion: (SuggestedHabit) -> Unit = {},
@@ -101,7 +107,7 @@ fun CategoryDetailScreen(
             AiReviewCard(
                 state = state.aiReview,
                 accent = palette.accent,
-                onGenerateAgain = onAiReviewClick,
+                onGenerateAgain = onAiReviewRegenerate,
                 onDismiss = onDismissAiReview,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
@@ -119,7 +125,7 @@ fun CategoryDetailScreen(
                 state = state.aiSuggestions,
                 accent = palette.accent,
                 onAddSuggestion = onAddAiSuggestion,
-                onRegenerate = onAiSuggestClick,
+                onRegenerate = onAiSuggestRegenerate,
                 onDismiss = onDismissAiSuggestions,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )

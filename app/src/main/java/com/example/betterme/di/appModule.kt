@@ -56,6 +56,8 @@ import com.example.betterme.domain.usecase.habit.ScheduleHabitReminderUseCase
 import com.example.betterme.data.ai.AiHabitInsightRepositoryImpl
 import com.example.betterme.data.ai.OpenRouterApi
 import com.example.betterme.data.ai.OpenRouterNetwork
+import com.example.betterme.data.repository.AiCacheRepositoryImpl
+import com.example.betterme.domain.ai.AiCacheRepository
 import com.example.betterme.domain.ai.AiHabitInsightRepository
 import com.example.betterme.domain.usecase.ai.GenerateHabitGroupReviewUseCase
 import com.example.betterme.domain.usecase.ai.SuggestHabitsForCategoryUseCase
@@ -138,6 +140,7 @@ val roomModule = module {
     single { get<BetterMeDatabase>().userAchievementDao() }
     single { get<BetterMeDatabase>().notificationDao() }
     single { get<BetterMeDatabase>().aiChatDao() }
+    single { get<BetterMeDatabase>().aiCacheDao() }
     single { get<BetterMeDatabase>().userDao() }
 }
 
@@ -208,6 +211,7 @@ val repositoryModule = module {
         OpenRouterNetwork.create(apiKeyProvider = { BuildConfig.OPENROUTER_API_KEY })
     }
     single<AiHabitInsightRepository> { AiHabitInsightRepositoryImpl(get()) }
+    single<AiCacheRepository> { AiCacheRepositoryImpl(get()) }
 
     // Image upload repo: Cloudinary if configured, local-passthrough otherwise. Pick at
     // DI time so the rest of the app never has to branch on whether the cloud is set up.
@@ -249,9 +253,9 @@ val useCaseModule = module {
     factory { CancelHabitReminderUseCase(get<Context>()) }
     factory { RescheduleAllHabitRemindersUseCase(get(), get(), get(), get()) }
 
-    // AI use cases
-    factory { GenerateHabitGroupReviewUseCase(get(), get(), get(), get()) }
-    factory { SuggestHabitsForCategoryUseCase(get(), get(), get()) }
+    // AI use cases — last `get()` is the AiCacheRepository.
+    factory { GenerateHabitGroupReviewUseCase(get(), get(), get(), get(), get()) }
+    factory { SuggestHabitsForCategoryUseCase(get(), get(), get(), get()) }
 }
 
 val viewModelModule = module {

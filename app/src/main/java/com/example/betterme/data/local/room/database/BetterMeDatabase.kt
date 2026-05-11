@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.example.betterme.data.local.room.dao.AIChatDao
 import com.example.betterme.data.local.room.dao.AchievementDao
+import com.example.betterme.data.local.room.dao.AiCacheDao
 import com.example.betterme.data.local.room.dao.CategoryDao
 import com.example.betterme.data.local.room.dao.ChallengeDao
 import com.example.betterme.data.local.room.dao.ChallengeLogDao
@@ -21,6 +22,7 @@ import com.example.betterme.data.local.room.dao.UserChallengeDao
 import com.example.betterme.data.local.room.dao.UserDao
 import com.example.betterme.data.local.room.entities.AIChatEntity
 import com.example.betterme.data.local.room.entities.AchievementEntity
+import com.example.betterme.data.local.room.entities.AiCacheEntity
 import com.example.betterme.data.local.room.entities.CategoryEntity
 import com.example.betterme.data.local.room.entities.ChallengeEntity
 import com.example.betterme.data.local.room.entities.ChallengeLogEntity
@@ -50,9 +52,10 @@ import com.example.betterme.data.local.room.migrations.ALL_MIGRATIONS
         AchievementEntity::class,
         UserAchievementEntity::class,
         NotificationEntity::class,
-        AIChatEntity::class
+        AIChatEntity::class,
+        AiCacheEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -72,6 +75,7 @@ abstract class BetterMeDatabase : RoomDatabase() {
     abstract fun userAchievementDao(): UserAchievementDao
     abstract fun notificationDao(): NotificationDao
     abstract fun aiChatDao(): AIChatDao
+    abstract fun aiCacheDao(): AiCacheDao
     abstract fun userDao(): UserDao
 
     companion object {

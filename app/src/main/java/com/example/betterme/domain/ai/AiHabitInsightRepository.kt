@@ -66,5 +66,7 @@ data class SuggestedHabit(
     /** "EASY" | "MEDIUM" | "HARD" — used to color the difficulty badge. */
     val difficulty: String,
     /** Free-text impact line, e.g. "Cải thiện năng lượng buổi sáng". */
-    val estimatedImpact: String
+    val estimatedImpact: String,
+    /** Why doing this *consistently* matters. e.g. "Chuỗi 21 ngày sẽ tạo phản xạ tự động". */
+    val streakBenefit: String = ""
 )

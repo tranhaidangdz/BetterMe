@@ -1,6 +1,11 @@
 package com.example.betterme.presentation.categorydetail.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,10 +28,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,16 +49,19 @@ import com.example.betterme.presentation.theme.BetterMeTypography
 
 /**
  * Premium AI suggestions panel. Shows up to 4 habit suggestions as rich cards with
- * emoji + title + description + difficulty badge + estimated-impact tagline. Each
- * card has a "+ Thêm" button that hands the suggestion back to the screen for
- * insertion via the existing AddHabit flow.
+ * emoji + title + description + difficulty badge + estimated-impact + streak-benefit.
  *
- * Three states piped through [AiSuggestionsState]:
- * - Loading → spinner + "AI đang tạo gợi ý cá nhân hoá…"
- * - Success → list of [SuggestionRow]s
- * - Error   → red retry pill
+ * State machine
+ * - Loading → shimmer skeleton rows + spinner subtitle.
+ * - Success → list of [SuggestionRow]s. Tapping "+ Thêm" inserts a real habit row;
+ *             the row flips locally to a green "✓ Đã thêm" pill so the user feels
+ *             the action landed (the screen's snackbar repeats the confirmation).
+ * - Error   → red retry pill.
  *
- * Visual surface matches AiReviewCard so the two AI panels read as one design.
+ * The added-state set is intentionally local to this composable (remember{}) — once
+ * the screen scrolls away or the suggestions card is dismissed, the set resets, which
+ * matches the user's mental model: "the suggestions list is the suggestions list,
+ * the habits list below is where I see what I actually have".
  */
 @Composable
 fun AiSuggestionsCard(
@@ -70,6 +83,12 @@ fun AiSuggestionsCard(
             animationSpec = tween(160)
         )
     ) {
+        val surface = Brush.verticalGradient(
+            colors = listOf(
+                Color.White,
+                accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft * 0.6f)
+            )
+        )
         Column(
             modifier = modifier
                 .fillMaxWidth()
@@ -80,7 +99,7 @@ fun AiSuggestionsCard(
                     spotColor = BetterMeTokens.NeutralShadow.Spot
                 )
                 .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Hero))
-                .background(Color.White)
+                .background(surface)
                 .border(
                     width = 1.2.dp,
                     color = accent.copy(alpha = BetterMeTokens.AccentAlpha.Medium),
@@ -158,21 +177,59 @@ fun AiSuggestionsCard(
 
 @Composable
 private fun LoadingRow(accent: Color) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(20.dp),
-            color = accent,
-            strokeWidth = 2.dp
-        )
-        Text(
-            text = "Đang tổng hợp gợi ý dựa trên thói quen hiện tại của bạn…",
-            style = BetterMeTypography.Body.Medium,
-            color = BetterMeColors.Text.TextSecondary
-        )
+    val transition = rememberInfiniteTransition(label = "ai_sugg_shimmer")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ai_sugg_phase"
+    )
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                color = accent,
+                strokeWidth = 2.dp
+            )
+            Text(
+                text = "Đang tổng hợp gợi ý dựa trên thói quen hiện tại của bạn…",
+                style = BetterMeTypography.Body.Small.Medium,
+                color = BetterMeColors.Text.TextSecondary
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        repeat(3) { idx ->
+            ShimmerSuggestionPlaceholder(phase = phase, accent = accent)
+            if (idx != 2) Spacer(Modifier.height(8.dp))
+        }
     }
+}
+
+@Composable
+private fun ShimmerSuggestionPlaceholder(phase: Float, accent: Color) {
+    val base = accent.copy(alpha = 0.08f)
+    val highlight = accent.copy(alpha = 0.22f)
+    val start = (phase * 1.6f) - 0.3f
+    val brush = Brush.horizontalGradient(
+        colorStops = arrayOf(
+            (start - 0.2f).coerceIn(0f, 1f) to base,
+            start.coerceIn(0f, 1f) to highlight,
+            (start + 0.2f).coerceIn(0f, 1f) to base
+        )
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(60.dp)
+            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Body))
+            .background(brush)
+    )
 }
 
 @Composable
@@ -182,9 +239,20 @@ private fun SuccessList(
     onAdd: (SuggestedHabit) -> Unit,
     onRegenerate: () -> Unit
 ) {
+    // Local "added this session" set — keyed by title so re-suggested rows reset.
+    val addedTitles = remember(items) { mutableStateOf(setOf<String>()) }
+
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         items.forEach { suggestion ->
-            SuggestionRow(suggestion = suggestion, accent = accent, onAdd = onAdd)
+            SuggestionRow(
+                suggestion = suggestion,
+                accent = accent,
+                isAdded = suggestion.title in addedTitles.value,
+                onAdd = {
+                    onAdd(suggestion)
+                    addedTitles.value = addedTitles.value + suggestion.title
+                }
+            )
         }
         Spacer(Modifier.height(4.dp))
         Box(
@@ -195,7 +263,7 @@ private fun SuccessList(
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             Text(
-                text = "↻  Tạo lại",
+                text = "↻  Tạo lại 4 gợi ý mới",
                 style = BetterMeTypography.Body.Small.Medium,
                 color = accent,
                 fontWeight = FontWeight.SemiBold
@@ -208,7 +276,8 @@ private fun SuccessList(
 private fun SuggestionRow(
     suggestion: SuggestedHabit,
     accent: Color,
-    onAdd: (SuggestedHabit) -> Unit
+    isAdded: Boolean,
+    onAdd: () -> Unit
 ) {
     val (badgeColor, badgeLabel) = when (suggestion.difficulty.uppercase()) {
         "EASY" -> Color(0xFF16A34A) to "Dễ"
@@ -283,20 +352,47 @@ private fun SuggestionRow(
                     fontWeight = FontWeight.Medium
                 )
             }
-            Spacer(Modifier.height(8.dp))
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
-                    .background(accent)
-                    .clickable { onAdd(suggestion) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
-            ) {
+            if (suggestion.streakBenefit.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "+ Thêm thói quen",
+                    text = "🔥 ${suggestion.streakBenefit}",
                     style = BetterMeTypography.Body.Small.Medium,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold
+                    color = BetterMeColors.Text.TextTertiary
                 )
+            }
+            Spacer(Modifier.height(8.dp))
+            // Pill flips locally to the success state on tap. The screen's
+            // snackbar repeats the confirmation; this gives the user immediate
+            // in-row feedback so they don't tap twice.
+            if (isAdded) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
+                        .background(Color(0xFF16A34A).copy(alpha = 0.14f))
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "✓  Đã thêm",
+                        style = BetterMeTypography.Body.Small.Medium,
+                        color = Color(0xFF16A34A),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
+                        .background(accent)
+                        .clickable { onAdd() }
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "+ Thêm thói quen",
+                        style = BetterMeTypography.Body.Small.Medium,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

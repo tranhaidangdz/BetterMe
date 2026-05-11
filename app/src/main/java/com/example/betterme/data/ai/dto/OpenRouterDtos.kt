@@ -18,7 +18,7 @@ data class ChatRequest(
     val model: String,
     val messages: List<ChatMessage>,
     /** Hard cap on response length — keeps cost predictable and replies concise. */
-    @SerialName("max_tokens") val maxTokens: Int = 400,
+    @SerialName("max_tokens") val maxTokens: Int = 350,
     /** Lower temperature = more deterministic, on-brand coaching tone. */
     val temperature: Double = 0.6
 )

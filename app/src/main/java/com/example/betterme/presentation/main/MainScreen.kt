@@ -2,14 +2,18 @@ package com.example.betterme.presentation.main
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.example.betterme.presentation.addhabit.AddHabitScreen
+import com.example.betterme.presentation.categorydetail.CategoryDetailEvent
 import com.example.betterme.presentation.categorydetail.CategoryDetailIntent
 import com.example.betterme.presentation.categorydetail.CategoryDetailScreen
 import com.example.betterme.presentation.categorydetail.CategoryDetailViewModel
@@ -131,6 +135,7 @@ fun MainScreen(
             val categoryDetailViewModel = koinViewModel<CategoryDetailViewModel>()
             val detailState by categoryDetailViewModel.viewState.collectAsState()
             val currentCategoryId = state.categoryDetailId
+            val snackbarHostState = remember { SnackbarHostState() }
 
             if (currentCategoryId != null) {
                 LaunchedEffect(currentCategoryId) {
@@ -144,46 +149,75 @@ fun MainScreen(
                 }
             }
 
-            CategoryDetailScreen(
-                state = detailState,
-                onBack = { viewModel.processIntent(MainIntent.CloseCategoryDetail) },
-                onHabitClick = { habitId ->
-                    viewModel.processIntent(MainIntent.OpenHabitDetail(habitId))
-                },
-                onAiReviewClick = {
-                    // Dispatch into the category VM so the AI review card renders
-                    // in-place. Doesn't close the screen — coaching stays in context.
-                    categoryDetailViewModel.processIntent(
-                        CategoryDetailIntent.GenerateAiReview
-                    )
-                },
-                onDismissAiReview = {
-                    categoryDetailViewModel.processIntent(
-                        CategoryDetailIntent.DismissAiReview
-                    )
-                },
-                onAddHabitClick = {
-                    viewModel.processIntent(MainIntent.CloseCategoryDetail)
-                    viewModel.processIntent(MainIntent.SelectTab(MainTab.ADD))
-                },
-                onAiSuggestClick = {
-                    // Render AI suggestions in-place — same pattern as AI review.
-                    // Tapping the same CTA while suggestions are visible regenerates.
-                    categoryDetailViewModel.processIntent(
-                        CategoryDetailIntent.GenerateAiSuggestions
-                    )
-                },
-                onDismissAiSuggestions = {
-                    categoryDetailViewModel.processIntent(
-                        CategoryDetailIntent.DismissAiSuggestions
-                    )
-                },
-                onAddAiSuggestion = { suggestion ->
-                    categoryDetailViewModel.processIntent(
-                        CategoryDetailIntent.AddAiSuggestion(suggestion)
-                    )
+            // Single-shot events from the Category VM: a habit was added from an AI
+            // suggestion → show a snackbar so the user feels the action landed.
+            LaunchedEffect(categoryDetailViewModel) {
+                categoryDetailViewModel.singleEvent.collect { event ->
+                    when (event) {
+                        is CategoryDetailEvent.HabitAddedFromSuggestion ->
+                            snackbarHostState.showSnackbar("✅ Đã thêm \"${event.title}\" vào nhóm")
+                        else -> Unit
+                    }
                 }
-            )
+            }
+
+            Box(modifier = Modifier.fillMaxSize()) {
+                CategoryDetailScreen(
+                    state = detailState,
+                    onBack = { viewModel.processIntent(MainIntent.CloseCategoryDetail) },
+                    onHabitClick = { habitId ->
+                        viewModel.processIntent(MainIntent.OpenHabitDetail(habitId))
+                    },
+                    onAiReviewClick = {
+                        // First tap: cache-first (no network if a fresh entry exists).
+                        // The card's "Tạo lại" calls onAiReviewRegenerate which forces.
+                        categoryDetailViewModel.processIntent(
+                            CategoryDetailIntent.GenerateAiReview(forceRefresh = false)
+                        )
+                    },
+                    onAiReviewRegenerate = {
+                        categoryDetailViewModel.processIntent(
+                            CategoryDetailIntent.GenerateAiReview(forceRefresh = true)
+                        )
+                    },
+                    onDismissAiReview = {
+                        categoryDetailViewModel.processIntent(
+                            CategoryDetailIntent.DismissAiReview
+                        )
+                    },
+                    onAddHabitClick = {
+                        viewModel.processIntent(MainIntent.CloseCategoryDetail)
+                        viewModel.processIntent(MainIntent.SelectTab(MainTab.ADD))
+                    },
+                    onAiSuggestClick = {
+                        categoryDetailViewModel.processIntent(
+                            CategoryDetailIntent.GenerateAiSuggestions(forceRefresh = false)
+                        )
+                    },
+                    onAiSuggestRegenerate = {
+                        categoryDetailViewModel.processIntent(
+                            CategoryDetailIntent.GenerateAiSuggestions(forceRefresh = true)
+                        )
+                    },
+                    onDismissAiSuggestions = {
+                        categoryDetailViewModel.processIntent(
+                            CategoryDetailIntent.DismissAiSuggestions
+                        )
+                    },
+                    onAddAiSuggestion = { suggestion ->
+                        categoryDetailViewModel.processIntent(
+                            CategoryDetailIntent.AddAiSuggestion(suggestion)
+                        )
+                    }
+                )
+
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 96.dp)
+                )
+            }
         }
 
         // Habit Detail Overlay

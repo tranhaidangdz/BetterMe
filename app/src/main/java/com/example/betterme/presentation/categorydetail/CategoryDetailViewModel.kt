@@ -34,11 +34,12 @@ class CategoryDetailViewModel(
                 intent.categoryName,
                 intent.categoryIcon
             )
-            CategoryDetailIntent.GenerateAiReview -> generateAiReview()
+            is CategoryDetailIntent.GenerateAiReview -> generateAiReview(intent.forceRefresh)
             CategoryDetailIntent.DismissAiReview -> updateState {
                 copy(aiReview = AiReviewState.Idle)
             }
-            CategoryDetailIntent.GenerateAiSuggestions -> generateAiSuggestions()
+            is CategoryDetailIntent.GenerateAiSuggestions ->
+                generateAiSuggestions(intent.forceRefresh)
             CategoryDetailIntent.DismissAiSuggestions -> updateState {
                 copy(aiSuggestions = AiSuggestionsState.Idle)
             }
@@ -47,10 +48,11 @@ class CategoryDetailViewModel(
     }
 
     /**
-     * Fire-and-forget AI suggestion request. Same re-entrancy guard pattern as the
-     * review path so a tap-storm doesn't spawn parallel coroutines.
+     * Fire-and-forget AI suggestion request. Re-entrancy guard prevents tap-storms
+     * from spawning parallel coroutines; viewModelScope cancels in-flight calls
+     * automatically when the screen is left (via DisposableEffect in the host).
      */
-    private fun generateAiSuggestions() {
+    private fun generateAiSuggestions(forceRefresh: Boolean) {
         if (currentState.aiSuggestions is AiSuggestionsState.Loading) return
         val categoryId = currentState.categoryId
         val categoryName = currentState.categoryName
@@ -61,7 +63,8 @@ class CategoryDetailViewModel(
             val result = suggestHabitsForCategory(
                 categoryId = categoryId,
                 categoryName = categoryName,
-                personality = AiCoachPersonality.Default
+                personality = AiCoachPersonality.Default,
+                forceRefresh = forceRefresh
             )
             updateState {
                 copy(
@@ -81,6 +84,9 @@ class CategoryDetailViewModel(
      * starting today, description from the suggestion, no reminder time (the user
      * can tap into the habit to configure one). The new row appears automatically
      * via the reactive Flow that backs [loadData].
+     *
+     * Fires a single-shot [CategoryDetailEvent.HabitAddedFromSuggestion] so the host
+     * screen can render a success toast/snackbar without reading state.
      */
     private fun addAiSuggestion(suggestion: SuggestedHabit) {
         viewModelScope.launch {
@@ -100,13 +106,12 @@ class CategoryDetailViewModel(
                 created_at = now
             )
             val newId = habitRepository.addHabit(entity).toInt()
-            // No reminder by default — but route through the scheduler anyway so the
-            // call path is identical to the AddHabit flow. It no-ops on a null time.
             scheduleHabitReminder(
                 habitId = newId,
                 habitTitle = suggestion.title,
                 reminderTime = null
             )
+            sendEvent(CategoryDetailEvent.HabitAddedFromSuggestion(suggestion.title))
         }
     }
 
@@ -115,7 +120,7 @@ class CategoryDetailViewModel(
      * Error. Re-entrancy guard: if a request is already in flight, additional taps
      * are ignored so a tap-storm doesn't spawn parallel coroutines.
      */
-    private fun generateAiReview() {
+    private fun generateAiReview(forceRefresh: Boolean) {
         if (currentState.aiReview is AiReviewState.Loading) return
         val categoryId = currentState.categoryId
         val categoryName = currentState.categoryName
@@ -126,7 +131,8 @@ class CategoryDetailViewModel(
             val result = generateHabitGroupReview(
                 categoryId = categoryId,
                 categoryName = categoryName,
-                personality = AiCoachPersonality.Default
+                personality = AiCoachPersonality.Default,
+                forceRefresh = forceRefresh
             )
             updateState {
                 copy(

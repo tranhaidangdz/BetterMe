@@ -1,6 +1,8 @@
 package com.example.betterme.domain.usecase.ai
 
 import com.example.betterme.data.local.datastore.DataStoreManager
+import com.example.betterme.domain.ai.AiCacheRepository
+import com.example.betterme.domain.ai.AiCacheRepository.Companion.TYPE_REVIEW
 import com.example.betterme.domain.ai.AiCoachPersonality
 import com.example.betterme.domain.ai.AiHabitInsightRepository
 import com.example.betterme.domain.ai.AiHabitInsightRepository.AiResult
@@ -13,30 +15,39 @@ import kotlinx.coroutines.flow.first
  * Builds the per-category analytics snapshot, feeds it to the AI repo, returns the
  * coach response.
  *
+ * Caching strategy (12h via [AiCacheRepository]):
+ * 1. `invoke(forceRefresh=false)` consults the cache first — fresh hit returns
+ *    instantly without an OpenRouter call. Repeated screen visits within the
+ *    window get the same coaching text.
+ * 2. `forceRefresh=true` (user tapped "Tạo lại") bypasses the cache and writes the
+ *    new response on top of the old entry.
+ * 3. On network failure with a stale entry available, the use case returns the
+ *    stale entry through [invokeOffline] so the user still gets *something*.
+ *
  * Why this lives as a use case (not inside the VM): the prompt construction is
  * deterministic and reusable — future surfaces (Habit Detail, weekly digest) can
  * call the same path without re-implementing the stats summarization.
- *
- * Snapshot includes (all real, no fake numbers):
- * - habits in the category: count, names
- * - per-habit: planned duration, DONE count, longest streak, last check-in
- * - aggregates: completion rate, missed days, journey-complete count
- *
- * The snapshot is pre-formatted into Vietnamese prose so the model never has to
- * invent or paraphrase numbers — it just writes the coaching commentary on top.
  */
 class GenerateHabitGroupReviewUseCase(
     private val dataStoreManager: DataStoreManager,
     private val habitRepository: HabitRepository,
     private val habitLogRepository: HabitLogRepository,
-    private val aiRepository: AiHabitInsightRepository
+    private val aiRepository: AiHabitInsightRepository,
+    private val cache: AiCacheRepository
 ) {
 
     suspend operator fun invoke(
         categoryId: Int,
         categoryName: String,
-        personality: AiCoachPersonality = AiCoachPersonality.Default
+        personality: AiCoachPersonality = AiCoachPersonality.Default,
+        forceRefresh: Boolean = false
     ): AiResult {
+        if (!forceRefresh) {
+            cache.getFresh(categoryId, TYPE_REVIEW)?.let { cached ->
+                return AiResult.Success(cached)
+            }
+        }
+
         val userId = dataStoreManager.getCurrentUserId().first().orEmpty()
         if (userId.isBlank()) {
             return AiResult.Failure("Vui lòng đăng nhập để dùng AI")
@@ -61,7 +72,6 @@ class GenerateHabitGroupReviewUseCase(
             val planned = if (habit.end_date != null) {
                 (((habit.end_date - habit.start_date) / dayMs) + 1).toInt().coerceAtLeast(1)
             } else {
-                // Open-ended: budget = days elapsed so the rate is honest.
                 (((now - habit.start_date) / dayMs) + 1).toInt().coerceAtLeast(1)
             }
             val done = habitLogRepository.countCompleted(habit.id)
@@ -94,10 +104,23 @@ class GenerateHabitGroupReviewUseCase(
             perHabitLines.forEach { appendLine(it) }
         }.trim()
 
-        return aiRepository.reviewHabitGroup(
+        val result = aiRepository.reviewHabitGroup(
             categoryName = categoryName,
             stats = statsBlock,
             personality = personality
         )
+
+        // Network call succeeded → persist for the next 12h.
+        if (result is AiResult.Success) {
+            cache.save(categoryId, TYPE_REVIEW, result.text)
+            return result
+        }
+
+        // Network call failed → if we have *any* prior entry (even past TTL),
+        // surface it instead of leaving the user with a blank error card.
+        cache.getAny(categoryId, TYPE_REVIEW)?.let { stale ->
+            return AiResult.Success(stale.content)
+        }
+        return result
     }
 }
