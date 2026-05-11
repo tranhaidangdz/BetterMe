@@ -27,7 +27,9 @@ data class NotificationEntity(
     val user_id: String,
     val title: String,
     val message: String,
-    val type: String,                       // "CHALLENGE_REMINDER" | "CHALLENGE_START" | "BADGE_AWARDED" | "GENERIC"
+    val type: String,                       // "HABIT_REMINDER" | "CHALLENGE_REMINDER" | "CHALLENGE_START" | "BADGE_AWARDED" | "GENERIC"
+    /** Deep-link target for HABIT_REMINDER rows; null for challenge/system rows. */
+    val habit_id: Int? = null,
     val challenge_id: Int? = null,          // for deep-linking to the challenge detail
     val user_challenge_id: Int? = null,     // for active-mode detail navigation
     val reminder_time_label: String? = null,

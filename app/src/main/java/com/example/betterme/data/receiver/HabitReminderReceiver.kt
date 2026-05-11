@@ -10,7 +10,9 @@ import androidx.core.app.NotificationCompat
 import com.example.betterme.MainActivity
 import com.example.betterme.R
 import com.example.betterme.data.local.datastore.DataStoreManager
+import com.example.betterme.data.local.room.entities.NotificationEntity
 import com.example.betterme.domain.repository.HabitRepository
+import com.example.betterme.domain.repository.NotificationRepository
 import com.example.betterme.domain.usecase.habit.ScheduleHabitReminderUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +44,7 @@ class HabitReminderReceiver : BroadcastReceiver(), KoinComponent {
     private val habitRepository: HabitRepository by inject()
     private val scheduleHabitReminder: ScheduleHabitReminderUseCase by inject()
     private val dataStoreManager: DataStoreManager by inject()
+    private val notificationRepository: NotificationRepository by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
         val habitId = intent.getIntExtra(EXTRA_HABIT_ID, -1)
@@ -59,7 +62,26 @@ class HabitReminderReceiver : BroadcastReceiver(), KoinComponent {
                 val currentUserId = dataStoreManager.getCurrentUserId().first().orEmpty()
                 if (currentUserId.isNotBlank() && currentUserId != habit.user_id) return@launch
 
-                postNotification(context, habitId, habit.title)
+                val motivationalLine = pickMotivationalLine(habitId)
+                postNotification(context, habitId, habit.title, motivationalLine)
+
+                // Persist into the in-app inbox so the Home bell + notification
+                // center reflect this reminder even after the system tray dismiss.
+                // The system push is fire-and-forget; this row is the authoritative
+                // record the user reads later in the app.
+                runCatching {
+                    notificationRepository.insert(
+                        NotificationEntity(
+                            user_id = habit.user_id,
+                            title = "Đến giờ rồi — \"${habit.title}\"",
+                            message = motivationalLine,
+                            type = "HABIT_REMINDER",
+                            habit_id = habitId,
+                            reminder_time_label = habit.reminder_time
+                        )
+                    )
+                }
+
                 // Re-arm for tomorrow at the same time. ScheduleHabitReminderUseCase
                 // computes the next occurrence relative to "now", so calling it after
                 // the alarm fires lands tomorrow's slot automatically.
@@ -70,7 +92,12 @@ class HabitReminderReceiver : BroadcastReceiver(), KoinComponent {
         }
     }
 
-    private fun postNotification(context: Context, habitId: Int, title: String) {
+    private fun postNotification(
+        context: Context,
+        habitId: Int,
+        title: String,
+        motivationalLine: String
+    ) {
         val launchIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_OPEN_HABIT_ID, habitId)
@@ -85,10 +112,8 @@ class HabitReminderReceiver : BroadcastReceiver(), KoinComponent {
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_challenge)
             .setContentTitle("Đến giờ rồi — \"$title\"")
-            .setContentText(pickMotivationalLine(habitId))
-            .setStyle(
-                NotificationCompat.BigTextStyle().bigText(pickMotivationalLine(habitId))
-            )
+            .setContentText(motivationalLine)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(motivationalLine))
             .setContentIntent(tapIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

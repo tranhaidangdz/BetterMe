@@ -22,4 +22,6 @@ class NotificationRepositoryImpl(
         dao.deleteOlderThan(olderThanMillis)
 
     override suspend fun deleteAllForUser(userId: String) = dao.deleteAllForUser(userId)
+
+    override suspend fun deleteById(id: Int) = dao.deleteById(id)
 }

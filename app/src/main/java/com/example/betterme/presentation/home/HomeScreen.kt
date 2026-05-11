@@ -34,7 +34,7 @@ import com.example.betterme.presentation.home.components.EditProfileDialog
 import com.example.betterme.presentation.home.components.HomeCard
 import com.example.betterme.presentation.home.components.HomeProgressCard
 import com.example.betterme.presentation.home.components.NotificationBell
-import com.example.betterme.presentation.home.components.NotificationCenterSheet
+import com.example.betterme.presentation.home.components.NotificationCenterScreen
 import com.example.betterme.presentation.home.model.CantMiss
 import com.example.betterme.presentation.home.model.HomeProgress
 import com.example.betterme.presentation.theme.BetterMeColors
@@ -89,6 +89,7 @@ fun HomeScreen(
         onDismissNotificationCenter = { viewModel.processIntent(HomeIntent.DismissNotificationCenter) },
         onMarkNotificationRead = { id -> viewModel.processIntent(HomeIntent.MarkNotificationRead(id)) },
         onMarkAllNotificationsRead = { viewModel.processIntent(HomeIntent.MarkAllNotificationsRead) },
+        onHabitNotificationClick = { habitId -> onHabitClick(habitId) },
         onChallengeNotificationClick = { ucId, challengeId ->
             if (ucId != null) onChallengeDetailClick(ucId)
             else if (challengeId != null) onChallengePreviewClick(challengeId)
@@ -110,6 +111,7 @@ fun HomeContent(
     onDismissNotificationCenter: () -> Unit = {},
     onMarkNotificationRead: (Int) -> Unit = {},
     onMarkAllNotificationsRead: () -> Unit = {},
+    onHabitNotificationClick: (Int) -> Unit = {},
     onChallengeNotificationClick: (Int?, Int?) -> Unit = { _, _ -> }
 ) {
     val colors = BetterMeColors.ListColors.list
@@ -122,20 +124,6 @@ fun HomeContent(
             onDismiss = onDismissEditProfile,
             onSave = onSaveProfile,
             onLogout = onLogout
-        )
-    }
-
-    // Notification Center
-    if (state.showNotificationCenter) {
-        NotificationCenterSheet(
-            notifications = state.notifications,
-            onItemClick = { item ->
-                onMarkNotificationRead(item.id)
-                onChallengeNotificationClick(item.user_challenge_id, item.challenge_id)
-                onDismissNotificationCenter()
-            },
-            onMarkAllRead = onMarkAllNotificationsRead,
-            onDismiss = onDismissNotificationCenter
         )
     }
 
@@ -305,6 +293,26 @@ fun HomeContent(
         ) {
             CircularProgressIndicator(color = BetterMeColors.Primary.Primary)
         }
+    }
+
+    // Notification inbox — full-screen overlay rendered on top of the Home
+    // content. Mounts only while open so it doesn't run group/sort logic when
+    // the user isn't looking at it.
+    if (state.showNotificationCenter) {
+        NotificationCenterScreen(
+            notifications = state.notifications,
+            onMarkRead = onMarkNotificationRead,
+            onMarkAllRead = onMarkAllNotificationsRead,
+            onHabitClick = { habitId ->
+                onDismissNotificationCenter()
+                onHabitNotificationClick(habitId)
+            },
+            onChallengeClick = { ucId, challengeId ->
+                onDismissNotificationCenter()
+                onChallengeNotificationClick(ucId, challengeId)
+            },
+            onClose = onDismissNotificationCenter
+        )
     }
 }
 

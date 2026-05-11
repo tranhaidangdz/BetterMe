@@ -67,6 +67,18 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
     }
 }
 
+/**
+ * v10 → v11 (Habit reminder deep-linking):
+ * adds nullable `habit_id` column to `notifications` so HABIT_REMINDER rows can
+ * deep-link to the habit detail screen on tap. Older rows backfill to NULL — the
+ * existing challenge-routing path is untouched.
+ */
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE notifications ADD COLUMN habit_id INTEGER")
+    }
+}
+
 /** Aggregated list passed to the Room builder. Add new migrations to this list as the
  *  schema evolves. */
-val ALL_MIGRATIONS = arrayOf(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+val ALL_MIGRATIONS = arrayOf(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)

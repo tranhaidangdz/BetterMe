@@ -19,4 +19,7 @@ interface NotificationRepository {
     suspend fun deleteOlderThan(olderThanMillis: Long): Int
 
     suspend fun deleteAllForUser(userId: String)
+
+    /** Remove a single notification by id — used by swipe-to-delete in the inbox. */
+    suspend fun deleteById(id: Int)
 }
