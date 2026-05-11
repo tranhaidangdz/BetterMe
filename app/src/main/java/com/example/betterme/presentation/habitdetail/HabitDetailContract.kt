@@ -64,6 +64,12 @@ data class HabitDetailState(
     val categoryIcon: String = "📌",
     val reminderTime: String? = null,
     val isCompletedToday: Boolean = false,
+    /**
+     * True when DONE log count ≥ planned duration. Once set, the camera/check-in flow is
+     * locked (no over-completion past target). Open-ended habits (no `end_date`) never
+     * flip this to true and stay perpetually check-inable.
+     */
+    val isJourneyComplete: Boolean = false,
 
     // Streak info
     val currentStreak: Int = 0,
@@ -113,7 +119,8 @@ sealed class HabitDetailIntent : MviIntent {
     data class SetLocation(val lat: Double, val lng: Double, val name: String?) : HabitDetailIntent()
     data object ConfirmCheckIn : HabitDetailIntent()        // Xác nhận → lưu vào DB
     data object DismissCheckIn : HabitDetailIntent()        // Hủy check-in flow
-    data object UndoCheckIn : HabitDetailIntent()           // Bỏ check-in hôm nay
+    // Note: UndoCheckIn was intentionally removed. Check-ins are immutable once
+    // committed — no toggle-back, no accidental undo. Daily logs are permanent.
 }
 
 // ============================================================

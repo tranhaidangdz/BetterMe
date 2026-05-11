@@ -39,7 +39,6 @@ class HabitDetailViewModel(
             is HabitDetailIntent.SetLocation -> setLocation(intent.lat, intent.lng, intent.name)
             HabitDetailIntent.ConfirmCheckIn -> confirmCheckIn()
             HabitDetailIntent.DismissCheckIn -> dismissCheckIn()
-            HabitDetailIntent.UndoCheckIn -> undoCheckIn()
         }
     }
 
@@ -90,13 +89,21 @@ class HabitDetailViewModel(
                     )
                 }
 
-                // Stats
-                val totalDays = if (habit.end_date != null) {
-                    ((habit.end_date - habit.start_date) / (24 * 60 * 60 * 1000)).toInt().coerceAtLeast(1)
+                // Stats — journey completion is derived from real check-in count vs the
+                // habit's planned duration. Open-ended habits (no end_date) never
+                // auto-complete; their `totalDays` reflects elapsed days for display only.
+                val DAY_MS = 24L * 60L * 60L * 1000L
+                val plannedDurationDays = if (habit.end_date != null) {
+                    (((habit.end_date - habit.start_date) / DAY_MS) + 1).toInt().coerceAtLeast(1)
                 } else {
-                    ((today - habit.start_date) / (24 * 60 * 60 * 1000)).toInt().coerceAtLeast(1)
+                    Int.MAX_VALUE
                 }
-                val completionRate = if (totalDays > 0) ((doneLogs.size.toFloat() / totalDays) * 100).toInt().coerceIn(0, 100) else 0
+                val isJourneyComplete = doneLogs.size >= plannedDurationDays
+                val totalDays = if (habit.end_date != null) plannedDurationDays
+                    else ((today - habit.start_date) / DAY_MS).toInt().coerceAtLeast(1)
+                val completionRate = if (totalDays > 0)
+                    ((doneLogs.size.toFloat() / totalDays) * 100).toInt().coerceIn(0, 100)
+                else 0
 
                 updateState {
                     copy(
@@ -108,6 +115,7 @@ class HabitDetailViewModel(
                         categoryIcon = category?.icon ?: "📌",
                         reminderTime = habit.reminder_time,
                         isCompletedToday = isCompletedToday,
+                        isJourneyComplete = isJourneyComplete,
                         currentStreak = currentStreak,
                         longestStreak = longestStreak,
                         weeklyProgress = weeklyProgress,
@@ -147,11 +155,11 @@ class HabitDetailViewModel(
 
     /** Bước 1: Bấm nút → signal UI mở camera */
     private fun startCheckIn() {
-        if (currentState.isCompletedToday) {
-            // Nếu đã check-in rồi → không mở camera nữa
-            return
-        }
-        // Signal UI to launch camera — location sẽ được lấy trong composable
+        // Two locks guard the camera flow:
+        // 1. isCompletedToday — one check-in per day max; today's log is immutable.
+        // 2. isJourneyComplete — the habit's full duration has been satisfied; no
+        //    over-completion past target.
+        if (currentState.isCompletedToday || currentState.isJourneyComplete) return
         sendEvent(HabitDetailEvent.LaunchCamera)
     }
 
@@ -265,21 +273,6 @@ class HabitDetailViewModel(
     fun onSuccessDismiss() {
         dismissCheckIn()
         loadHabit(currentState.habitId)
-    }
-
-    /** Bỏ check-in hôm nay (undo) */
-    private fun undoCheckIn() {
-        viewModelScope.launch {
-            try {
-                val today = getStartOfDay(Calendar.getInstance())
-                val existingLog = habitLogRepository.getLogByDate(currentState.habitId, today)
-                if (existingLog != null && existingLog.status == "DONE") {
-                    habitLogRepository.deleteLog(existingLog)
-                    sendEvent(HabitDetailEvent.ShowMessage("Đã bỏ check-in"))
-                    loadHabit(currentState.habitId)
-                }
-            } catch (_: Exception) { }
-        }
     }
 
     // ============================================================

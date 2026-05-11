@@ -297,8 +297,8 @@ private fun HabitDetailMainContent(
         // ===== FIXED BOTTOM CHECK-IN BAR =====
         CheckInBottomBar(
             isCompletedToday = state.isCompletedToday,
-            onCheckInClick = { onIntent(HabitDetailIntent.StartCheckIn) },
-            onUndoClick = { onIntent(HabitDetailIntent.UndoCheckIn) }
+            isJourneyComplete = state.isJourneyComplete,
+            onCheckInClick = { onIntent(HabitDetailIntent.StartCheckIn) }
         )
     }
 }
@@ -309,8 +309,8 @@ private fun HabitDetailMainContent(
 @Composable
 private fun CheckInBottomBar(
     isCompletedToday: Boolean,
-    onCheckInClick: () -> Unit,
-    onUndoClick: () -> Unit
+    isJourneyComplete: Boolean,
+    onCheckInClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -327,52 +327,14 @@ private fun CheckInBottomBar(
             .navigationBarsPadding()
             .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
-        if (isCompletedToday) {
-            // Đã check-in → undo + status row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Button(
-                    onClick = onUndoClick,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = BetterMeColors.Red.copy(alpha = 0.1f)
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(0.dp)
-                ) {
-                    Text(
-                        text = "Bỏ check-in",
-                        style = BetterMeTypography.Body.Medium.copy(fontWeight = FontWeight.SemiBold),
-                        color = BetterMeColors.Red
-                    )
-                }
-
-                Button(
-                    onClick = { },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = BetterMeColors.Green
-                    ),
-                    enabled = false,
-                    elevation = ButtonDefaults.buttonElevation(0.dp)
-                ) {
-                    Text(
-                        text = "✓ Đã hoàn thành",
-                        style = BetterMeTypography.Title.Small.Bold,
-                        color = BetterMeColors.White
-                    )
-                }
-            }
-        } else {
-            // Chưa check-in → camera button
-            Button(
+        // Three-state CTA. Check-ins are immutable — no Undo button anywhere.
+        //   1. Journey complete   → permanent "Hoàn thành thử thách" trophy state.
+        //   2. Checked in today   → disabled green "Đã check-in" pill, can re-attempt tomorrow.
+        //   3. Otherwise          → primary camera button.
+        when {
+            isJourneyComplete -> CompletedHabitButton(label = "🏆  Đã hoàn thành thử thách")
+            isCompletedToday -> CompletedHabitButton(label = "✓  Đã check-in hôm nay")
+            else -> Button(
                 onClick = onCheckInClick,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -393,6 +355,30 @@ private fun CheckInBottomBar(
                 )
             }
         }
+    }
+}
+
+/** Disabled green CTA used for both daily-done and journey-complete states. */
+@Composable
+private fun CompletedHabitButton(label: String) {
+    Button(
+        onClick = { },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = BetterMeColors.Green,
+            disabledContainerColor = BetterMeColors.Green
+        ),
+        enabled = false,
+        elevation = ButtonDefaults.buttonElevation(0.dp)
+    ) {
+        Text(
+            text = label,
+            style = BetterMeTypography.Title.Small.Bold,
+            color = BetterMeColors.White
+        )
     }
 }
 
