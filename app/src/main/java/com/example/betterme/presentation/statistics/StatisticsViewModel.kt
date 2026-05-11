@@ -38,7 +38,7 @@ import java.util.Locale
  * - WEEKLY    : last 7 days ending today (inclusive).
  * - MONTHLY   : last 30 days ending today.
  * - ALL_TIME  : from the user's oldest habit start_date through today.
- * - CUSTOM    : explicit user-picked [start..end] (inclusive), both clamped to startOfDay.
+ * - CUSTOM    : explicit user-picked start..end (inclusive), both clamped to startOfDay.
  *
  * Aggregation rules
  * - Logs are filtered to the resolved range and status == "DONE" before any percentage
