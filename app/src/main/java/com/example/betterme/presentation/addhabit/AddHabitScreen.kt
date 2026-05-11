@@ -192,11 +192,24 @@ fun AddHabitScreen(
                     .verticalScroll(rememberScrollState())
                     .imePadding()
             ) {
-                TopBar(onBack = onBackClick)
+                // Top app bar — back arrow + title on a single baseline. The previous
+                // two-row layout (arrow row above, headline row below) made the title
+                // sit ~50dp lower than the icon. Premium apps (Notion / TickTick /
+                // Spotify) keep them on the same row vertically centered; we follow.
+                AppBar(title = "Tạo thói quen mới", onBack = onBackClick)
 
-                HeroHeader(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                Spacer(Modifier.height(2.dp))
 
-                Spacer(Modifier.height(12.dp))
+                // Motivational subtitle on its own line, padded to content edge so the
+                // text starts in line with the section cards below.
+                Text(
+                    text = "Một thói quen nhỏ hôm nay là phiên bản tốt hơn của bạn ngày mai.",
+                    style = BetterMeTypography.Body.Medium,
+                    color = BetterMeColors.Text.TextTertiary,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                )
+
+                Spacer(Modifier.height(14.dp))
 
                 HabitPreviewCard(
                     title = state.title,
@@ -373,8 +386,25 @@ fun AddHabitScreen(
 // SUB-COMPOSABLES
 // =====================================================================
 
+/**
+ * Single-row app bar — back arrow + title vertically centered on the same baseline.
+ *
+ * Key choices:
+ * - `verticalAlignment = Alignment.CenterVertically` aligns both children to the
+ *   row's vertical center. Without this, IconButton's 48dp touch target makes the
+ *   icon glyph sit slightly above the natural centerline of inline text.
+ * - Title uses `Title.Medium.Bold` (matches the rest of the app's top-bar titles)
+ *   instead of `Headline.Small.Bold` at 28sp, which previously bloated the title
+ *   into a hero-sized line that couldn't share a row with the 24dp icon.
+ * - 48dp trailing spacer for visual symmetry — keeps the title optically centered
+ *   even though the IconButton on the left isn't visually balanced by a right-side
+ *   action.
+ * - 4dp horizontal + 4dp vertical padding only. Status-bar inset is handled by the
+ *   parent column's `Modifier.statusBarsPadding()`, so the app bar doesn't double-
+ *   space.
+ */
 @Composable
-private fun TopBar(onBack: () -> Unit) {
+private fun AppBar(title: String, onBack: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -388,27 +418,16 @@ private fun TopBar(onBack: () -> Unit) {
                 tint = BetterMeColors.Text.TextPrimary
             )
         }
-        Spacer(Modifier.weight(1f))
-        Spacer(Modifier.size(48.dp))
-    }
-}
-
-@Composable
-private fun HeroHeader(modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
         Text(
-            text = "Tạo thói quen mới",
-            style = BetterMeTypography.Headline.Small.Bold,
+            text = title,
+            style = BetterMeTypography.Title.Medium.Bold,
             color = BetterMeColors.Text.TextPrimary,
             fontWeight = FontWeight.Bold,
-            fontSize = 28.sp
+            modifier = Modifier.weight(1f)
         )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = "Một thói quen nhỏ hôm nay là phiên bản tốt hơn của bạn ngày mai.",
-            style = BetterMeTypography.Body.Medium,
-            color = BetterMeColors.Text.TextTertiary
-        )
+        // Right-side symmetry slot — keeps the title visually centered against the
+        // icon button's 48dp touch target on the left.
+        Spacer(Modifier.size(48.dp))
     }
 }
 
