@@ -1,33 +1,56 @@
 package com.example.betterme.presentation.addhabit
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import com.example.betterme.R
-import com.example.betterme.presentation.addhabit.components.CategorySelector
-import com.example.betterme.presentation.addhabit.components.HabitFormField
-import com.example.betterme.presentation.components.view.BetterMeTopBar
+import androidx.compose.ui.unit.sp
+import com.example.betterme.presentation.addhabit.components.CategoryChipRow
+import com.example.betterme.presentation.addhabit.components.HabitPreviewCard
+import com.example.betterme.presentation.addhabit.components.SectionCard
+import com.example.betterme.presentation.categorydetail.components.paletteFor
 import com.example.betterme.presentation.theme.BetterMeColors
+import com.example.betterme.presentation.theme.BetterMeTokens
 import com.example.betterme.presentation.theme.BetterMeTypography
 import org.koin.androidx.compose.koinViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * Add Habit — premium redesign.
+ *
+ * Layout (information architecture unchanged):
+ *   - elegant top bar with back arrow
+ *   - hero header with motivational subtitle
+ *   - live preview card mirroring the Home row that will be created
+ *   - section cards: name, description, category, schedule, reminder
+ *   - sticky bottom CTA outside the scroll viewport
+ *
+ * ViewModel contract is untouched — same intents, same state, same submit flow.
+ * The redesign is pure UI/UX on top of the existing reactive state.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddHabitScreen(
@@ -37,338 +60,462 @@ fun AddHabitScreen(
 ) {
     val state by viewModel.viewState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Picker visibility flags — transient UI state, screen-local.
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+
+    val titleFocusRequester = remember { FocusRequester() }
+    // Auto-focus the name field once on screen entry so the keyboard is ready
+    // immediately. Subsequent recompositions don't re-focus.
+    LaunchedEffect(Unit) {
+        runCatching { titleFocusRequester.requestFocus() }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.singleEvent.collect { event ->
             when (event) {
                 AddHabitEvent.SaveSuccess -> {
                     onHabitAdded()
-                    snackbarHostState.showSnackbar("Đã thêm thói quen thành công!")
+                    snackbarHostState.showSnackbar("Đã thêm thói quen — bắt đầu hành trình!")
                     onBackClick()
                 }
-                is AddHabitEvent.ShowError -> {
-                    snackbarHostState.showSnackbar(event.message)
-                }
+                is AddHabitEvent.ShowError -> snackbarHostState.showSnackbar(event.message)
             }
         }
     }
 
-    // Date pickers
+    // ===== Pickers =====
     if (showStartDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = state.startDate
-        )
+        val pickerState = rememberDatePickerState(initialSelectedDateMillis = state.startDate)
         DatePickerDialog(
             onDismissRequest = { showStartDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let {
+                    pickerState.selectedDateMillis?.let {
                         viewModel.processIntent(AddHabitIntent.InputStartDate(it))
                     }
                     showStartDatePicker = false
-                }) {
-                    Text("Xác nhận", color = BetterMeColors.Primary.Primary)
-                }
+                }) { Text("Xác nhận", color = BetterMeColors.Primary.Primary) }
             },
             dismissButton = {
                 TextButton(onClick = { showStartDatePicker = false }) {
                     Text("Hủy", color = BetterMeColors.Text.TextTertiary)
                 }
             }
-        ) {
-            DatePicker(state = datePickerState)
-        }
+        ) { DatePicker(state = pickerState) }
     }
-
     if (showEndDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = state.endDate ?: (state.startDate + 30L * 24 * 60 * 60 * 1000)
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = state.endDate
+                ?: (state.startDate + 30L * 24 * 60 * 60 * 1000)
         )
         DatePickerDialog(
             onDismissRequest = { showEndDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let {
+                    pickerState.selectedDateMillis?.let {
                         viewModel.processIntent(AddHabitIntent.InputEndDate(it))
                     }
                     showEndDatePicker = false
-                }) {
-                    Text("Xác nhận", color = BetterMeColors.Primary.Primary)
-                }
+                }) { Text("Xác nhận", color = BetterMeColors.Primary.Primary) }
             },
             dismissButton = {
                 TextButton(onClick = { showEndDatePicker = false }) {
                     Text("Hủy", color = BetterMeColors.Text.TextTertiary)
                 }
             }
-        ) {
-            DatePicker(state = datePickerState)
-        }
+        ) { DatePicker(state = pickerState) }
     }
-
     if (showTimePicker) {
-        val timeParts = state.reminderTime.split(":")
-        val initialHour = timeParts.getOrNull(0)?.toIntOrNull() ?: 7
-        val initialMinute = timeParts.getOrNull(1)?.toIntOrNull() ?: 0
-        val timePickerState = rememberTimePickerState(
-            initialHour = initialHour,
-            initialMinute = initialMinute,
+        val parts = state.reminderTime.split(":")
+        val pickerState = rememberTimePickerState(
+            initialHour = parts.getOrNull(0)?.toIntOrNull() ?: 7,
+            initialMinute = parts.getOrNull(1)?.toIntOrNull() ?: 0,
             is24Hour = true
         )
-
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
             title = {
-                Text("Chọn giờ nhắc nhở", style = BetterMeTypography.Title.Medium.SemiBold)
+                Text(
+                    text = "Đặt giờ nhắc",
+                    style = BetterMeTypography.Title.Small.Bold,
+                    color = BetterMeColors.Text.TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
             },
-            text = { TimePicker(state = timePickerState) },
+            text = { TimePicker(state = pickerState) },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        val time = String.format("%02d:%02d", timePickerState.hour, timePickerState.minute)
-                        viewModel.processIntent(AddHabitIntent.InputReminderTime(time))
-                        showTimePicker = false
-                    }
-                ) {
-                    Text("Xác nhận", color = BetterMeColors.Primary.Primary)
-                }
+                TextButton(onClick = {
+                    val t = String.format("%02d:%02d", pickerState.hour, pickerState.minute)
+                    viewModel.processIntent(AddHabitIntent.InputReminderTime(t))
+                    showTimePicker = false
+                }) { Text("Lưu", color = BetterMeColors.Primary.Primary) }
             },
             dismissButton = {
                 TextButton(onClick = { showTimePicker = false }) {
                     Text("Hủy", color = BetterMeColors.Text.TextTertiary)
                 }
             },
-            containerColor = BetterMeColors.BackGround.BackgroundPrimary,
-            shape = RoundedCornerShape(20.dp)
+            containerColor = Color.White,
+            shape = RoundedCornerShape(BetterMeTokens.CardRadius.Hero)
         )
     }
+
+    // Derived UI values. `remember(keys)` keeps recomposition stable.
+    val targetDays = remember(state.startDate, state.endDate) {
+        val end = state.endDate ?: return@remember null
+        val days = ((end - state.startDate) / (24L * 60 * 60 * 1000)).toInt() + 1
+        days.takeIf { it > 0 }
+    }
+    val accent = remember(state.selectedCategoryId) {
+        state.selectedCategoryId?.let { paletteFor(it).accent }
+            ?: BetterMeColors.Primary.Primary
+    }
+    val canSubmit = !state.isLoading && state.title.isNotBlank()
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         containerColor = BetterMeColors.BackGround.BackgroundSecondary
-    ) { innerPadding ->
-        Column(
+    ) { inner ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .statusBarsPadding()
+                .padding(inner)
                 .background(BetterMeColors.BackGround.BackgroundSecondary)
         ) {
-            // ===== TOP BAR =====
-            BetterMeTopBar(
-                leadingIconRes = R.drawable.ic_arrow_left,
-                title = "Thêm thói quen",
-                onLeadingClick = onBackClick
-            )
-
-            // ===== FORM =====
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .statusBarsPadding()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .imePadding()
             ) {
+                TopBar(onBack = onBackClick)
 
-                // Nhóm thói quen
-                CategorySelector(
-                    categories = state.categories,
-                    selectedCategoryName = state.selectedCategoryName,
-                    isExpanded = state.showCategorySelector,
-                    onToggle = { viewModel.processIntent(AddHabitIntent.ToggleCategorySelector) },
-                    onSelect = { id, name ->
-                        viewModel.processIntent(AddHabitIntent.SelectCategory(id, name))
-                    },
-                    containerColor = Color(0xFFE6F3FF)
+                HeroHeader(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+
+                Spacer(Modifier.height(12.dp))
+
+                HabitPreviewCard(
+                    title = state.title,
+                    categoryName = state.selectedCategoryName,
+                    categoryIcon = state.categories
+                        .firstOrNull { it.id == state.selectedCategoryId }?.icon
+                        .orEmpty(),
+                    accent = accent,
+                    reminderTime = state.reminderTime,
+                    targetDays = targetDays,
+                    modifier = Modifier.padding(horizontal = 20.dp)
                 )
 
-                // Tên thói quen
-                HabitFormField(
-                    value = state.title,
-                    onValueChange = { viewModel.processIntent(AddHabitIntent.InputTitle(it)) },
-                    label = "Tên thói quen *",
-                    placeholder = "VD: Đi bộ 10.000 bước mỗi ngày",
-                    isError = state.titleError != null,
-                    errorText = state.titleError,
-                    containerColor = Color(0xFFEDEAF7)
-                )
+                Spacer(Modifier.height(18.dp))
 
-                // Mô tả
-                HabitFormField(
-                    value = state.description,
-                    onValueChange = { viewModel.processIntent(AddHabitIntent.InputDescription(it)) },
-                    label = "Mô tả",
-                    placeholder = "Mô tả chi tiết về thói quen",
-                    singleLine = false,
-                    minLines = 3,
-                    containerColor = Color(0xFFE7F1DE)
-                )
-
-                // Ngày bắt đầu
-                DateField(
-                    label = "Ngày bắt đầu",
-                    dateMillis = state.startDate,
-                    onClick = { showStartDatePicker = true },
-                    containerColor = Color(0xFFFDF3D2)
-                )
-
-                // Hạn hoàn thành
-                DateField(
-                    label = "Hạn hoàn thành",
-                    dateMillis = state.endDate,
-                    placeholder = "Chọn ngày kết thúc",
-                    onClick = { showEndDatePicker = true },
-                    containerColor = Color(0xFFFDF3D2)
-                )
-
-                // Thời gian nhắc nhở
-                TimeField(
-                    value = state.reminderTime,
-                    label = "Thời gian nhắc nhở",
-                    placeholder = "Chọn giờ nhắc",
-                    onClick = { showTimePicker = true },
-                    containerColor = Color(0xFFFBEED8)
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // ===== SUBMIT BUTTON =====
-                Button(
-                    onClick = { viewModel.processIntent(AddHabitIntent.Submit) },
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = BetterMeColors.Primary.Primary,
-                        disabledContainerColor = BetterMeColors.Primary.Primary.copy(alpha = 0.4f)
-                    ),
-                    enabled = !state.isLoading
+                        .padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    if (state.isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
+                    // ===== Name =====
+                    SectionCard(
+                        icon = "✍️",
+                        title = "Tên thói quen",
+                        helper = "Đặt tên cụ thể, dễ nhớ"
+                    ) {
+                        OutlinedTextField(
+                            value = state.title,
+                            onValueChange = {
+                                viewModel.processIntent(AddHabitIntent.InputTitle(it))
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(titleFocusRequester),
+                            placeholder = {
+                                Text(
+                                    text = "VD: Đi bộ 10.000 bước mỗi ngày",
+                                    style = BetterMeTypography.Body.Medium,
+                                    color = BetterMeColors.Text.TextTertiary
+                                )
+                            },
+                            singleLine = true,
+                            isError = state.titleError != null,
+                            shape = RoundedCornerShape(BetterMeTokens.CardRadius.Body),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = accent,
+                                unfocusedBorderColor = BetterMeColors.Border.BorderLight,
+                                errorBorderColor = BetterMeColors.Red,
+                                cursorColor = accent
+                            )
                         )
-                    } else {
-                        Text(
-                            text = "Thêm thói quen",
-                            style = BetterMeTypography.Title.Small.SemiBold,
-                            color = Color.White
+                        if (state.titleError != null) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = state.titleError!!,
+                                style = BetterMeTypography.Body.Small.Medium,
+                                color = BetterMeColors.Red
+                            )
+                        }
+                    }
+
+                    // ===== Description =====
+                    SectionCard(
+                        icon = "📝",
+                        title = "Mô tả",
+                        helper = "Tùy chọn — vì sao thói quen này quan trọng với bạn?"
+                    ) {
+                        OutlinedTextField(
+                            value = state.description,
+                            onValueChange = {
+                                viewModel.processIntent(AddHabitIntent.InputDescription(it))
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = {
+                                Text(
+                                    text = "VD: Cải thiện sức khoẻ tim mạch và năng lượng cả ngày.",
+                                    style = BetterMeTypography.Body.Medium,
+                                    color = BetterMeColors.Text.TextTertiary
+                                )
+                            },
+                            minLines = 3,
+                            maxLines = 5,
+                            shape = RoundedCornerShape(BetterMeTokens.CardRadius.Body),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = accent,
+                                unfocusedBorderColor = BetterMeColors.Border.BorderLight,
+                                cursorColor = accent
+                            )
                         )
                     }
+
+                    // ===== Category =====
+                    SectionCard(
+                        icon = "🗂️",
+                        title = "Nhóm thói quen",
+                        helper = "Mỗi nhóm có màu sắc và nhịp riêng"
+                    ) {
+                        CategoryChipRow(
+                            categories = state.categories,
+                            selectedCategoryId = state.selectedCategoryId,
+                            accent = accent,
+                            onSelect = { id, name ->
+                                viewModel.processIntent(AddHabitIntent.SelectCategory(id, name))
+                            }
+                        )
+                    }
+
+                    // ===== Schedule =====
+                    SectionCard(
+                        icon = "📅",
+                        title = "Lịch trình",
+                        helper = "Khoảng thời gian bạn cam kết"
+                    ) {
+                        ScheduleField(
+                            emoji = "🚀",
+                            label = "Ngày bắt đầu",
+                            value = formatDate(state.startDate),
+                            accent = accent,
+                            onClick = { showStartDatePicker = true }
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        ScheduleField(
+                            emoji = "🎯",
+                            label = "Ngày hoàn thành",
+                            value = state.endDate?.let { formatDate(it) }
+                                ?: "Chưa chọn ngày kết thúc",
+                            accent = accent,
+                            placeholderTone = state.endDate == null,
+                            onClick = { showEndDatePicker = true }
+                        )
+                    }
+
+                    // ===== Reminder =====
+                    SectionCard(
+                        icon = "⏰",
+                        title = "Nhắc nhở",
+                        helper = if (state.reminderTime.isBlank()) "Không nhắc"
+                        else "Mỗi ngày lúc ${state.reminderTime} — thông báo tự động"
+                    ) {
+                        ScheduleField(
+                            emoji = "🔔",
+                            label = "Giờ nhắc hằng ngày",
+                            value = state.reminderTime.ifBlank { "Bấm để chọn giờ" },
+                            accent = accent,
+                            placeholderTone = state.reminderTime.isBlank(),
+                            onClick = { showTimePicker = true }
+                        )
+                    }
+
+                    // Bottom-bar breathing room so the last card never sits flush against
+                    // the sticky CTA shadow.
+                    Spacer(Modifier.height(100.dp))
                 }
-
-                // Bottom spacing
-                Spacer(modifier = Modifier.height(80.dp))
             }
-        }
-    }
-}
 
-// ============================================================
-// DATE FIELD — Composable hiển thị ngày đã chọn
-// ============================================================
-@Composable
-private fun DateField(
-    label: String,
-    dateMillis: Long?,
-    placeholder: String = "",
-    onClick: () -> Unit,
-    containerColor: Color = BetterMeColors.BackGround.BackgroundPrimary
-) {
-    val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
-    val displayText = if (dateMillis != null) {
-        dateFormat.format(Date(dateMillis))
-    } else {
-        placeholder
-    }
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = label,
-            style = BetterMeTypography.Body.Small.Medium,
-            color = BetterMeColors.Text.TextSecondary,
-            modifier = Modifier.padding(bottom = 6.dp)
-        )
-        OutlinedCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onClick() },
-            shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, BetterMeColors.Border.BorderLight),
-            colors = CardDefaults.outlinedCardColors(
-                containerColor = containerColor
-            )
-        ) {
-            Row(
+            // ===== Sticky CTA =====
+            StickyCta(
+                accent = accent,
+                enabled = canSubmit,
+                isLoading = state.isLoading,
+                onClick = { viewModel.processIntent(AddHabitIntent.Submit) },
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "📅",
-                    modifier = Modifier.padding(end = 10.dp)
-                )
-                Text(
-                    text = displayText,
-                    style = BetterMeTypography.Body.Medium,
-                    color = if (dateMillis != null) BetterMeColors.Text.TextPrimary
-                    else BetterMeColors.Text.TextTertiary,
-                    modifier = Modifier.weight(1f)
-                )
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = BetterMeColors.Text.TextTertiary
-                )
-            }
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(20.dp)
+            )
         }
     }
 }
 
+// =====================================================================
+// SUB-COMPOSABLES
+// =====================================================================
+
 @Composable
-private fun TimeField(
-    value: String,
-    label: String,
-    placeholder: String,
-    onClick: () -> Unit,
-    containerColor: Color
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = label,
-            style = BetterMeTypography.Body.Small.Medium,
-            color = BetterMeColors.Text.TextSecondary,
-            modifier = Modifier.padding(bottom = 6.dp)
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(containerColor)
-                .border(1.dp, BetterMeColors.Border.BorderLight, RoundedCornerShape(14.dp))
-                .clickable { onClick() }
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text = "⏰", modifier = Modifier.padding(end = 10.dp))
-            Text(
-                text = value.ifBlank { placeholder },
-                style = BetterMeTypography.Body.Medium,
-                color = if (value.isBlank()) BetterMeColors.Text.TextTertiary else BetterMeColors.Text.TextPrimary,
-                modifier = Modifier.weight(1f)
-            )
+private fun TopBar(onBack: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
             Icon(
-                imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = null,
-                tint = BetterMeColors.Text.TextTertiary
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Quay lại",
+                tint = BetterMeColors.Text.TextPrimary
+            )
+        }
+        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.size(48.dp))
+    }
+}
+
+@Composable
+private fun HeroHeader(modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(
+            text = "Tạo thói quen mới",
+            style = BetterMeTypography.Headline.Small.Bold,
+            color = BetterMeColors.Text.TextPrimary,
+            fontWeight = FontWeight.Bold,
+            fontSize = 28.sp
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Một thói quen nhỏ hôm nay là phiên bản tốt hơn của bạn ngày mai.",
+            style = BetterMeTypography.Body.Medium,
+            color = BetterMeColors.Text.TextTertiary
+        )
+    }
+}
+
+@Composable
+private fun ScheduleField(
+    emoji: String,
+    label: String,
+    value: String,
+    accent: Color,
+    placeholderTone: Boolean = false,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Body))
+            .background(BetterMeColors.BackGround.BackgroundSecondary)
+            .border(
+                width = 1.dp,
+                color = BetterMeColors.Border.BorderLight,
+                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Body)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = emoji, fontSize = 14.sp)
+        }
+        Spacer(Modifier.size(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = BetterMeTypography.Body.Small.Medium,
+                color = BetterMeColors.Text.TextTertiary
+            )
+            Text(
+                text = value,
+                style = BetterMeTypography.Body.Medium,
+                color = if (placeholderTone) BetterMeColors.Text.TextTertiary
+                else BetterMeColors.Text.TextPrimary,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        Icon(
+            imageVector = Icons.Default.KeyboardArrowDown,
+            contentDescription = null,
+            tint = BetterMeColors.Text.TextTertiary
+        )
+    }
+}
+
+@Composable
+private fun StickyCta(
+    accent: Color,
+    enabled: Boolean,
+    isLoading: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val containerColor = if (enabled) accent else accent.copy(alpha = 0.45f)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .shadow(
+                elevation = 10.dp,
+                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Body),
+                ambientColor = accent.copy(alpha = 0.32f),
+                spotColor = accent.copy(alpha = 0.40f)
+            )
+            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Body))
+            .background(
+                Brush.horizontalGradient(
+                    colors = listOf(
+                        containerColor,
+                        containerColor.copy(alpha = 0.85f)
+                    )
+                )
+            )
+            .clickable(enabled = enabled) { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = Color.White,
+                strokeWidth = 2.dp
+            )
+        } else {
+            Text(
+                text = "🚀  Bắt đầu hành trình",
+                style = BetterMeTypography.Title.Small.Bold,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
             )
         }
     }
+}
+
+private fun formatDate(ms: Long): String {
+    val sdf = SimpleDateFormat("dd/MM/yyyy", Locale("vi"))
+    return sdf.format(Date(ms))
 }
