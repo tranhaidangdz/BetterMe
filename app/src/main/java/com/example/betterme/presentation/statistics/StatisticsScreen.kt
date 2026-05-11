@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.example.betterme.presentation.statistics.components.*
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
+import com.example.betterme.utils.DateUtils
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -26,13 +27,41 @@ fun StatisticsScreen(
     viewModel: StatisticsViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
+    var showRangePicker by remember { mutableStateOf(false) }
 
     StatisticsContent(
         state = state,
-        onTabSelected = { viewModel.processIntent(StatisticsIntent.SelectTab(it)) },
+        onTabSelected = { tab ->
+            // Tapping "Tùy chọn" in the tab row opens the picker instead of dropping
+            // the user on an empty CUSTOM tab with no range set. Every other tab
+            // dispatches as normal.
+            if (tab == StatisticsTab.CUSTOM) showRangePicker = true
+            else viewModel.processIntent(StatisticsIntent.SelectTab(tab))
+        },
         onToggleSection = { viewModel.processIntent(StatisticsIntent.ToggleSection(it)) },
-        onBackClick = onBackClick
+        onBackClick = onBackClick,
+        onOpenRangePicker = { showRangePicker = true },
+        onResetCustomRange = {
+            viewModel.processIntent(StatisticsIntent.SelectTab(StatisticsTab.WEEKLY))
+        }
     )
+
+    if (showRangePicker) {
+        DateRangePickerSheet(
+            initialStart = state.customRangeStart ?: state.effectiveRangeStart.takeIf { it > 0 },
+            initialEnd = state.customRangeEnd ?: state.effectiveRangeEnd.takeIf { it > 0 },
+            onDismiss = { showRangePicker = false },
+            onConfirm = { startMs, endMs ->
+                viewModel.processIntent(
+                    StatisticsIntent.SelectCustomRange(
+                        start = DateUtils.startOfDay(startMs),
+                        end = DateUtils.startOfDay(endMs)
+                    )
+                )
+                showRangePicker = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -40,7 +69,9 @@ fun StatisticsContent(
     state: StatisticsState,
     onTabSelected: (StatisticsTab) -> Unit = {},
     onToggleSection: (ExpandedSection) -> Unit = {},
-    onBackClick: () -> Unit = {}
+    onBackClick: () -> Unit = {},
+    onOpenRangePicker: () -> Unit = {},
+    onResetCustomRange: () -> Unit = {}
 ) {
     var showContent by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { showContent = true }
@@ -64,6 +95,41 @@ fun StatisticsContent(
                     onTabSelected = onTabSelected,
                     onBackClick = onBackClick
                 )
+            }
+
+            // ===== RANGE SUMMARY CHIP =====
+            // Shows the effective date range under the tab row. Tap to re-pick a range,
+            // tap "Đặt lại" while in CUSTOM mode to revert to the prior tab default.
+            item(key = "range_chip") {
+                if (state.effectiveRangeStart > 0 && state.effectiveRangeEnd > 0) {
+                    RangeSummaryChip(
+                        selectedTab = state.selectedTab,
+                        effectiveStart = state.effectiveRangeStart,
+                        effectiveEnd = state.effectiveRangeEnd,
+                        onClick = onOpenRangePicker,
+                        onReset = onResetCustomRange
+                    )
+                }
+            }
+
+            // ===== SMART INSIGHTS =====
+            // Derived motivational copy. Hides itself entirely when the analytics
+            // inputs aren't strong enough to produce signal lines.
+            item(key = "smart_insights") {
+                AnimatedVisibility(
+                    visible = showContent,
+                    enter = fadeIn(tween(450, delayMillis = 50)) + slideInVertically(
+                        initialOffsetY = { it / 4 },
+                        animationSpec = tween(450, delayMillis = 50)
+                    )
+                ) {
+                    SmartInsightsCard(
+                        overview = state.overview,
+                        streaks = state.streakAnalytics,
+                        insights = state.additionalInsights,
+                        challengeStats = state.challengeStats
+                    )
+                }
             }
 
             // ===== OVERVIEW SECTION =====
