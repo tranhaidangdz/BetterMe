@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -39,7 +40,16 @@ fun HomeProgressCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            // Slight elevation so the hero progress card sits visibly above the rest
+            // of the page surface, then a brand-tinted shadow to keep the lift soft
+            // rather than hard.
+            .shadow(
+                elevation = 6.dp,
+                shape = RoundedCornerShape(22.dp),
+                ambientColor = Color(0x33000000),
+                spotColor = Color(0x33000000)
+            )
+            .clip(RoundedCornerShape(22.dp))
             .background(
                 Brush.horizontalGradient(BetterMeColors.Gradient.HomeCard)
             )
