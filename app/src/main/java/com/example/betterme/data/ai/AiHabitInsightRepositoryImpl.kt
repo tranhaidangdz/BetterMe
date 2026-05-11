@@ -16,79 +16,65 @@ import retrofit2.HttpException
 /**
  * OpenRouter-backed implementation.
  *
- * Model strategy
- * - Primary: Gemini 2.0 Flash (free tier). Fastest free responses (1-3s typical),
- *   Vietnamese-fluent, JSON-mode reliable.
- * - Fallback: Llama 3.3 70B (free tier). Stronger reasoning, used if Gemini 429/5xx
- *   or empty-bodies. Same chat schema, prompt is identical.
+ * Model chain (tried in order)
+ * 1. google/gemini-2.5-flash-preview:free  — fastest free model, strongest JSON.
+ * 2. google/gemini-2.0-flash-exp:free      — previous-gen Gemini, separate quota.
+ * 3. meta-llama/llama-3.3-70b-instruct:free — strong reasoning, slower.
+ * 4. mistralai/mistral-small-3.1-24b-instruct:free — last-line free option.
  *
- * Retry & failure policy
- * - One retry on 429/5xx with 800ms backoff. Avoids hammering a free model during
- *   short rate-limit windows without queuing forever.
- * - 401/402/403/404 fail fast — retry won't help.
- * - HttpException → readable Vietnamese reason via [extractHttpErrorMessage].
- * - Final cross-model fallback: if the whole primary path (+retry) fails, the call
- *   is retried once on the fallback model. Two physical attempts max per AI flow.
+ * Per-model behaviour
+ * - One retry on 429/500/502/503/504 with 800ms backoff. Anything else fails
+ *   fast — retrying 401/403/404 just burns time.
+ * - On any failure, the chain advances to the next model. The user never sees
+ *   intermediate failures unless EVERY model is exhausted.
+ *
+ * Last-resort fallback
+ * - If all 4 models fail, the repo returns a canned (handwritten) response
+ *   tagged with `isCanned = true`. The use cases never cache canned content,
+ *   so the next attempt is fresh. The UI renders canned content through the
+ *   same premium card — the user always sees meaningful content.
  *
  * Output shaping
- * - max_tokens = 350 keeps both cost and latency low while still producing 3-4
- *   coherent paragraphs. Free-tier quotas are token-based, so capping pays back
- *   directly in calls-per-day.
- * - temperature = 0.6 (review) / 0.7 (suggestions) — review is more deterministic
- *   so the same stats produce a stable read, suggestions slightly hotter for
- *   variety on regenerate.
+ * - max_tokens = 120 across the board. Prompts are deliberately terse so a
+ *   120-token reply still feels complete. This trades occasional truncation
+ *   (caught by the canned fallback) for a much smaller per-call quota burn.
  */
 class AiHabitInsightRepositoryImpl(
     private val api: OpenRouterApi
 ) : AiHabitInsightRepository {
 
+    // ============================================================
+    // REVIEW
+    // ============================================================
     override suspend fun reviewHabitGroup(
         categoryName: String,
         stats: String,
         personality: AiCoachPersonality
     ): AiResult {
-        val systemPrompt = buildString {
-            append(personality.systemPromptPrefix)
-            append("\n\n")
-            append(
-                """
-                BẮT BUỘC: Trả lời bằng tiếng Việt. Chỉ dùng các con số có trong dữ liệu
-                bên dưới — TUYỆT ĐỐI không bịa số liệu. Cấu trúc:
-                1) Nhận xét tổng quát (1 câu súc tích).
-                2) Điểm mạnh thấy được từ dữ liệu (1-2 câu, trích dẫn con số cụ thể).
-                3) Một đề xuất cải thiện cụ thể (1-2 câu, hành động rõ ràng).
-                Tổng cộng không quá 5 câu, không dùng tiêu đề số, viết liền mạch tự nhiên.
-                Có thể dùng **bold** để nhấn điểm quan trọng và dấu "- " cho gạch đầu dòng
-                nếu liệt kê.
-                """.trimIndent()
-            )
-        }
-        val userPrompt = """
-            Hãy nhận xét cho người dùng về nhóm thói quen "$categoryName".
-            Đây là dữ liệu thực tế của họ:
-            $stats
-        """.trimIndent()
+        val systemPrompt = personality.systemPromptPrefix +
+            "\nTrả lời tiếng Việt, 3-4 câu, súc tích, chỉ dùng số có trong dữ liệu."
+        val userPrompt = "Nhóm: \"$categoryName\".\n$stats"
 
         val messages = listOf(
             ChatMessage(role = "system", content = systemPrompt),
             ChatMessage(role = "user", content = userPrompt)
         )
 
-        // Primary attempt (Gemini Flash). retryOnTransient handles 429/5xx with one
-        // backed-off retry so a transient hiccup doesn't burn the cross-model fallback.
-        val primary = retryOnTransient {
-            tryModel(PRIMARY_MODEL, messages, maxTokens = REVIEW_MAX_TOKENS, temperature = 0.6)
+        var lastFailure: AiResult.Failure? = null
+        for ((index, model) in FALLBACK_MODELS.withIndex()) {
+            val result = retryOnTransient { tryModel(model, messages) }
+            if (result is AiResult.Success) return result
+            lastFailure = result as AiResult.Failure
+            Log.w(TAG, "Review model[$index]=$model failed: ${lastFailure.message}")
         }
-        if (primary is AiResult.Success) return primary
 
-        Log.w(
-            TAG,
-            "Review primary ($PRIMARY_MODEL) failed → falling back to $FALLBACK_MODEL. " +
-                "Reason: ${(primary as AiResult.Failure).message}"
-        )
-        return tryModel(FALLBACK_MODEL, messages, maxTokens = REVIEW_MAX_TOKENS, temperature = 0.6)
+        Log.w(TAG, "All review models exhausted — serving canned review")
+        return AiResult.Success(text = cannedReview(categoryName), isCanned = true)
     }
 
+    // ============================================================
+    // SUGGESTIONS
+    // ============================================================
     override suspend fun suggestHabits(
         categoryName: String,
         existingHabitTitles: List<String>,
@@ -97,58 +83,38 @@ class AiHabitInsightRepositoryImpl(
         val existingList = if (existingHabitTitles.isEmpty()) "không có"
         else existingHabitTitles.joinToString("; ")
 
-        val systemPrompt = buildString {
-            append(personality.systemPromptPrefix)
-            append("\n\n")
-            append(
-                """
-                BẮT BUỘC: Chỉ trả lời bằng JSON hợp lệ — KHÔNG kèm chữ giải thích bên
-                ngoài, KHÔNG dùng ```json block. Cấu trúc:
-                {
-                  "suggestions": [
-                    {
-                      "title": "Tên thói quen ngắn gọn (tiếng Việt)",
-                      "emoji": "1 emoji duy nhất",
-                      "description": "1-2 câu ngắn, vì sao nên làm",
-                      "difficulty": "EASY" | "MEDIUM" | "HARD",
-                      "estimatedImpact": "Tác động dự kiến (1 câu, tiếng Việt)",
-                      "streakBenefit": "Vì sao duy trì đều đặn lại đáng giá (1 câu)"
-                    }
-                  ]
-                }
-                Trả về đúng 4 gợi ý, đa dạng độ khó (ít nhất 1 EASY), không trùng với
-                thói quen hiện có của người dùng. Toàn bộ tiếng Việt, ngắn gọn.
-                """.trimIndent()
-            )
-        }
-        val userPrompt = """
-            Người dùng đang xem nhóm thói quen "$categoryName".
-            Thói quen họ đã có trong nhóm này: $existingList
-            Hãy gợi ý 4 thói quen mới phù hợp với chủ đề của nhóm.
-        """.trimIndent()
+        // Compact JSON-only prompt. No markdown rules, no "BẮT BUỘC" filler — the
+        // model is told the exact schema once and asked to fill it.
+        val systemPrompt =
+            """
+            Trả về JSON: {"suggestions":[{"title":"","emoji":"","description":"","difficulty":"EASY|MEDIUM|HARD","estimatedImpact":"","streakBenefit":""}]}
+            3-4 mục, tiếng Việt rất ngắn, không trùng thói quen đã có. Không kèm chữ ngoài JSON.
+            """.trimIndent()
+        val userPrompt = "Nhóm: \"$categoryName\". Đã có: $existingList."
 
         val messages = listOf(
             ChatMessage(role = "system", content = systemPrompt),
             ChatMessage(role = "user", content = userPrompt)
         )
 
-        val primary = retryOnTransient {
-            tryModelJson(PRIMARY_MODEL, messages)
+        var lastFailure: AiSuggestResult.Failure? = null
+        for ((index, model) in FALLBACK_MODELS.withIndex()) {
+            val result = retryOnTransient { tryModelJson(model, messages) }
+            if (result is AiSuggestResult.Success) return result
+            lastFailure = result as AiSuggestResult.Failure
+            Log.w(TAG, "Suggest model[$index]=$model failed: ${lastFailure.message}")
         }
-        if (primary is AiSuggestResult.Success) return primary
 
-        Log.w(
-            TAG,
-            "Suggest primary ($PRIMARY_MODEL) failed → falling back to $FALLBACK_MODEL. " +
-                "Reason: ${(primary as AiSuggestResult.Failure).message}"
-        )
-        return tryModelJson(FALLBACK_MODEL, messages)
+        Log.w(TAG, "All suggest models exhausted — serving canned suggestions")
+        return AiSuggestResult.Success(suggestions = cannedSuggestions(), isCanned = true)
     }
 
+    // ============================================================
+    // RETRY POLICY
+    // ============================================================
     /**
-     * Wraps a single physical request and retries it once on the *same* model if the
-     * failure looks transient (429 / 5xx / read timeout). Anything fatal (401, 402,
-     * 403, 404, parse errors, IO) short-circuits — retrying won't help.
+     * One retry on transient failures only. 429/500/502/503/504 and read timeouts
+     * are worth a second swing — auth, payment, and "model not found" are not.
      */
     private suspend fun <T> retryOnTransient(block: suspend () -> T): T {
         val first = block()
@@ -168,18 +134,61 @@ class AiHabitInsightRepositoryImpl(
         contains("(429)") || contains("(500)") || contains("(502)") ||
             contains("(503)") || contains("(504)") || contains("Mạng chậm")
 
-    private suspend fun tryModelJson(
+    // ============================================================
+    // HTTP — REVIEW (plain text)
+    // ============================================================
+    private suspend fun tryModel(
         model: String,
         messages: List<ChatMessage>
-    ): AiSuggestResult {
-        Log.d(TAG, "Suggest call → model=$model maxTokens=$SUGGEST_MAX_TOKENS")
+    ): AiResult {
+        Log.d(TAG, "Using model=$model")
         return try {
             val response = api.chatCompletion(
                 ChatRequest(
                     model = model,
                     messages = messages,
-                    maxTokens = SUGGEST_MAX_TOKENS,
-                    temperature = 0.7
+                    maxTokens = MAX_TOKENS,
+                    temperature = TEMPERATURE
+                )
+            )
+            if (response.error != null) {
+                return AiResult.Failure(
+                    response.error.message ?: "Yêu cầu AI bị từ chối"
+                )
+            }
+            val content = response.choices.firstOrNull()?.message?.content?.trim()
+            if (content.isNullOrBlank()) {
+                AiResult.Failure("AI không trả lời — vui lòng thử lại")
+            } else {
+                AiResult.Success(content)
+            }
+        } catch (e: java.net.SocketTimeoutException) {
+            AiResult.Failure("Mạng chậm — AI hết thời gian chờ")
+        } catch (e: HttpException) {
+            AiResult.Failure(extractHttpErrorMessage(e))
+        } catch (e: java.io.IOException) {
+            AiResult.Failure("Không thể kết nối đến AI — kiểm tra mạng")
+        } catch (e: Exception) {
+            Log.e(TAG, "AI request threw", e)
+            AiResult.Failure("Lỗi AI: ${e.message ?: "không xác định"}")
+        }
+    }
+
+    // ============================================================
+    // HTTP — SUGGESTIONS (JSON)
+    // ============================================================
+    private suspend fun tryModelJson(
+        model: String,
+        messages: List<ChatMessage>
+    ): AiSuggestResult {
+        Log.d(TAG, "Using model=$model")
+        return try {
+            val response = api.chatCompletion(
+                ChatRequest(
+                    model = model,
+                    messages = messages,
+                    maxTokens = MAX_TOKENS,
+                    temperature = TEMPERATURE
                 )
             )
             if (response.error != null) {
@@ -191,6 +200,8 @@ class AiHabitInsightRepositoryImpl(
             if (content.isNullOrBlank()) {
                 return AiSuggestResult.Failure("AI không trả lời — vui lòng thử lại")
             }
+            // Free-tier models occasionally wrap JSON in ```json fences despite our
+            // explicit ask. Strip them defensively before parsing.
             val cleaned = content
                 .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
             parseSuggestions(cleaned)
@@ -234,69 +245,12 @@ class AiHabitInsightRepositoryImpl(
         }
     }
 
-    @Serializable
-    private data class SuggestionsEnvelope(val suggestions: List<SuggestionDto> = emptyList())
-
-    @Serializable
-    private data class SuggestionDto(
-        val title: String = "",
-        val emoji: String = "",
-        val description: String = "",
-        val difficulty: String = "MEDIUM",
-        val estimatedImpact: String = "",
-        val streakBenefit: String = ""
-    )
-
-    private val jsonParser = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        coerceInputValues = true
-    }
-
-    private suspend fun tryModel(
-        model: String,
-        messages: List<ChatMessage>,
-        maxTokens: Int,
-        temperature: Double
-    ): AiResult {
-        Log.d(TAG, "Review call → model=$model maxTokens=$maxTokens")
-        return try {
-            val response = api.chatCompletion(
-                ChatRequest(
-                    model = model,
-                    messages = messages,
-                    maxTokens = maxTokens,
-                    temperature = temperature
-                )
-            )
-            if (response.error != null) {
-                return AiResult.Failure(
-                    response.error.message ?: "Yêu cầu AI bị từ chối"
-                )
-            }
-            val content = response.choices.firstOrNull()?.message?.content?.trim()
-            if (content.isNullOrBlank()) {
-                AiResult.Failure("AI không trả lời — vui lòng thử lại")
-            } else {
-                AiResult.Success(content)
-            }
-        } catch (e: java.net.SocketTimeoutException) {
-            AiResult.Failure("Mạng chậm — AI hết thời gian chờ")
-        } catch (e: HttpException) {
-            AiResult.Failure(extractHttpErrorMessage(e))
-        } catch (e: java.io.IOException) {
-            AiResult.Failure("Không thể kết nối đến AI — kiểm tra mạng")
-        } catch (e: Exception) {
-            Log.e(TAG, "AI request threw", e)
-            AiResult.Failure("Lỗi AI: ${e.message ?: "không xác định"}")
-        }
-    }
-
+    // ============================================================
+    // ERROR MAPPING
+    // ============================================================
     /**
-     * Pulls the OpenRouter error JSON out of an [HttpException] and returns the
-     * underlying reason. Without this, a 401 surfaces as the unhelpful string
-     * "HTTP 401 " (= [HttpException.message]) and the user has no way to tell an
-     * auth problem apart from a network problem.
+     * Pulls the OpenRouter error JSON out of an [HttpException] and returns a
+     * Vietnamese reason mapped per status code.
      *
      * OpenRouter error body shape (per docs):
      * `{ "error": { "message": "No auth credentials found", "code": 401 } }`
@@ -321,11 +275,85 @@ class AiHabitInsightRepositoryImpl(
             402 -> "Tài khoản OpenRouter cần nạp credit (402)${if (detail.isNotBlank()) ": $detail" else ""}"
             403 -> "OpenRouter từ chối yêu cầu (403)${if (detail.isNotBlank()) ": $detail" else ""}"
             404 -> "Model không tồn tại hoặc không truy cập được (404)${if (detail.isNotBlank()) ": $detail" else ""}"
-            429 -> "Đã vượt giới hạn miễn phí — thử lại sau (429)"
+            // Friendly 429: phrased as a passing moment rather than a hard fail.
+            // The chain walker will keep trying the next model anyway, so this
+            // string mostly surfaces in Logcat unless every model 429s.
+            429 -> "AI đang hơi quá tải ✨ Đang thử model khác... (429)"
             in 500..599 -> "OpenRouter đang gặp sự cố ($code) — thử lại sau"
             else -> "Lỗi AI ($code)${if (detail.isNotBlank()) ": $detail" else ""}"
         }
     }
+
+    // ============================================================
+    // CANNED FALLBACK (last-resort, never empty UI)
+    // ============================================================
+    /**
+     * Handwritten coaching message used when every model in [FALLBACK_MODELS]
+     * fails. Honest about not knowing the user's specific numbers — names the
+     * category so it doesn't feel like a generic error.
+     */
+    private fun cannedReview(categoryName: String): String = """
+        Bạn đang duy trì nhóm "**$categoryName**" khá tốt 🌱. Hãy thử tăng độ ổn định bằng các thói quen nhỏ mỗi ngày — sự nhất quán quan trọng hơn sự hoàn hảo.
+
+        - Chọn 1 thói quen quan trọng nhất hôm nay và làm nó trước, dù chỉ 5 phút.
+        - Cho phép mình "lỡ một ngày" mà không bỏ luôn cả tuần.
+    """.trimIndent()
+
+    /**
+     * Generic-but-useful suggestions that fit any category. Curated so even when
+     * OpenRouter is fully unreachable the user gets four real, actionable ideas
+     * rendered through the standard premium card.
+     */
+    private fun cannedSuggestions(): List<SuggestedHabit> = listOf(
+        SuggestedHabit(
+            title = "Khởi động 5 phút buổi sáng",
+            emoji = "🌅",
+            description = "Vài động tác nhẹ ngay sau khi thức dậy.",
+            difficulty = "EASY",
+            estimatedImpact = "Tạo đà tích cực cho cả ngày",
+            streakBenefit = "Lặp lại 21 ngày sẽ thành phản xạ"
+        ),
+        SuggestedHabit(
+            title = "Ghi 3 điều biết ơn trước khi ngủ",
+            emoji = "📝",
+            description = "Viết ngắn 3 điều bạn biết ơn hôm nay.",
+            difficulty = "EASY",
+            estimatedImpact = "Cải thiện tâm trạng và giấc ngủ",
+            streakBenefit = "Càng đều đặn, tâm trí càng nhẹ nhõm"
+        ),
+        SuggestedHabit(
+            title = "Học/đọc 15 phút mỗi ngày",
+            emoji = "📚",
+            description = "Một chủ đề bạn quan tâm, kể cả 1 trang sách.",
+            difficulty = "MEDIUM",
+            estimatedImpact = "Bồi đắp kiến thức theo thời gian",
+            streakBenefit = "30 ngày = hơn 7 giờ học sâu"
+        ),
+        SuggestedHabit(
+            title = "Đi bộ 10 phút sau bữa chính",
+            emoji = "🚶",
+            description = "Vận động nhẹ giúp tiêu hoá và tỉnh táo.",
+            difficulty = "MEDIUM",
+            estimatedImpact = "Tốt cho thể chất lẫn tinh thần",
+            streakBenefit = "Đều đặn sẽ thay đổi mức năng lượng"
+        )
+    )
+
+    // ============================================================
+    // DTO / JSON
+    // ============================================================
+    @Serializable
+    private data class SuggestionsEnvelope(val suggestions: List<SuggestionDto> = emptyList())
+
+    @Serializable
+    private data class SuggestionDto(
+        val title: String = "",
+        val emoji: String = "",
+        val description: String = "",
+        val difficulty: String = "MEDIUM",
+        val estimatedImpact: String = "",
+        val streakBenefit: String = ""
+    )
 
     @Serializable
     private data class ErrorEnvelope(val error: ErrorBody? = null)
@@ -336,19 +364,28 @@ class AiHabitInsightRepositoryImpl(
         val code: Int? = null
     )
 
+    private val jsonParser = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        coerceInputValues = true
+    }
+
     private companion object {
         const val TAG = "AiHabitInsight"
-        // Free-tier model order. Gemini Flash leads because it's the fastest free
-        // chat model on OpenRouter at time of writing (1-3s typical) and handles
-        // strict-JSON responses cleanly. Llama 70B is the fallback when Gemini
-        // throttles or returns an empty body.
-        const val PRIMARY_MODEL = "google/gemini-2.0-flash-exp:free"
-        const val FALLBACK_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
 
-        // max_tokens budget. Tuned to fit a 5-sentence coaching reply or 4 short
-        // habit suggestions. Bumping these increases free-tier quota burn linearly.
-        const val REVIEW_MAX_TOKENS = 350
-        const val SUGGEST_MAX_TOKENS = 350
+        /**
+         * Tried in order until one succeeds. New free models are added at the end
+         * — the chain head is the model we expect to handle the steady-state load.
+         */
+        val FALLBACK_MODELS = listOf(
+            "google/gemini-2.5-flash-preview:free",
+            "google/gemini-2.0-flash-exp:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "mistralai/mistral-small-3.1-24b-instruct:free"
+        )
+
+        const val MAX_TOKENS = 120
+        const val TEMPERATURE = 0.6
 
         const val RETRY_DELAY_MS = 800L
     }

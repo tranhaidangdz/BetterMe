@@ -110,14 +110,18 @@ class GenerateHabitGroupReviewUseCase(
             personality = personality
         )
 
-        // Network call succeeded → persist for the next 12h.
+        // Real model success → persist for the next 12h.
+        // Canned success (all models failed) → DO NOT cache. Next visit might have
+        // working connectivity; we don't want canned content to occupy the cache.
         if (result is AiResult.Success) {
-            cache.save(categoryId, TYPE_REVIEW, result.text)
+            if (!result.isCanned) {
+                cache.save(categoryId, TYPE_REVIEW, result.text)
+            }
             return result
         }
 
-        // Network call failed → if we have *any* prior entry (even past TTL),
-        // surface it instead of leaving the user with a blank error card.
+        // Network call failed entirely → if we have *any* prior entry (even past
+        // TTL), surface it instead of leaving the user with a blank error card.
         cache.getAny(categoryId, TYPE_REVIEW)?.let { stale ->
             return AiResult.Success(stale.content)
         }

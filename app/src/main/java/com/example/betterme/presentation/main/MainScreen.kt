@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.example.betterme.presentation.addhabit.AddHabitScreen
 import com.example.betterme.presentation.categorydetail.CategoryDetailEvent
 import com.example.betterme.presentation.categorydetail.CategoryDetailIntent

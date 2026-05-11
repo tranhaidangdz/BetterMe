@@ -17,7 +17,13 @@ package com.example.betterme.domain.ai
 interface AiHabitInsightRepository {
 
     sealed class AiResult {
-        data class Success(val text: String) : AiResult()
+        /**
+         * @param isCanned true when the response is a local "hard fallback" served
+         *                 because every OpenRouter model in the chain failed. Use
+         *                 cases must NOT persist canned content into the 12h cache —
+         *                 next visit might have working connectivity.
+         */
+        data class Success(val text: String, val isCanned: Boolean = false) : AiResult()
         data class Failure(val message: String) : AiResult()
     }
 
@@ -50,7 +56,11 @@ interface AiHabitInsightRepository {
     ): AiSuggestResult
 
     sealed class AiSuggestResult {
-        data class Success(val suggestions: List<SuggestedHabit>) : AiSuggestResult()
+        /** [isCanned] semantics match [AiResult.Success.isCanned]. */
+        data class Success(
+            val suggestions: List<SuggestedHabit>,
+            val isCanned: Boolean = false
+        ) : AiSuggestResult()
         data class Failure(val message: String) : AiSuggestResult()
     }
 }

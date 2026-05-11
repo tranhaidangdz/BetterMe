@@ -59,12 +59,18 @@ class SuggestHabitsForCategoryUseCase(
             personality = personality
         )
 
+        // Real model success → persist for the next 12h.
+        // Canned success (all models failed) → DO NOT cache. Canned suggestions
+        // are generic; we don't want them to sit in cache for 12h once the
+        // network is back.
         if (result is AiSuggestResult.Success) {
-            cache.save(categoryId, TYPE_SUGGESTIONS, encode(result.suggestions))
+            if (!result.isCanned) {
+                cache.save(categoryId, TYPE_SUGGESTIONS, encode(result.suggestions))
+            }
             return result
         }
 
-        // Network failed → fall back to whatever we have, fresh or stale.
+        // Network failed entirely → fall back to whatever we have, fresh or stale.
         cache.getAny(categoryId, TYPE_SUGGESTIONS)?.let { stale ->
             decode(stale.content)?.let { return AiSuggestResult.Success(it) }
         }
