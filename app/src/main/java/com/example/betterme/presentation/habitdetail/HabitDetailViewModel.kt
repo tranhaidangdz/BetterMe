@@ -9,6 +9,7 @@ import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitLogRepository
 import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.domain.repository.ImageUploadRepository
+import com.example.betterme.domain.usecase.habit.CancelHabitReminderUseCase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -20,7 +21,8 @@ class HabitDetailViewModel(
     private val habitRepository: HabitRepository,
     private val habitLogRepository: HabitLogRepository,
     private val categoryRepository: CategoryRepository,
-    private val imageUploadRepository: ImageUploadRepository
+    private val imageUploadRepository: ImageUploadRepository,
+    private val cancelHabitReminder: CancelHabitReminderUseCase
 ) : BaseMviViewModel<HabitDetailIntent, HabitDetailState, HabitDetailEvent>() {
 
     override fun initState(): HabitDetailState = HabitDetailState()
@@ -99,6 +101,10 @@ class HabitDetailViewModel(
                     Int.MAX_VALUE
                 }
                 val isJourneyComplete = doneLogs.size >= plannedDurationDays
+                // Journey just hit 100% → cancel the pending alarm so the user
+                // never gets a stale "time to check-in" notification for a habit
+                // they can no longer check into. Idempotent if already cancelled.
+                if (isJourneyComplete) cancelHabitReminder(habitId)
                 val totalDays = if (habit.end_date != null) plannedDurationDays
                     else ((today - habit.start_date) / DAY_MS).toInt().coerceAtLeast(1)
                 val completionRate = if (totalDays > 0)

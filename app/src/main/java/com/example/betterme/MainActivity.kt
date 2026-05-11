@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.example.betterme.data.receiver.HabitReminderReceiver
 import com.example.betterme.data.worker.ChallengeReminderWorker
 import com.example.betterme.navigation.NavRoutes
 import com.example.betterme.utils.DeepLinkBus
@@ -45,6 +46,13 @@ class MainActivity : ComponentActivity() {
         if (challengeId > 0) {
             deepLinkBus.publish(DeepLinkBus.Event.OpenChallengePreview(challengeId))
             intent.removeExtra(ChallengeReminderWorker.EXTRA_OPEN_CHALLENGE_ID)
+            return
+        }
+        // Habit reminder notification tap → open Habit Detail.
+        val habitId = intent.getIntExtra(HabitReminderReceiver.EXTRA_OPEN_HABIT_ID, -1)
+        if (habitId > 0) {
+            deepLinkBus.publish(DeepLinkBus.Event.OpenHabitDetail(habitId))
+            intent.removeExtra(HabitReminderReceiver.EXTRA_OPEN_HABIT_ID)
         }
     }
 }

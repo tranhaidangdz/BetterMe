@@ -11,6 +11,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.cloudinary.android.MediaManager
 import com.example.betterme.BuildConfig
+import com.example.betterme.data.receiver.HabitReminderReceiver
 import com.example.betterme.data.worker.ChallengeReminderWorker
 import com.example.betterme.data.worker.MidnightCleanupWorker
 import com.google.firebase.FirebaseApp
@@ -76,7 +77,9 @@ class KoinApp : Application() {
     private fun registerNotificationChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channel = NotificationChannel(
+
+        // Challenge reminders — alarm-style high-importance channel.
+        val challengeChannel = NotificationChannel(
             ChallengeReminderWorker.CHANNEL_ID,
             ChallengeReminderWorker.CHANNEL_NAME,
             NotificationManager.IMPORTANCE_HIGH
@@ -92,7 +95,28 @@ class KoinApp : Application() {
                 ChallengeReminderWorker.alarmAudioAttributes()
             )
         }
-        nm.createNotificationChannel(channel)
+        nm.createNotificationChannel(challengeChannel)
+
+        // Habit reminders — dedicated channel so the user can independently tune
+        // sound / vibration / importance vs. challenge reminders. Same high-priority
+        // alarm-style defaults out of the box.
+        val habitChannel = NotificationChannel(
+            HabitReminderReceiver.CHANNEL_ID,
+            HabitReminderReceiver.CHANNEL_NAME,
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = HabitReminderReceiver.CHANNEL_DESCRIPTION
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 250, 100, 250)
+            enableLights(true)
+            setBypassDnd(false)
+            setShowBadge(true)
+            setSound(
+                ChallengeReminderWorker.defaultAlarmSound(),
+                ChallengeReminderWorker.alarmAudioAttributes()
+            )
+        }
+        nm.createNotificationChannel(habitChannel)
     }
 
     /**

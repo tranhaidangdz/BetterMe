@@ -50,6 +50,9 @@ import com.example.betterme.domain.usecase.challenge.JoinChallengeUseCase
 import com.example.betterme.domain.usecase.challenge.LeaveChallengeUseCase
 import com.example.betterme.domain.usecase.challenge.ScheduleChallengeReminderUseCase
 import com.example.betterme.domain.usecase.challenge.ToggleStartReminderUseCase
+import com.example.betterme.domain.usecase.habit.CancelHabitReminderUseCase
+import com.example.betterme.domain.usecase.habit.RescheduleAllHabitRemindersUseCase
+import com.example.betterme.domain.usecase.habit.ScheduleHabitReminderUseCase
 import com.example.betterme.domain.usecase.user.GetUserUseCase
 import com.example.betterme.domain.usecase.user.SaveUserUseCase
 import com.example.betterme.presentation.challenge.achievements.ChallengeAchievementsViewModel
@@ -222,6 +225,13 @@ val useCaseModule = module {
     factory { ScheduleChallengeReminderUseCase(get(), get()) }
     factory { CancelChallengeReminderUseCase(get(), get()) }
     factory { ToggleStartReminderUseCase(get(), get(), get()) }
+
+    // Habit reminders (AlarmManager exact alarms). Pulled out into use cases so
+    // both the UI (AddHabit / HabitDetail) and the receivers (boot reschedule)
+    // call the same scheduling code path — never duplicated.
+    factory { ScheduleHabitReminderUseCase(get<Context>()) }
+    factory { CancelHabitReminderUseCase(get<Context>()) }
+    factory { RescheduleAllHabitRemindersUseCase(get(), get(), get(), get()) }
 }
 
 val viewModelModule = module {

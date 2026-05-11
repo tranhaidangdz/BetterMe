@@ -7,6 +7,7 @@ import com.example.betterme.data.local.room.entities.HabitEntity
 import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.domain.repository.UserCategoryRepository
+import com.example.betterme.domain.usecase.habit.ScheduleHabitReminderUseCase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -15,6 +16,7 @@ class AddHabitViewModel(
     private val habitRepository: HabitRepository,
     private val categoryRepository: CategoryRepository,
     private val userCategoryRepository: UserCategoryRepository,
+    private val scheduleHabitReminder: ScheduleHabitReminderUseCase,
 ) : BaseMviViewModel<AddHabitIntent, AddHabitState, AddHabitEvent>() {
 
     override fun initState(): AddHabitState = AddHabitState()
@@ -106,7 +108,15 @@ class AddHabitViewModel(
                     created_at = System.currentTimeMillis()
                 )
 
-                habitRepository.addHabit(habitEntity)
+                val insertedHabitId = habitRepository.addHabit(habitEntity).toInt()
+
+                // Arm the per-habit AlarmManager exact alarm immediately. If the user
+                // didn't set a reminder time, the use case is a no-op.
+                scheduleHabitReminder(
+                    habitId = insertedHabitId,
+                    habitTitle = habitEntity.title,
+                    reminderTime = habitEntity.reminder_time
+                )
 
                 updateState { copy(isLoading = false) }
                 sendEvent(AddHabitEvent.SaveSuccess)

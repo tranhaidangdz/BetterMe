@@ -17,6 +17,8 @@ class DeepLinkBus {
     sealed class Event {
         data class OpenUserChallenge(val userChallengeId: Int) : Event()
         data class OpenChallengePreview(val challengeId: Int) : Event()
+        /** Notification tap → open Habit Detail for the given habitId. */
+        data class OpenHabitDetail(val habitId: Int) : Event()
     }
 
     private val _events = MutableSharedFlow<Event>(extraBufferCapacity = 4)

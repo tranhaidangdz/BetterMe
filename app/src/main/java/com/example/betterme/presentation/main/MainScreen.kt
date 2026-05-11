@@ -53,6 +53,8 @@ fun MainScreen(
                     viewModel.processIntent(
                         MainIntent.OpenChallengeDetail(event.challengeId, isPreview = true)
                     )
+                is DeepLinkBus.Event.OpenHabitDetail ->
+                    viewModel.processIntent(MainIntent.OpenHabitDetail(event.habitId))
             }
         }
     }
