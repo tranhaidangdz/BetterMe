@@ -36,7 +36,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.betterme.R
 import com.example.betterme.data.local.room.entities.NotificationEntity
+import com.example.betterme.presentation.components.view.BetterMeTopBar
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTokens
 import com.example.betterme.presentation.theme.BetterMeTypography
@@ -100,10 +102,19 @@ fun NotificationCenterScreen(
                 .background(BetterMeColors.BackGround.BackgroundSecondary)
                 .statusBarsPadding()
         ) {
-            TopBar(
+            // Shared app top bar — consistent with Tasks / Habit Group / Add Habit.
+            BetterMeTopBar(
+                leadingIconRes = R.drawable.ic_arrow_left,
+                title = "Thông báo",
+                onLeadingClick = onClose
+            )
+            // Status row immediately under the top bar — preserves the unread
+            // subtitle + "Đánh dấu tất cả đã đọc" action that previously lived
+            // inside the custom header. Kept out of BetterMeTopBar so the top
+            // bar can stay the canonical icon+title+icon shape used everywhere.
+            InboxStatusRow(
                 unreadCount = notifications.count { !it.is_read },
                 hasAny = notifications.isNotEmpty(),
-                onClose = onClose,
                 onMarkAllRead = onMarkAllRead
             )
 
@@ -151,51 +162,33 @@ fun NotificationCenterScreen(
 }
 
 // ============================================================
-// HEADER
+// STATUS ROW — sits under the shared top bar
 // ============================================================
+/**
+ * Subtitle + mark-all-read action. Lives outside BetterMeTopBar so the top bar
+ * itself stays the canonical icon-title-icon shape used everywhere else in the
+ * app; the inbox-specific affordances live here without breaking that contract.
+ */
 @Composable
-private fun TopBar(
+private fun InboxStatusRow(
     unreadCount: Int,
     hasAny: Boolean,
-    onClose: () -> Unit,
     onMarkAllRead: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 20.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .clickable { onClose() },
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "←",
-                fontSize = 22.sp,
-                color = BetterMeColors.Text.TextPrimary
-            )
-        }
-        Spacer(Modifier.size(4.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Thông báo",
-                style = BetterMeTypography.Title.Medium.Bold,
-                color = BetterMeColors.Text.TextPrimary,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = if (unreadCount > 0) "$unreadCount thông báo chưa đọc"
-                else if (hasAny) "Tất cả đã đọc"
-                else "Trống",
-                style = BetterMeTypography.Body.Small.Medium,
-                color = BetterMeColors.Text.TextTertiary
-            )
-        }
+        Text(
+            text = if (unreadCount > 0) "$unreadCount thông báo chưa đọc"
+            else if (hasAny) "Tất cả đã đọc"
+            else "Trống",
+            style = BetterMeTypography.Body.Small.Medium,
+            color = BetterMeColors.Text.TextTertiary,
+            modifier = Modifier.weight(1f)
+        )
         if (unreadCount > 0) {
             Box(
                 modifier = Modifier

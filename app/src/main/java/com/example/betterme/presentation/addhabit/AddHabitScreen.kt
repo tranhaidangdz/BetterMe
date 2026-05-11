@@ -10,7 +10,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,10 +25,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.betterme.R
 import com.example.betterme.presentation.addhabit.components.CategoryChipRow
 import com.example.betterme.presentation.addhabit.components.HabitPreviewCard
 import com.example.betterme.presentation.addhabit.components.SectionCard
 import com.example.betterme.presentation.categorydetail.components.paletteFor
+import com.example.betterme.presentation.components.view.BetterMeTopBar
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTokens
 import com.example.betterme.presentation.theme.BetterMeTypography
@@ -192,11 +193,14 @@ fun AddHabitScreen(
                     .verticalScroll(rememberScrollState())
                     .imePadding()
             ) {
-                // Top app bar — back arrow + title on a single baseline. The previous
-                // two-row layout (arrow row above, headline row below) made the title
-                // sit ~50dp lower than the icon. Premium apps (Notion / TickTick /
-                // Spotify) keep them on the same row vertically centered; we follow.
-                AppBar(title = "Tạo thói quen mới", onBack = onBackClick)
+                // Shared app top bar — kept consistent with Tasks / Habit Group / Habit
+                // Detail / Notification Center. statusBarsPadding is already applied
+                // to the outer Column, so the top bar lays inside the safe area.
+                BetterMeTopBar(
+                    leadingIconRes = R.drawable.ic_arrow_left,
+                    title = "Tạo thói quen mới",
+                    onLeadingClick = onBackClick
+                )
 
                 Spacer(Modifier.height(2.dp))
 
@@ -385,51 +389,6 @@ fun AddHabitScreen(
 // =====================================================================
 // SUB-COMPOSABLES
 // =====================================================================
-
-/**
- * Single-row app bar — back arrow + title vertically centered on the same baseline.
- *
- * Key choices:
- * - `verticalAlignment = Alignment.CenterVertically` aligns both children to the
- *   row's vertical center. Without this, IconButton's 48dp touch target makes the
- *   icon glyph sit slightly above the natural centerline of inline text.
- * - Title uses `Title.Medium.Bold` (matches the rest of the app's top-bar titles)
- *   instead of `Headline.Small.Bold` at 28sp, which previously bloated the title
- *   into a hero-sized line that couldn't share a row with the 24dp icon.
- * - 48dp trailing spacer for visual symmetry — keeps the title optically centered
- *   even though the IconButton on the left isn't visually balanced by a right-side
- *   action.
- * - 4dp horizontal + 4dp vertical padding only. Status-bar inset is handled by the
- *   parent column's `Modifier.statusBarsPadding()`, so the app bar doesn't double-
- *   space.
- */
-@Composable
-private fun AppBar(title: String, onBack: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Quay lại",
-                tint = BetterMeColors.Text.TextPrimary
-            )
-        }
-        Text(
-            text = title,
-            style = BetterMeTypography.Title.Medium.Bold,
-            color = BetterMeColors.Text.TextPrimary,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.weight(1f)
-        )
-        // Right-side symmetry slot — keeps the title visually centered against the
-        // icon button's 48dp touch target on the left.
-        Spacer(Modifier.size(48.dp))
-    }
-}
 
 @Composable
 private fun ScheduleField(
