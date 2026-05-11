@@ -298,6 +298,7 @@ private fun HabitDetailMainContent(
         CheckInBottomBar(
             isCompletedToday = state.isCompletedToday,
             isJourneyComplete = state.isJourneyComplete,
+            isFailed = state.isFailed,
             onCheckInClick = { onIntent(HabitDetailIntent.StartCheckIn) }
         )
     }
@@ -310,6 +311,7 @@ private fun HabitDetailMainContent(
 private fun CheckInBottomBar(
     isCompletedToday: Boolean,
     isJourneyComplete: Boolean,
+    isFailed: Boolean,
     onCheckInClick: () -> Unit
 ) {
     Box(
@@ -327,12 +329,17 @@ private fun CheckInBottomBar(
             .navigationBarsPadding()
             .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
-        // Three-state CTA. Check-ins are immutable — no Undo button anywhere.
-        //   1. Journey complete   → permanent "Hoàn thành thử thách" trophy state.
-        //   2. Checked in today   → disabled green "Đã check-in" pill, can re-attempt tomorrow.
-        //   3. Otherwise          → primary camera button.
+        // Four-state CTA. Check-ins are immutable — no Undo button anywhere.
+        //   1. Journey complete   → permanent green "Hoàn thành thử thách" trophy state.
+        //   2. Failed             → permanent red "Thử thách thất bại" state. History
+        //                          stays browsable (the screen still renders the
+        //                          calendar + log list above) but no new check-ins.
+        //   3. Checked in today   → disabled green "Đã check-in" pill, can re-attempt
+        //                          tomorrow.
+        //   4. Otherwise          → primary camera button.
         when {
             isJourneyComplete -> CompletedHabitButton(label = "🏆  Đã hoàn thành thử thách")
+            isFailed -> FailedHabitButton(label = "⚠  Thử thách thất bại")
             isCompletedToday -> CompletedHabitButton(label = "✓  Đã check-in hôm nay")
             else -> Button(
                 onClick = onCheckInClick,
@@ -370,6 +377,30 @@ private fun CompletedHabitButton(label: String) {
         colors = ButtonDefaults.buttonColors(
             containerColor = BetterMeColors.Green,
             disabledContainerColor = BetterMeColors.Green
+        ),
+        enabled = false,
+        elevation = ButtonDefaults.buttonElevation(0.dp)
+    ) {
+        Text(
+            text = label,
+            style = BetterMeTypography.Title.Small.Bold,
+            color = BetterMeColors.White
+        )
+    }
+}
+
+/** Disabled red CTA used for journey-failed state. History above remains browsable. */
+@Composable
+private fun FailedHabitButton(label: String) {
+    Button(
+        onClick = { },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = BetterMeColors.Red,
+            disabledContainerColor = BetterMeColors.Red
         ),
         enabled = false,
         elevation = ButtonDefaults.buttonElevation(0.dp)

@@ -36,7 +36,8 @@ fun HabitStatusSection(
     isExpanded: Boolean,
     habits: List<HabitStatusItem>,
     onToggle: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onHabitClick: (Int) -> Unit = {}
 ) {
     val (accentColor, icon) = when (section) {
         ExpandedSection.COMPLETED -> Color(0xFF4CAF50) to Icons.Rounded.CheckCircle
@@ -105,7 +106,10 @@ fun HabitStatusSection(
                 habits.forEach { habit ->
                     HabitStatusRow(
                         habit = habit,
-                        accentColor = accentColor
+                        accentColor = accentColor,
+                        onClick = {
+                            if (habit.habitId > 0) onHabitClick(habit.habitId)
+                        }
                     )
                 }
             }
@@ -116,13 +120,15 @@ fun HabitStatusSection(
 @Composable
 private fun HabitStatusRow(
     habit: HabitStatusItem,
-    accentColor: Color
+    accentColor: Color,
+    onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(Color(0xFFF8F9FC))
+            .clickable { onClick() }
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)

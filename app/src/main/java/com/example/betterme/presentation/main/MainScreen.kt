@@ -115,7 +115,14 @@ fun MainScreen(
                 }
             )
             MainTab.STATS -> StatisticsScreen(
-                onBackClick = { viewModel.processIntent(MainIntent.SelectTab(MainTab.HOME)) }
+                onBackClick = { viewModel.processIntent(MainIntent.SelectTab(MainTab.HOME)) },
+                // Tapping any row in the Completed / Failed / Ongoing sections opens
+                // that habit's full history (HabitDetailScreen) as an overlay. Logs are
+                // permanent in Room — completed and failed habits both display their
+                // full historical check-in calendar + log list.
+                onHabitClick = { habitId ->
+                    viewModel.processIntent(MainIntent.OpenHabitDetail(habitId))
+                }
             )
         }
 

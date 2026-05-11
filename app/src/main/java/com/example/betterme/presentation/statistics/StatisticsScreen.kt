@@ -24,6 +24,7 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun StatisticsScreen(
     onBackClick: () -> Unit = {},
+    onHabitClick: (Int) -> Unit = {},
     viewModel: StatisticsViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
@@ -43,7 +44,8 @@ fun StatisticsScreen(
         onOpenRangePicker = { showRangePicker = true },
         onResetCustomRange = {
             viewModel.processIntent(StatisticsIntent.SelectTab(StatisticsTab.WEEKLY))
-        }
+        },
+        onHabitClick = onHabitClick
     )
 
     if (showRangePicker) {
@@ -71,7 +73,8 @@ fun StatisticsContent(
     onToggleSection: (ExpandedSection) -> Unit = {},
     onBackClick: () -> Unit = {},
     onOpenRangePicker: () -> Unit = {},
-    onResetCustomRange: () -> Unit = {}
+    onResetCustomRange: () -> Unit = {},
+    onHabitClick: (Int) -> Unit = {}
 ) {
     var showContent by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { showContent = true }
@@ -257,7 +260,8 @@ fun StatisticsContent(
                         section = ExpandedSection.COMPLETED,
                         isExpanded = state.expandedSection == ExpandedSection.COMPLETED,
                         habits = state.completedHabits,
-                        onToggle = { onToggleSection(ExpandedSection.COMPLETED) }
+                        onToggle = { onToggleSection(ExpandedSection.COMPLETED) },
+                        onHabitClick = onHabitClick
                     )
                 }
             }
@@ -276,7 +280,8 @@ fun StatisticsContent(
                         section = ExpandedSection.FAILED,
                         isExpanded = state.expandedSection == ExpandedSection.FAILED,
                         habits = state.failedHabits,
-                        onToggle = { onToggleSection(ExpandedSection.FAILED) }
+                        onToggle = { onToggleSection(ExpandedSection.FAILED) },
+                        onHabitClick = onHabitClick
                     )
                 }
             }
@@ -295,7 +300,8 @@ fun StatisticsContent(
                         section = ExpandedSection.ONGOING,
                         isExpanded = state.expandedSection == ExpandedSection.ONGOING,
                         habits = state.ongoingHabits,
-                        onToggle = { onToggleSection(ExpandedSection.ONGOING) }
+                        onToggle = { onToggleSection(ExpandedSection.ONGOING) },
+                        onHabitClick = onHabitClick
                     )
                 }
             }

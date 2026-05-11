@@ -236,9 +236,16 @@ class StatisticsViewModel(
             val doneAll = allDoneCountByHabit[habit.id] ?: 0
             val isJourneyComplete = doneAll >= plannedDuration
             val hasEnded = habit.end_date != null && habit.end_date < now
+            // Per the user spec: a habit is FAILED when it didn't hit 100% AND has at
+            // least 1 missed day. Closed-duration habits whose window has elapsed and
+            // weren't completed always have ≥ 1 missed day by definition (else they
+            // would be complete). Active habits with mid-stream misses stay in the
+            // Ongoing bucket — they can still recover.
+            val missedDayCount = if (plannedDuration == Int.MAX_VALUE) 0
+                else (plannedDuration - doneAll).coerceAtLeast(0)
+            val isFailed = hasEnded && !isJourneyComplete && missedDayCount >= 1
             val pct = when {
                 plannedDuration == Int.MAX_VALUE -> {
-                    // Open-ended: % is "done / elapsed" within range
                     val elapsed = (((rangeEnd - habit.start_date) / dayMs) + 1)
                         .toInt().coerceAtLeast(1)
                     ((doneAll.toFloat() / elapsed) * 100).toInt().coerceIn(0, 100)
@@ -246,11 +253,12 @@ class StatisticsViewModel(
                 else -> ((doneAll.toFloat() / plannedDuration) * 100).toInt().coerceIn(0, 100)
             }
             val item = HabitStatusItem(
+                habitId = habit.id,
                 name = habit.title,
                 icon = categoriesById[habit.category_id]?.icon ?: "📌",
                 statusLabel = when {
                     isJourneyComplete -> "Hoàn thành"
-                    hasEnded && !isJourneyComplete -> "Thất bại"
+                    isFailed -> "Thất bại"
                     else -> "Đang thực hiện"
                 },
                 completionInfo = "$doneAll/${if (plannedDuration == Int.MAX_VALUE) "∞" else plannedDuration} ngày",
@@ -259,7 +267,7 @@ class StatisticsViewModel(
             )
             when {
                 isJourneyComplete -> completedList.add(item)
-                hasEnded -> failedList.add(item)
+                isFailed -> failedList.add(item)
                 else -> ongoingList.add(item)
             }
         }

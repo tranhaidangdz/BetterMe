@@ -101,10 +101,15 @@ class HabitDetailViewModel(
                     Int.MAX_VALUE
                 }
                 val isJourneyComplete = doneLogs.size >= plannedDurationDays
-                // Journey just hit 100% → cancel the pending alarm so the user
-                // never gets a stale "time to check-in" notification for a habit
-                // they can no longer check into. Idempotent if already cancelled.
-                if (isJourneyComplete) cancelHabitReminder(habitId)
+                // Failed = window elapsed AND target not reached. Mutually exclusive
+                // with isJourneyComplete: a habit that hit 100% on the last day is
+                // Completed, not Failed.
+                val isFailed = !isJourneyComplete &&
+                    habit.end_date != null && habit.end_date < today
+                // Journey just hit 100% (or window elapsed) → cancel the pending alarm
+                // so the user never gets a stale "time to check-in" notification for a
+                // habit they can no longer check into. Idempotent if already cancelled.
+                if (isJourneyComplete || isFailed) cancelHabitReminder(habitId)
                 val totalDays = if (habit.end_date != null) plannedDurationDays
                     else ((today - habit.start_date) / DAY_MS).toInt().coerceAtLeast(1)
                 val completionRate = if (totalDays > 0)
@@ -122,6 +127,7 @@ class HabitDetailViewModel(
                         reminderTime = habit.reminder_time,
                         isCompletedToday = isCompletedToday,
                         isJourneyComplete = isJourneyComplete,
+                        isFailed = isFailed,
                         currentStreak = currentStreak,
                         longestStreak = longestStreak,
                         weeklyProgress = weeklyProgress,
@@ -161,11 +167,16 @@ class HabitDetailViewModel(
 
     /** Bước 1: Bấm nút → signal UI mở camera */
     private fun startCheckIn() {
-        // Two locks guard the camera flow:
-        // 1. isCompletedToday — one check-in per day max; today's log is immutable.
+        // Three locks guard the camera flow:
+        // 1. isCompletedToday  — one check-in per day max; today's log is immutable.
         // 2. isJourneyComplete — the habit's full duration has been satisfied; no
         //    over-completion past target.
-        if (currentState.isCompletedToday || currentState.isJourneyComplete) return
+        // 3. isFailed          — the planned window has elapsed without completion;
+        //    no further check-ins, but the history view stays browsable.
+        if (currentState.isCompletedToday ||
+            currentState.isJourneyComplete ||
+            currentState.isFailed
+        ) return
         sendEvent(HabitDetailEvent.LaunchCamera)
     }
 

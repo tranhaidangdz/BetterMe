@@ -76,6 +76,8 @@ data class HabitJourney(
 )
 
 data class HabitStatusItem(
+    /** Habit primary key — used to route taps to HabitDetailScreen. -1 = synthetic/empty. */
+    val habitId: Int = -1,
     val name: String = "",
     val icon: String = "",
     val statusLabel: String = "",

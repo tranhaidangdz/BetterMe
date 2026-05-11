@@ -70,6 +70,13 @@ data class HabitDetailState(
      * flip this to true and stay perpetually check-inable.
      */
     val isJourneyComplete: Boolean = false,
+    /**
+     * True when the habit's planned window has elapsed but the user never hit 100%.
+     * Mutually exclusive with [isJourneyComplete]. The bottom CTA locks the same way
+     * a completed habit does — no new check-ins past the deadline — but renders the
+     * "Thử thách thất bại" red pill instead of the green trophy.
+     */
+    val isFailed: Boolean = false,
 
     // Streak info
     val currentStreak: Int = 0,
