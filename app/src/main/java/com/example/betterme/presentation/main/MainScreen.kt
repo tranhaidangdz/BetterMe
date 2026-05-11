@@ -167,8 +167,21 @@ fun MainScreen(
                     viewModel.processIntent(MainIntent.SelectTab(MainTab.ADD))
                 },
                 onAiSuggestClick = {
-                    viewModel.processIntent(MainIntent.CloseCategoryDetail)
-                    viewModel.processIntent(MainIntent.SelectTab(MainTab.HOME))
+                    // Render AI suggestions in-place — same pattern as AI review.
+                    // Tapping the same CTA while suggestions are visible regenerates.
+                    categoryDetailViewModel.processIntent(
+                        CategoryDetailIntent.GenerateAiSuggestions
+                    )
+                },
+                onDismissAiSuggestions = {
+                    categoryDetailViewModel.processIntent(
+                        CategoryDetailIntent.DismissAiSuggestions
+                    )
+                },
+                onAddAiSuggestion = { suggestion ->
+                    categoryDetailViewModel.processIntent(
+                        CategoryDetailIntent.AddAiSuggestion(suggestion)
+                    )
                 }
             )
         }

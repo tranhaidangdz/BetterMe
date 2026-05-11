@@ -3,11 +3,15 @@ package com.example.betterme.presentation.categorydetail
 import androidx.lifecycle.viewModelScope
 import com.example.betterme.base.BaseMviViewModel
 import com.example.betterme.data.local.datastore.DataStoreManager
+import com.example.betterme.data.local.room.entities.HabitEntity
 import com.example.betterme.domain.ai.AiCoachPersonality
 import com.example.betterme.domain.ai.AiHabitInsightRepository
+import com.example.betterme.domain.ai.SuggestedHabit
 import com.example.betterme.domain.repository.HabitLogRepository
 import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.domain.usecase.ai.GenerateHabitGroupReviewUseCase
+import com.example.betterme.domain.usecase.ai.SuggestHabitsForCategoryUseCase
+import com.example.betterme.domain.usecase.habit.ScheduleHabitReminderUseCase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
@@ -17,6 +21,8 @@ class CategoryDetailViewModel(
     private val habitRepository: HabitRepository,
     private val habitLogRepository: HabitLogRepository,
     private val generateHabitGroupReview: GenerateHabitGroupReviewUseCase,
+    private val suggestHabitsForCategory: SuggestHabitsForCategoryUseCase,
+    private val scheduleHabitReminder: ScheduleHabitReminderUseCase,
 ) : BaseMviViewModel<CategoryDetailIntent, CategoryDetailState, CategoryDetailEvent>() {
 
     override fun initState(): CategoryDetailState = CategoryDetailState()
@@ -32,6 +38,75 @@ class CategoryDetailViewModel(
             CategoryDetailIntent.DismissAiReview -> updateState {
                 copy(aiReview = AiReviewState.Idle)
             }
+            CategoryDetailIntent.GenerateAiSuggestions -> generateAiSuggestions()
+            CategoryDetailIntent.DismissAiSuggestions -> updateState {
+                copy(aiSuggestions = AiSuggestionsState.Idle)
+            }
+            is CategoryDetailIntent.AddAiSuggestion -> addAiSuggestion(intent.suggestion)
+        }
+    }
+
+    /**
+     * Fire-and-forget AI suggestion request. Same re-entrancy guard pattern as the
+     * review path so a tap-storm doesn't spawn parallel coroutines.
+     */
+    private fun generateAiSuggestions() {
+        if (currentState.aiSuggestions is AiSuggestionsState.Loading) return
+        val categoryId = currentState.categoryId
+        val categoryName = currentState.categoryName
+        if (categoryId <= 0 || categoryName.isBlank()) return
+
+        viewModelScope.launch {
+            updateState { copy(aiSuggestions = AiSuggestionsState.Loading) }
+            val result = suggestHabitsForCategory(
+                categoryId = categoryId,
+                categoryName = categoryName,
+                personality = AiCoachPersonality.Default
+            )
+            updateState {
+                copy(
+                    aiSuggestions = when (result) {
+                        is AiHabitInsightRepository.AiSuggestResult.Success ->
+                            AiSuggestionsState.Success(result.suggestions)
+                        is AiHabitInsightRepository.AiSuggestResult.Failure ->
+                            AiSuggestionsState.Error(result.message)
+                    }
+                )
+            }
+        }
+    }
+
+    /**
+     * Materializes an AI suggestion as a real habit row. Defaults: 30-day journey
+     * starting today, description from the suggestion, no reminder time (the user
+     * can tap into the habit to configure one). The new row appears automatically
+     * via the reactive Flow that backs [loadData].
+     */
+    private fun addAiSuggestion(suggestion: SuggestedHabit) {
+        viewModelScope.launch {
+            val userId = dataStoreManager.getCurrentUserId().first().orEmpty()
+            if (userId.isBlank()) return@launch
+
+            val now = System.currentTimeMillis()
+            val thirtyDays = TimeUnit.DAYS.toMillis(30)
+            val entity = HabitEntity(
+                user_id = userId,
+                category_id = currentState.categoryId.takeIf { it > 0 },
+                title = suggestion.title,
+                description = suggestion.description.ifBlank { null },
+                start_date = now,
+                end_date = now + thirtyDays,
+                reminder_time = null,
+                created_at = now
+            )
+            val newId = habitRepository.addHabit(entity).toInt()
+            // No reminder by default — but route through the scheduler anyway so the
+            // call path is identical to the AddHabit flow. It no-ops on a null time.
+            scheduleHabitReminder(
+                habitId = newId,
+                habitTitle = suggestion.title,
+                reminderTime = null
+            )
         }
     }
 

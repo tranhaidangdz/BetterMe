@@ -21,7 +21,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.betterme.R
+import com.example.betterme.domain.ai.SuggestedHabit
 import com.example.betterme.presentation.categorydetail.components.AiReviewCard
+import com.example.betterme.presentation.categorydetail.components.AiSuggestionsCard
 import com.example.betterme.presentation.categorydetail.components.CategoryActionButton
 import com.example.betterme.presentation.categorydetail.components.CategorySummaryCard
 import com.example.betterme.presentation.categorydetail.components.HabitDetailCard
@@ -54,6 +56,8 @@ fun CategoryDetailScreen(
     onAddHabitClick: () -> Unit,
     onAiSuggestClick: () -> Unit,
     onDismissAiReview: () -> Unit = {},
+    onDismissAiSuggestions: () -> Unit = {},
+    onAddAiSuggestion: (SuggestedHabit) -> Unit = {},
 ) {
     val palette = paletteFor(state.categoryId)
     // Fallback emoji set used when the habit doesn't expose its own. Kept here as a
@@ -102,6 +106,24 @@ fun CategoryDetailScreen(
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
             if (state.aiReview !is AiReviewState.Idle) {
+                Spacer(Modifier.height(16.dp))
+            }
+        }
+
+        // ===== AI SUGGESTIONS CARD =====
+        // Same Idle-collapsed pattern. Each suggestion's "+ Thêm" calls back into
+        // the VM which inserts a real habit row; the reactive Flow refreshes the
+        // list below automatically.
+        item(key = "ai_suggestions") {
+            AiSuggestionsCard(
+                state = state.aiSuggestions,
+                accent = palette.accent,
+                onAddSuggestion = onAddAiSuggestion,
+                onRegenerate = onAiSuggestClick,
+                onDismiss = onDismissAiSuggestions,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            if (state.aiSuggestions !is AiSuggestionsState.Idle) {
                 Spacer(Modifier.height(16.dp))
             }
         }

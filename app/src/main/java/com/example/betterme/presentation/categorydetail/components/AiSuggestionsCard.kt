@@ -31,37 +31,36 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.betterme.presentation.categorydetail.AiReviewState
+import com.example.betterme.domain.ai.SuggestedHabit
+import com.example.betterme.presentation.categorydetail.AiSuggestionsState
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTokens
 import com.example.betterme.presentation.theme.BetterMeTypography
 
 /**
- * AI coach insight panel slotted into the Habit Group screen.
+ * Premium AI suggestions panel. Shows up to 4 habit suggestions as rich cards with
+ * emoji + title + description + difficulty badge + estimated-impact tagline. Each
+ * card has a "+ Thêm" button that hands the suggestion back to the screen for
+ * insertion via the existing AddHabit flow.
  *
- * Three visual states, picked by the sealed [AiReviewState]:
- * - [AiReviewState.Loading]   — accent-tinted card with a spinner + "Đang phân tích…".
- * - [AiReviewState.Success]   — accent-tinted card with the model's reply + a
- *                                "Đóng" action to dismiss. Tap "Tạo lại" to re-run.
- * - [AiReviewState.Error]     — soft red surface with the error and a "Thử lại" link.
+ * Three states piped through [AiSuggestionsState]:
+ * - Loading → spinner + "AI đang tạo gợi ý cá nhân hoá…"
+ * - Success → list of [SuggestionRow]s
+ * - Error   → red retry pill
  *
- * The whole panel animates in from below when the state flips out of Idle, and slides
- * out when the user dismisses. AnimatedVisibility wraps the card so the surrounding
- * LazyColumn doesn't jitter on entry/exit.
- *
- * accent is piped in from `paletteFor(categoryId).accent` so the AI card inherits
- * the category's identity color — keeps the screen visually unified.
+ * Visual surface matches AiReviewCard so the two AI panels read as one design.
  */
 @Composable
-fun AiReviewCard(
-    state: AiReviewState,
+fun AiSuggestionsCard(
+    state: AiSuggestionsState,
     accent: Color,
-    onGenerateAgain: () -> Unit,
+    onAddSuggestion: (SuggestedHabit) -> Unit,
+    onRegenerate: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
-        visible = state !is AiReviewState.Idle,
+        visible = state !is AiSuggestionsState.Idle,
         enter = fadeIn(tween(220)) + slideInVertically(
             initialOffsetY = { it / 4 },
             animationSpec = tween(220)
@@ -89,7 +88,7 @@ fun AiReviewCard(
                 )
                 .padding(18.dp)
         ) {
-            // Header: avatar disc + title + dismiss
+            // Header
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
@@ -103,28 +102,28 @@ fun AiReviewCard(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(text = "✨", fontSize = 18.sp)
+                    Text(text = "💡", fontSize = 18.sp)
                 }
                 Spacer(Modifier.size(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Huấn luyện viên AI",
+                        text = "Gợi ý từ AI",
                         style = BetterMeTypography.Title.Small.Bold,
                         color = BetterMeColors.Text.TextPrimary,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = when (state) {
-                            is AiReviewState.Loading -> "Đang phân tích thói quen của bạn…"
-                            is AiReviewState.Success -> "Phân tích cá nhân hoá"
-                            is AiReviewState.Error -> "Không thể tạo nhận xét"
-                            AiReviewState.Idle -> ""
+                            is AiSuggestionsState.Loading -> "AI đang tạo gợi ý cá nhân hoá…"
+                            is AiSuggestionsState.Success -> "${state.items.size} thói quen phù hợp"
+                            is AiSuggestionsState.Error -> "Không thể tạo gợi ý"
+                            AiSuggestionsState.Idle -> ""
                         },
                         style = BetterMeTypography.Body.Small.Medium,
                         color = BetterMeColors.Text.TextTertiary
                     )
                 }
-                if (state !is AiReviewState.Loading) {
+                if (state !is AiSuggestionsState.Loading) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
@@ -142,26 +141,23 @@ fun AiReviewCard(
 
             Spacer(Modifier.height(14.dp))
 
-            // Body
             when (state) {
-                is AiReviewState.Loading -> LoadingBody(accent)
-                is AiReviewState.Success -> SuccessBody(
-                    text = state.text,
+                is AiSuggestionsState.Loading -> LoadingRow(accent)
+                is AiSuggestionsState.Success -> SuccessList(
+                    items = state.items,
                     accent = accent,
-                    onRegenerate = onGenerateAgain
+                    onAdd = onAddSuggestion,
+                    onRegenerate = onRegenerate
                 )
-                is AiReviewState.Error -> ErrorBody(
-                    message = state.message,
-                    onRetry = onGenerateAgain
-                )
-                AiReviewState.Idle -> Unit
+                is AiSuggestionsState.Error -> ErrorRow(state.message, onRegenerate)
+                AiSuggestionsState.Idle -> Unit
             }
         }
     }
 }
 
 @Composable
-private fun LoadingBody(accent: Color) {
+private fun LoadingRow(accent: Color) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -172,7 +168,7 @@ private fun LoadingBody(accent: Color) {
             strokeWidth = 2.dp
         )
         Text(
-            text = "Đang gửi dữ liệu lên AI và chờ phản hồi…",
+            text = "Đang tổng hợp gợi ý dựa trên thói quen hiện tại của bạn…",
             style = BetterMeTypography.Body.Medium,
             color = BetterMeColors.Text.TextSecondary
         )
@@ -180,25 +176,126 @@ private fun LoadingBody(accent: Color) {
 }
 
 @Composable
-private fun SuccessBody(text: String, accent: Color, onRegenerate: () -> Unit) {
-    Column {
-        // Markdown-light renderer turns "**bold**" + "- bullet" + paragraph breaks
-        // into the right Compose primitives. No giant wall of asterisks visible.
-        AiRichText(raw = text, accent = accent)
-        Spacer(Modifier.height(14.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
+private fun SuccessList(
+    items: List<SuggestedHabit>,
+    accent: Color,
+    onAdd: (SuggestedHabit) -> Unit,
+    onRegenerate: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        items.forEach { suggestion ->
+            SuggestionRow(suggestion = suggestion, accent = accent, onAdd = onAdd)
+        }
+        Spacer(Modifier.height(4.dp))
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
+                .background(accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft))
+                .clickable { onRegenerate() }
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = "↻  Tạo lại",
+                style = BetterMeTypography.Body.Small.Medium,
+                color = accent,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+@Composable
+private fun SuggestionRow(
+    suggestion: SuggestedHabit,
+    accent: Color,
+    onAdd: (SuggestedHabit) -> Unit
+) {
+    val (badgeColor, badgeLabel) = when (suggestion.difficulty.uppercase()) {
+        "EASY" -> Color(0xFF16A34A) to "Dễ"
+        "HARD" -> Color(0xFFDC2626) to "Khó"
+        else -> Color(0xFFEA580C) to "Trung bình"
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Body))
+            .background(BetterMeColors.BackGround.BackgroundSecondary)
+            .border(
+                width = 1.dp,
+                color = accent.copy(alpha = BetterMeTokens.AccentAlpha.Subtle),
+                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Body)
+            )
+            .padding(12.dp),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = suggestion.emoji, fontSize = 20.sp)
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = suggestion.title,
+                    style = BetterMeTypography.Title.Small.SemiBold,
+                    color = BetterMeColors.Text.TextPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
+                        .background(badgeColor.copy(alpha = 0.12f))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = badgeLabel,
+                        style = BetterMeTypography.Body.Small.Medium,
+                        color = badgeColor,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+            if (suggestion.description.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = suggestion.description,
+                    style = BetterMeTypography.Body.Small.Medium,
+                    color = BetterMeColors.Text.TextSecondary
+                )
+            }
+            if (suggestion.estimatedImpact.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "✨ ${suggestion.estimatedImpact}",
+                    style = BetterMeTypography.Body.Small.Medium,
+                    color = accent,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Spacer(Modifier.height(8.dp))
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
-                    .background(accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft))
-                    .clickable { onRegenerate() }
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .background(accent)
+                    .clickable { onAdd(suggestion) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
                 Text(
-                    text = "↻  Tạo lại",
+                    text = "+ Thêm thói quen",
                     style = BetterMeTypography.Body.Small.Medium,
-                    color = accent,
-                    fontWeight = FontWeight.SemiBold
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
@@ -206,7 +303,7 @@ private fun SuccessBody(text: String, accent: Color, onRegenerate: () -> Unit) {
 }
 
 @Composable
-private fun ErrorBody(message: String, onRetry: () -> Unit) {
+private fun ErrorRow(message: String, onRetry: () -> Unit) {
     val errorColor = BetterMeColors.Red
     Column {
         Text(

@@ -25,10 +25,9 @@ interface AiHabitInsightRepository {
      * Coach-style review of one habit category for the user.
      *
      * @param categoryName    "Vận động & thể chất", "Học tập", …
-     * @param stats           narrative summary of the analytics (see
-     *                        [com.example.betterme.domain.usecase.ai.HabitGroupStatsSnapshot]
-     *                        for the canonical shape). The repo embeds this verbatim into the
-     *                        user prompt — pre-formatting keeps the AI from inventing numbers.
+     * @param stats           narrative summary of the analytics. The repo embeds this verbatim
+     *                        into the user prompt — pre-formatting keeps the AI from inventing
+     *                        numbers.
      * @param personality     coaching tone selected by the user.
      */
     suspend fun reviewHabitGroup(
@@ -36,4 +35,36 @@ interface AiHabitInsightRepository {
         stats: String,
         personality: AiCoachPersonality
     ): AiResult
+
+    /**
+     * Habit suggestions for a category. The AI is prompted to return strict JSON;
+     * the repo parses that JSON into [SuggestedHabit] objects so the UI doesn't need
+     * to do any string parsing. On parse failure the call falls back to
+     * [AiSuggestResult.Failure] with a clear message — no half-rendered suggestions
+     * surface.
+     */
+    suspend fun suggestHabits(
+        categoryName: String,
+        existingHabitTitles: List<String>,
+        personality: AiCoachPersonality
+    ): AiSuggestResult
+
+    sealed class AiSuggestResult {
+        data class Success(val suggestions: List<SuggestedHabit>) : AiSuggestResult()
+        data class Failure(val message: String) : AiSuggestResult()
+    }
 }
+
+/**
+ * One AI-generated habit suggestion. All fields are user-visible — the AI is
+ * prompted to fill every one in Vietnamese.
+ */
+data class SuggestedHabit(
+    val title: String,
+    val emoji: String,
+    val description: String,
+    /** "EASY" | "MEDIUM" | "HARD" — used to color the difficulty badge. */
+    val difficulty: String,
+    /** Free-text impact line, e.g. "Cải thiện năng lượng buổi sáng". */
+    val estimatedImpact: String
+)

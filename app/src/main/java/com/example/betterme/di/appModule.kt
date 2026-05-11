@@ -58,6 +58,7 @@ import com.example.betterme.data.ai.OpenRouterApi
 import com.example.betterme.data.ai.OpenRouterNetwork
 import com.example.betterme.domain.ai.AiHabitInsightRepository
 import com.example.betterme.domain.usecase.ai.GenerateHabitGroupReviewUseCase
+import com.example.betterme.domain.usecase.ai.SuggestHabitsForCategoryUseCase
 import com.example.betterme.domain.usecase.user.GetUserUseCase
 import com.example.betterme.domain.usecase.user.SaveUserUseCase
 import com.example.betterme.presentation.challenge.achievements.ChallengeAchievementsViewModel
@@ -250,6 +251,7 @@ val useCaseModule = module {
 
     // AI use cases
     factory { GenerateHabitGroupReviewUseCase(get(), get(), get(), get()) }
+    factory { SuggestHabitsForCategoryUseCase(get(), get(), get()) }
 }
 
 val viewModelModule = module {

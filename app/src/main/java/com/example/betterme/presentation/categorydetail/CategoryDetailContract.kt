@@ -32,6 +32,16 @@ sealed class AiReviewState {
     data class Error(val message: String) : AiReviewState()
 }
 
+/** Lifecycle of the AI habit-suggestions request. */
+sealed class AiSuggestionsState {
+    data object Idle : AiSuggestionsState()
+    data object Loading : AiSuggestionsState()
+    data class Success(
+        val items: List<com.example.betterme.domain.ai.SuggestedHabit>
+    ) : AiSuggestionsState()
+    data class Error(val message: String) : AiSuggestionsState()
+}
+
 data class CategoryDetailState(
     val isLoading: Boolean = false,
     val categoryId: Int = -1,
@@ -40,6 +50,8 @@ data class CategoryDetailState(
     val habits: List<HabitDetailUiModel> = emptyList(),
     /** AI coaching review — Idle until the user taps "AI nhận xét". */
     val aiReview: AiReviewState = AiReviewState.Idle,
+    /** AI habit suggestions — Idle until the user taps "AI gợi ý". */
+    val aiSuggestions: AiSuggestionsState = AiSuggestionsState.Idle,
 ) : MviViewState {
     /** Tổng số thói quen đã hoàn thành (completionPercent = 100) */
     val completedHabitCount: Int
@@ -68,6 +80,18 @@ sealed class CategoryDetailIntent : MviIntent {
     data object GenerateAiReview : CategoryDetailIntent()
     /** Clear the AI review back to Idle (e.g. after the user dismisses it). */
     data object DismissAiReview : CategoryDetailIntent()
+    /** Generate AI habit suggestions for the loaded category. */
+    data object GenerateAiSuggestions : CategoryDetailIntent()
+    /** Clear the AI suggestions back to Idle. */
+    data object DismissAiSuggestions : CategoryDetailIntent()
+    /**
+     * Materialize an AI suggestion as a real habit in this category. Default
+     * 30-day journey, no reminder time (user can tap into the habit detail to
+     * configure one).
+     */
+    data class AddAiSuggestion(
+        val suggestion: com.example.betterme.domain.ai.SuggestedHabit
+    ) : CategoryDetailIntent()
 }
 
 // ============================================================
