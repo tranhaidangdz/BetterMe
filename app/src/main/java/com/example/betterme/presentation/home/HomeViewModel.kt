@@ -17,6 +17,7 @@ import com.example.betterme.domain.repository.UserRepository
 import com.example.betterme.presentation.home.model.CantMiss
 import com.example.betterme.presentation.home.model.HomeProgress
 import com.example.betterme.presentation.theme.BetterMeColors
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -39,6 +40,15 @@ class HomeViewModel(
     private companion object {
         const val DAY_MS: Long = 24L * 60L * 60L * 1000L
     }
+
+    /**
+     * Long-running job for the habits/logs/challenges Flow.combine. Tracked here so
+     * a re-entrant [HomeIntent.LoadData] (fired when [HomeState.homeRefreshVersion]
+     * bumps after a habit-add) cancels the previous observer before starting a new
+     * one — otherwise each reload would leak another infinite collector into
+     * viewModelScope.
+     */
+    private var observeJob: Job? = null
 
     override fun initState(): HomeState = HomeState()
 
@@ -86,17 +96,19 @@ class HomeViewModel(
     }
 
     private fun loadData() {
-        viewModelScope.launch {
+        // Cancel previous observer so re-entrant LoadData calls don't pile up
+        // infinite collectors on viewModelScope.
+        observeJob?.cancel()
+        observeJob = viewModelScope.launch {
             updateState { copy(isLoading = true) }
 
-            // 1. Lấy user info từ DataStore
+            // 1. Lấy user info từ DataStore (one-shot — không đổi trong session)
             val user = dataStoreManager.getUserInfo().first()
             val userName = user?.name ?: "Guest"
             val userPhotoUrl = user?.photoUrl ?: ""
             val userId = user?.id ?: dataStoreManager.getCurrentUserId().first() ?: ""
 
-            // 2. Lấy selected categories từ DB — scoped chặt theo userId hiện tại,
-            //    KHÔNG dùng global flag (đã từng leak giữa các tài khoản trên cùng device).
+            // 2. Selected categories + master category list — scoped theo userId.
             val selectedCategories = if (userId.isNotBlank()) {
                 userCategoryRepository.getSelectedCategories(userId)
             } else emptyList()
@@ -104,100 +116,106 @@ class HomeViewModel(
             val colors = BetterMeColors.ListColors.list
             val randomizedColors = colors.shuffled()
 
-            // 3. Build category groups với habit count thực — đếm theo userId.
-            val categoryGroups = selectedCategories.mapIndexed { index, category ->
-                val habitCount = if (userId.isNotBlank()) {
-                    habitRepository.getHabitCountByCategoryForUser(category.id, userId)
-                } else 0
-                HomeCategoryGroup(
-                    categoryId = category.id,
-                    categoryName = category.name.uppercase(),
-                    categoryIcon = category.icon,
-                    habitCount = habitCount,
-                    color = randomizedColors.getOrElse(index) {
-                        colors[Random.nextInt(colors.size)]
-                    }
-                )
-            }
-
-            // 4. Build "Đang thực hiện" list từ habits thực
-            val habits = if (userId.isNotBlank()) {
-                habitRepository.getHabits(userId).first()
-            } else {
-                emptyList()
-            }
-            val today = getStartOfDay()
-            val completedHabitIds = habitLogRepository.getCompletedHabitIdsByDate(today)
-
-            // 5. Build "Đang thực hiện" — show every habit whose journey is still in
-            //    progress, regardless of whether the user already checked in today.
-            //    A habit's journey is COMPLETE when total DONE days >= its planned duration.
-            //    Open-ended habits (no end_date) never finish automatically.
-            val cantMissList = habits.mapNotNull { habit ->
-                val durationDays = if (habit.end_date != null) {
-                    (((habit.end_date - habit.start_date) / DAY_MS) + 1).toInt().coerceAtLeast(1)
-                } else {
-                    Int.MAX_VALUE
-                }
-                val doneCount = habitLogRepository.countCompleted(habit.id)
-                if (doneCount >= durationDays) {
-                    // Journey finished — drop from Home.
-                    return@mapNotNull null
-                }
-
-                val category = allCategories.find { it.id == habit.category_id }
-                val habitProgress = if (durationDays == Int.MAX_VALUE) {
-                    // Open-ended habit: show "elapsed" days instead of journey %.
-                    val elapsed = (((today - habit.start_date) / DAY_MS) + 1).toInt().coerceAtLeast(1)
-                    ((doneCount.toFloat() / elapsed) * 100).toInt().coerceIn(0, 100)
-                } else {
-                    ((doneCount.toFloat() / durationDays) * 100).toInt().coerceIn(0, 100)
-                }
-
-                CantMiss(
-                    habitId = habit.id,
-                    categoryId = category?.id ?: -1,
-                    categoryName = category?.name ?: "Khác",
-                    categoryIcon = category?.icon ?: "📝",
-                    habitTitle = habit.title,
-                    progress = habitProgress
-                )
-            }
-
-            // 6. Tính progress tổng cho card trên cùng
-            val totalHabits = habits.size
-            val completedHabits = habits.count { it.id in completedHabitIds }
-            val percentage = if (totalHabits > 0) {
-                ((completedHabits.toFloat() / totalHabits) * 100).toInt()
-            } else 0
-
-            // 7. Today's challenge check-in tracker — count active challenges and how many
-            //    already have a DONE log for today.
-            val activeChallenges = if (userId.isNotBlank()) {
-                userChallengeRepository.observeByStatus(userId, "ACTIVE").first()
-            } else emptyList()
-            val checkedInToday = activeChallenges.count { uc ->
-                val log = challengeLogRepository.getLogByDate(uc.id, today)
-                log?.status == "DONE"
-            }
-
-            val progress = HomeProgress(
-                totalHabits = totalHabits,
-                completedHabits = completedHabits,
-                percentage = percentage,
-                totalChallenges = activeChallenges.size,
-                checkedInChallenges = checkedInToday
-            )
-
+            // 3. Push user info + initial loading=false ngay để UI render avatar
+            //    trong khi vòng lặp reactive bên dưới rebuild cantMissList / progress.
             updateState {
                 copy(
                     isLoading = false,
                     userName = userName,
-                    userPhotoUrl = userPhotoUrl,
-                    progress = progress,
-                    cantMissList = cantMissList,
-                    categoryGroups = categoryGroups
+                    userPhotoUrl = userPhotoUrl
                 )
+            }
+
+            if (userId.isBlank()) return@launch
+
+            // 4. Reactive observation. Khi user thêm habit mới hoặc check-in xong, ba
+            //    Flow sau emit → combine block chạy → cantMissList + categoryGroups +
+            //    progress được rebuild → state cập nhật ngay lập tức. Không cần
+            //    phụ thuộc vào homeRefreshVersion + LaunchedEffect để biết có habit
+            //    mới — một habit added từ AddHabit screen hoặc từ AI suggestion sẽ
+            //    xuất hiện trên Home trong cùng một frame.
+            kotlinx.coroutines.flow.combine(
+                habitRepository.getHabits(userId),
+                habitLogRepository.observeAllLogs(),
+                userChallengeRepository.observeByStatus(userId, "ACTIVE")
+            ) { habits, _, activeChallenges ->
+                Triple(habits, Unit, activeChallenges)
+            }.collect { (habits, _, activeChallenges) ->
+                val today = getStartOfDay()
+                val completedHabitIds = habitLogRepository.getCompletedHabitIdsByDate(today)
+
+                // 4a. Build "Đang thực hiện" — show every habit whose journey is still in
+                //     progress, regardless of whether user already checked in today.
+                //     A habit's journey is COMPLETE when total DONE days >= planned duration.
+                //     Open-ended habits (no end_date) never finish automatically.
+                val cantMissList = habits.mapNotNull { habit ->
+                    val durationDays = if (habit.end_date != null) {
+                        (((habit.end_date - habit.start_date) / DAY_MS) + 1).toInt().coerceAtLeast(1)
+                    } else {
+                        Int.MAX_VALUE
+                    }
+                    val doneCount = habitLogRepository.countCompleted(habit.id)
+                    if (doneCount >= durationDays) {
+                        return@mapNotNull null
+                    }
+
+                    val category = allCategories.find { it.id == habit.category_id }
+                    val habitProgress = if (durationDays == Int.MAX_VALUE) {
+                        val elapsed = (((today - habit.start_date) / DAY_MS) + 1).toInt().coerceAtLeast(1)
+                        ((doneCount.toFloat() / elapsed) * 100).toInt().coerceIn(0, 100)
+                    } else {
+                        ((doneCount.toFloat() / durationDays) * 100).toInt().coerceIn(0, 100)
+                    }
+
+                    CantMiss(
+                        habitId = habit.id,
+                        categoryId = category?.id ?: -1,
+                        categoryName = category?.name ?: "Khác",
+                        categoryIcon = category?.icon ?: "📝",
+                        habitTitle = habit.title,
+                        progress = habitProgress
+                    )
+                }
+
+                // 4b. Category groups — habitCount per category cần fresh theo từng emit.
+                val categoryGroups = selectedCategories.mapIndexed { index, category ->
+                    val habitCount = habits.count { it.category_id == category.id }
+                    HomeCategoryGroup(
+                        categoryId = category.id,
+                        categoryName = category.name.uppercase(),
+                        categoryIcon = category.icon,
+                        habitCount = habitCount,
+                        color = randomizedColors.getOrElse(index) {
+                            colors[Random.nextInt(colors.size)]
+                        }
+                    )
+                }
+
+                // 4c. Progress tổng + challenge check-in tracker.
+                val totalHabits = habits.size
+                val completedHabits = habits.count { it.id in completedHabitIds }
+                val percentage = if (totalHabits > 0) {
+                    ((completedHabits.toFloat() / totalHabits) * 100).toInt()
+                } else 0
+                val checkedInToday = activeChallenges.count { uc ->
+                    val log = challengeLogRepository.getLogByDate(uc.id, today)
+                    log?.status == "DONE"
+                }
+                val progress = HomeProgress(
+                    totalHabits = totalHabits,
+                    completedHabits = completedHabits,
+                    percentage = percentage,
+                    totalChallenges = activeChallenges.size,
+                    checkedInChallenges = checkedInToday
+                )
+
+                updateState {
+                    copy(
+                        progress = progress,
+                        cantMissList = cantMissList,
+                        categoryGroups = categoryGroups
+                    )
+                }
             }
         }
     }

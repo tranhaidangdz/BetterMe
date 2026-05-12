@@ -8,6 +8,7 @@ import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.domain.repository.UserCategoryRepository
 import com.example.betterme.domain.usecase.habit.ScheduleHabitReminderUseCase
+import com.example.betterme.utils.DateUtils
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -97,13 +98,22 @@ class AddHabitViewModel(
             try {
                 val userId = dataStoreManager.getCurrentUserId().first() ?: ""
 
+                // Normalize start_date and end_date to start-of-day at write time so
+                // every read site sees a clean day-aligned value. Without this, the
+                // default state.startDate = System.currentTimeMillis() (e.g. today
+                // 10:30 AM) would land mid-day in the DB, and comparing it against
+                // dateMs (= today 00:00) using `start_date <= dateMs` would be
+                // FALSE — silently excluding the habit from its own first day.
+                // Doing the floor here makes the rest of the app idempotent on
+                // time-of-day; the read-side normalization in DailyHabitsViewModel
+                // and StatisticsViewModel stays as defense in depth.
                 val habitEntity = HabitEntity(
                     user_id = userId,
                     category_id = state.selectedCategoryId,
                     title = state.title.trim(),
                     description = state.description.trim().ifBlank { null },
-                    start_date = state.startDate,
-                    end_date = state.endDate,
+                    start_date = DateUtils.startOfDay(state.startDate),
+                    end_date = state.endDate?.let { DateUtils.startOfDay(it) },
                     reminder_time = state.reminderTime.ifBlank { null },
                     created_at = System.currentTimeMillis()
                 )

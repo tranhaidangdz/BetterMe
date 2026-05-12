@@ -101,11 +101,15 @@ class HabitDetailViewModel(
                     Int.MAX_VALUE
                 }
                 val isJourneyComplete = doneLogs.size >= plannedDurationDays
-                // Failed = window elapsed AND target not reached. Mutually exclusive
-                // with isJourneyComplete: a habit that hit 100% on the last day is
-                // Completed, not Failed.
+                // Failed = the journey window has fully elapsed AND target not reached.
+                // Day-precise comparison: compare end_date's day to today's day so a
+                // habit whose end_date is "today" stays Active for all of today and only
+                // flips to Failed starting tomorrow. Without normalizing, raw
+                // `end_date < today` would mark a habit as Failed mid-day when
+                // end_date = today_07:00 but today = today_00:00 (off by hours).
                 val isFailed = !isJourneyComplete &&
-                    habit.end_date != null && habit.end_date < today
+                    habit.end_date != null &&
+                    com.example.betterme.utils.DateUtils.startOfDay(habit.end_date) < today
                 // Journey just hit 100% (or window elapsed) → cancel the pending alarm
                 // so the user never gets a stale "time to check-in" notification for a
                 // habit they can no longer check into. Idempotent if already cancelled.

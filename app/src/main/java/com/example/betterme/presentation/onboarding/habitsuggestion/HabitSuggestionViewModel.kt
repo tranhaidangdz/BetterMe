@@ -11,6 +11,7 @@ import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.domain.repository.ReminderRepository
 import com.example.betterme.domain.repository.UserRepository
+import com.example.betterme.utils.DateUtils
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -309,14 +310,16 @@ class HabitSuggestionViewModel(
                     category.habits
                         .filter { it.isChecked }
                         .forEach { habit ->
-                            // Lưu habit vào DB
+                            // Lưu habit vào DB. Normalize cả start_date và end_date
+                            // về startOfDay để các filter theo ngày phía read-side
+                            // (DailyHabits, Statistics, …) so sánh ngày-chính-xác.
                             val habitEntity = HabitEntity(
                                 user_id = userId,
                                 category_id = category.categoryId,
                                 title = habit.title,
                                 description = null,
-                                start_date = habit.startDate,
-                                end_date = habit.endDate,
+                                start_date = DateUtils.startOfDay(habit.startDate),
+                                end_date = habit.endDate?.let { DateUtils.startOfDay(it) },
                                 reminder_time = habit.reminderTimeFormatted,
                                 created_at = System.currentTimeMillis()
                             )

@@ -12,6 +12,7 @@ import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.domain.usecase.ai.GenerateHabitGroupReviewUseCase
 import com.example.betterme.domain.usecase.ai.SuggestHabitsForCategoryUseCase
 import com.example.betterme.domain.usecase.habit.ScheduleHabitReminderUseCase
+import com.example.betterme.utils.DateUtils
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
@@ -94,14 +95,17 @@ class CategoryDetailViewModel(
             if (userId.isBlank()) return@launch
 
             val now = System.currentTimeMillis()
+            val todayStart = DateUtils.startOfDay(now)
             val thirtyDays = TimeUnit.DAYS.toMillis(30)
+            // Day-aligned start/end so the new habit shows in today's active list
+            // immediately, with no time-of-day comparison off-by-hours bug.
             val entity = HabitEntity(
                 user_id = userId,
                 category_id = currentState.categoryId.takeIf { it > 0 },
                 title = suggestion.title,
                 description = suggestion.description.ifBlank { null },
-                start_date = now,
-                end_date = now + thirtyDays,
+                start_date = todayStart,
+                end_date = todayStart + thirtyDays,
                 reminder_time = null,
                 created_at = now
             )
