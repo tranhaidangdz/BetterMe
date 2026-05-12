@@ -55,11 +55,15 @@ fun DailyHabitsContent(
 ) {
     // Hero counters derive from the unfiltered list for the selected date so the
     // ring stays anchored to "today's plan" rather than reflecting whichever
-    // filter tab the user happens to be on. completed = checked-in today,
-    // total = today's allHabits count.
+    // filter tab the user happens to be on. completed = checked-in on selected
+    // date, total = active habits on selected date.
     val total = state.allHabits.size
     val completed = state.allHabits.count { it.isCheckedInToday }
     val selectedDate = state.dates.getOrNull(state.selectedDateIndex)
+    // Today-only interaction guard. Past/future rows render read-only; the hero
+    // copy + ring alpha shift to communicate it.
+    val isSelectedDateToday = state.selectedDateIndex == state.todayIndex
+    val dayOffset = state.selectedDateIndex - state.todayIndex
 
     Box(
         modifier = Modifier
@@ -86,12 +90,16 @@ fun DailyHabitsContent(
                 )
             }
 
-            // Hero card with progress ring + counters + momentum chip.
+            // Hero card with progress ring + counters. Title/subtitle/copy shift
+            // when the user selects a non-today date so the screen never lies
+            // ("Hôm nay" when the user is actually viewing Hôm qua).
             item(key = "hero") {
                 TasksHeroCard(
                     completedCount = completed,
                     totalCount = total,
-                    selectedDate = selectedDate
+                    selectedDate = selectedDate,
+                    isToday = isSelectedDateToday,
+                    dayOffset = dayOffset
                 )
             }
 
@@ -125,6 +133,9 @@ fun DailyHabitsContent(
                 HabitCard(
                     habit = habit,
                     onCardClick = { onHabitClick(habit.id) },
+                    // Past + future days are read-only — only today permits
+                    // check-in. Opening detail still works on every day.
+                    isInteractive = isSelectedDateToday,
                     modifier = Modifier.animateItem(
                         fadeInSpec = tween(220),
                         placementSpec = tween(220),

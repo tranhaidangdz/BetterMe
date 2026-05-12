@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.betterme.presentation.dailyhabits.DateUiModel
 import com.example.betterme.presentation.theme.BetterMeColors
@@ -37,26 +37,36 @@ import com.example.betterme.presentation.theme.BetterMeTokens
 import com.example.betterme.presentation.theme.BetterMeTypography
 
 /**
- * Hero card for the Tasks tab. Sits directly under the top bar and replaces the
- * prior plain header.
+ * Hero card for the Tasks tab.
  *
- * Visual anatomy (left → right):
- * - Left column: greeting / motivational subtitle, two info chips (today date
- *   + momentum), and the "X/Y nhiệm vụ" + "còn lại" counters.
- * - Right column: an animated circular progress ring rendered with Canvas so the
- *   stroke width and rounded caps look intentional (Material's LinearProgressIndicator
- *   reads as utilitarian; a custom ring fits the premium tone of the rest of
- *   the app — see CategorySummaryCard, ChallengeDetail hero).
+ * Layout
+ * - Left column (Column with spacedBy(4dp)) holds the date title + secondary
+ *   subtitle stacked vertically. Previously these lived in a horizontal chip
+ *   row that wrapped awkwardly when the Vietnamese label "🌱 Bắt đầu nào" met
+ *   the 96dp progress ring. Stacking matches the spec the user gave and never
+ *   overflows.
+ * - Right column: animated 96dp progress ring (Canvas, rounded caps) with a
+ *   percent label that counts up via animateFloatAsState.
  *
- * The ring's sweep animates with [animateFloatAsState] so a check-in nudges the
- * ring smoothly instead of jumping. The percentage label inside the ring uses the
- * same animated value so the number visibly counts up.
+ * Date-awareness
+ * - When [isToday] is true, the title reads "Hôm nay" and the subtitle uses
+ *   a motivational momentum line that shifts with completion fraction.
+ * - When viewing the past, the title reads "Hôm qua" or "N ngày trước" and
+ *   the subtitle calls out read-only mode + how the day went.
+ * - When viewing the future, the title reads "Ngày mai" / "N ngày tới" and
+ *   the subtitle frames the day as "Chỉ xem — chưa thể check-in".
+ *
+ * Read-only signal: when [isToday] is false, the progress ring uses a softer
+ * accent (50% alpha) and the ring's center label drops the "hôm nay" caption
+ * — both communicate "you're looking at history/preview, not interacting".
  */
 @Composable
 fun TasksHeroCard(
     completedCount: Int,
     totalCount: Int,
     selectedDate: DateUiModel?,
+    isToday: Boolean,
+    dayOffset: Int,
     modifier: Modifier = Modifier
 ) {
     val fraction = if (totalCount > 0) completedCount.toFloat() / totalCount else 0f
@@ -65,9 +75,9 @@ fun TasksHeroCard(
         animationSpec = tween(durationMillis = 600),
         label = "tasks_progress"
     )
-    val remaining = (totalCount - completedCount).coerceAtLeast(0)
-    val momentum = momentumLabel(fraction)
     val accent = BetterMeColors.Primary.Primary
+    val titleText = titleFor(isToday, dayOffset, selectedDate)
+    val subtitleText = subtitleFor(isToday, dayOffset, fraction, completedCount, totalCount)
 
     Box(
         modifier = modifier
@@ -97,32 +107,29 @@ fun TasksHeroCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                // Title — vertical stack per spec. "Hôm nay" / "Hôm qua" / "Ngày mai".
                 Text(
-                    text = "Hôm nay của bạn",
-                    style = BetterMeTypography.Body.Small.Medium,
-                    color = BetterMeColors.Text.TextTertiary
-                )
-                Text(
-                    text = "Hoàn thành từng bước nhỏ hôm nay ✨",
-                    style = BetterMeTypography.Title.Small.Bold,
+                    text = titleText,
+                    style = BetterMeTypography.Title.Medium.Bold,
                     color = BetterMeColors.Text.TextPrimary,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (selectedDate != null) {
-                        InfoChip(
-                            label = "📅 ${dateChipLabel(selectedDate)}",
-                            accent = accent
-                        )
-                    }
-                    InfoChip(
-                        label = momentum.label,
-                        accent = momentum.color
-                    )
-                }
-                Spacer(Modifier.height(2.dp))
+                // Secondary subtitle — motivational on today, read-only on other days.
+                Text(
+                    text = subtitleText,
+                    style = BetterMeTypography.Body.Small.Medium,
+                    color = BetterMeColors.Text.TextSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(Modifier.height(6.dp))
+
+                // Counter block.
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(
                         text = "$completedCount",
@@ -138,42 +145,21 @@ fun TasksHeroCard(
                     )
                 }
                 Text(
-                    text = if (totalCount == 0) "Hôm nay chưa có nhiệm vụ nào"
-                    else if (remaining == 0) "Tuyệt vời — bạn đã làm hết!"
-                    else "Còn $remaining nhiệm vụ chưa hoàn thành",
+                    text = footerFor(isToday, completedCount, totalCount),
                     style = BetterMeTypography.Body.Small.Medium,
-                    color = BetterMeColors.Text.TextTertiary
+                    color = BetterMeColors.Text.TextTertiary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Spacer(Modifier.size(14.dp))
             ProgressRing(
                 fraction = animatedFraction,
                 accent = accent,
-                percent = (animatedFraction * 100).toInt()
+                percent = (animatedFraction * 100).toInt(),
+                isToday = isToday
             )
         }
-    }
-}
-
-@Composable
-private fun InfoChip(label: String, accent: Color) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
-            .background(accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft))
-            .border(
-                width = 1.dp,
-                color = accent.copy(alpha = BetterMeTokens.AccentAlpha.Medium),
-                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Pill)
-            )
-            .padding(horizontal = 10.dp, vertical = 4.dp)
-    ) {
-        Text(
-            text = label,
-            style = BetterMeTypography.Body.Small.Medium,
-            color = accent,
-            fontWeight = FontWeight.SemiBold
-        )
     }
 }
 
@@ -181,8 +167,10 @@ private fun InfoChip(label: String, accent: Color) {
 private fun ProgressRing(
     fraction: Float,
     accent: Color,
-    percent: Int
+    percent: Int,
+    isToday: Boolean
 ) {
+    val foregroundAlpha = if (isToday) 1f else 0.5f
     Box(
         modifier = Modifier.size(96.dp),
         contentAlignment = Alignment.Center
@@ -190,7 +178,7 @@ private fun ProgressRing(
         Canvas(modifier = Modifier.size(96.dp)) {
             val stroke = 10.dp.toPx()
             val padding = stroke / 2
-            // Background ring — subtle so the foreground reads clearly even at 0%.
+            // Background ring — subtle so foreground reads clearly even at 0%.
             drawArc(
                 color = accent.copy(alpha = 0.12f),
                 startAngle = -90f,
@@ -200,9 +188,10 @@ private fun ProgressRing(
                 size = Size(size.width - stroke, size.height - stroke),
                 style = Stroke(width = stroke, cap = StrokeCap.Round)
             )
-            // Foreground sweep.
+            // Foreground sweep. Dimmer on non-today so the ring communicates
+            // "view-only" without changing visual structure.
             drawArc(
-                color = accent,
+                color = accent.copy(alpha = foregroundAlpha),
                 startAngle = -90f,
                 sweepAngle = 360f * fraction,
                 useCenter = false,
@@ -215,11 +204,11 @@ private fun ProgressRing(
             Text(
                 text = "$percent%",
                 style = BetterMeTypography.Title.Small.Bold,
-                color = BetterMeColors.Text.TextPrimary,
+                color = BetterMeColors.Text.TextPrimary.copy(alpha = if (isToday) 1f else 0.7f),
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "hôm nay",
+                text = if (isToday) "hôm nay" else "đã xong",
                 style = BetterMeTypography.Body.Small.Medium,
                 color = BetterMeColors.Text.TextTertiary
             )
@@ -227,21 +216,62 @@ private fun ProgressRing(
     }
 }
 
-private data class Momentum(val label: String, val color: Color)
+// ============================================================
+// COPY HELPERS
+// ============================================================
 
 /**
- * Maps completion fraction to a momentum chip — purely decorative copy so the
- * card has personality at any state. Tunable from one place if the user wants
- * a different tone.
+ * Big title line. Today + immediate neighbours get spoken-language labels;
+ * further days fall back to absolute "d/m" so the user gets a precise anchor.
  */
-private fun momentumLabel(fraction: Float): Momentum = when {
-    fraction <= 0f -> Momentum("🌱 Bắt đầu nào", Color(0xFFEA580C))
-    fraction < 0.34f -> Momentum("⚡ Đang khởi động", Color(0xFFEA580C))
-    fraction < 0.67f -> Momentum("🔥 Đang đà tốt", Color(0xFFDB7B0A))
-    fraction < 1f -> Momentum("💪 Sắp về đích", Color(0xFF16A34A))
-    else -> Momentum("✨ Hoàn hảo", Color(0xFF16A34A))
+private fun titleFor(isToday: Boolean, dayOffset: Int, selectedDate: DateUiModel?): String {
+    if (isToday) return "Hôm nay"
+    return when (dayOffset) {
+        -1 -> "Hôm qua"
+        1 -> "Ngày mai"
+        in Int.MIN_VALUE..-2 -> "${-dayOffset} ngày trước"
+        in 2..Int.MAX_VALUE -> "$dayOffset ngày tới"
+        else -> selectedDate?.let { "${it.day}/${it.month}" } ?: ""
+    }
 }
 
-private fun dateChipLabel(date: DateUiModel): String =
-    if (date.isToday) "Hôm nay • ${date.day}/${date.month}"
-    else "${date.weekDay} • ${date.day}/${date.month}"
+/**
+ * Subtitle. Today: motivational (momentum-aware). Past: how the day went.
+ * Future: framed as planning/preview. Always one line conceptually.
+ */
+private fun subtitleFor(
+    isToday: Boolean,
+    dayOffset: Int,
+    fraction: Float,
+    completed: Int,
+    total: Int
+): String {
+    if (isToday) {
+        return when {
+            total == 0 -> "Hôm nay chưa có nhiệm vụ nào"
+            fraction <= 0f -> "Bắt đầu nào ✨"
+            fraction < 0.34f -> "Đang khởi động — bước nhỏ là đủ"
+            fraction < 0.67f -> "Đang đà tốt — tiếp tục nhé"
+            fraction < 1f -> "Sắp về đích rồi 💪"
+            else -> "Hoàn hảo — bạn đã làm hết ✨"
+        }
+    }
+    val past = dayOffset < 0
+    if (total == 0) {
+        return if (past) "Ngày này không có nhiệm vụ nào"
+        else "Ngày này chưa có nhiệm vụ nào lên kế hoạch"
+    }
+    return if (past) "Chỉ xem — $completed/$total đã hoàn thành"
+    else "Chỉ xem — chưa thể check-in"
+}
+
+/** Trailing helper line under the counter. */
+private fun footerFor(isToday: Boolean, completed: Int, total: Int): String {
+    val remaining = (total - completed).coerceAtLeast(0)
+    if (!isToday) return "Chỉ xem — không thể check-in ngày này"
+    return when {
+        total == 0 -> "Thêm thói quen để bắt đầu"
+        remaining == 0 -> "Tuyệt vời — bạn đã làm hết!"
+        else -> "Còn $remaining nhiệm vụ chưa hoàn thành"
+    }
+}
