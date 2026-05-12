@@ -1,12 +1,12 @@
 package com.example.betterme.presentation.dailyhabits
 
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -26,8 +25,9 @@ import com.example.betterme.presentation.components.view.BetterMeTopBar
 import com.example.betterme.presentation.dailyhabits.components.DateSelector
 import com.example.betterme.presentation.dailyhabits.components.FilterTabs
 import com.example.betterme.presentation.dailyhabits.components.HabitCard
+import com.example.betterme.presentation.dailyhabits.components.TasksEmptyState
+import com.example.betterme.presentation.dailyhabits.components.TasksHeroCard
 import com.example.betterme.presentation.theme.BetterMeColors
-import com.example.betterme.presentation.theme.BetterMeTypography
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -53,6 +53,14 @@ fun DailyHabitsContent(
     onBackClick: () -> Unit = {},
     onHabitClick: (Int) -> Unit = {}
 ) {
+    // Hero counters derive from the unfiltered list for the selected date so the
+    // ring stays anchored to "today's plan" rather than reflecting whichever
+    // filter tab the user happens to be on. completed = checked-in today,
+    // total = today's allHabits count.
+    val total = state.allHabits.size
+    val completed = state.allHabits.count { it.isCheckedInToday }
+    val selectedDate = state.dates.getOrNull(state.selectedDateIndex)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -67,11 +75,23 @@ fun DailyHabitsContent(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(top = 12.dp, bottom = 140.dp)
         ) {
+            // Shared app top bar — consistent with the rest of the app. Title is
+            // "Nhiệm vụ" (this screen models the user's daily missions, not the
+            // catalog of habits).
             item(key = "topbar") {
                 BetterMeTopBar(
                     leadingIconRes = R.drawable.ic_arrow_left,
-                    title = "Thói quen",
+                    title = "Nhiệm vụ",
                     onLeadingClick = onBackClick
+                )
+            }
+
+            // Hero card with progress ring + counters + momentum chip.
+            item(key = "hero") {
+                TasksHeroCard(
+                    completedCount = completed,
+                    totalCount = total,
+                    selectedDate = selectedDate
                 )
             }
 
@@ -91,23 +111,8 @@ fun DailyHabitsContent(
             }
 
             if (state.visibleHabits.isEmpty() && !state.isLoading) {
-                item(key = "empty") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(120.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = when (state.selectedFilter) {
-                                DailyHabitFilter.ALL -> "Chưa có thói quen nào trong ngày này"
-                                DailyHabitFilter.IN_PROGRESS -> "Tất cả thói quen đã hoàn thành 🎉"
-                                DailyHabitFilter.DONE -> "Chưa hoàn thành thói quen nào"
-                            },
-                            style = BetterMeTypography.Body.Medium,
-                            color = BetterMeColors.Text.TextTertiary
-                        )
-                    }
+                item(key = "empty_state") {
+                    TasksEmptyState(filter = state.selectedFilter)
                 }
             }
 
@@ -115,9 +120,16 @@ fun DailyHabitsContent(
                 items = state.visibleHabits,
                 key = { it.id }
             ) { habit ->
+                // Filter switches re-key the list; animateItem smooths the
+                // re-flow between filter tabs so cards slide rather than jump.
                 HabitCard(
                     habit = habit,
-                    onCardClick = { onHabitClick(habit.id) }
+                    onCardClick = { onHabitClick(habit.id) },
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = tween(220),
+                        placementSpec = tween(220),
+                        fadeOutSpec = tween(160)
+                    )
                 )
             }
         }
