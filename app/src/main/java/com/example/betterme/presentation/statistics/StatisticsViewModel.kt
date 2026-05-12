@@ -204,8 +204,16 @@ class StatisticsViewModel(
 
         // Habits *active during* the range — created on or before rangeEnd, not ended
         // before rangeStart. Avoids counting a habit ended last year against this week.
+        //
+        // Both sides are normalized to start-of-day so a habit whose start_date
+        // is `today 10:30 AM` (AddHabit's default when the DatePicker isn't
+        // touched) is still considered active in a range ending at `today 00:00`.
+        // Without normalization the raw `10:30 <= 00:00` comparison excludes
+        // the habit from its own first day.
         val habitsInRange = habits.filter { h ->
-            h.start_date <= rangeEnd && (h.end_date == null || h.end_date >= rangeStart)
+            val hStart = DateUtils.startOfDay(h.start_date)
+            val hEnd = h.end_date?.let { DateUtils.startOfDay(it) }
+            hStart <= rangeEnd && (hEnd == null || hEnd >= rangeStart)
         }
 
         val habitIds = habitsInRange.map { it.id }.toSet()

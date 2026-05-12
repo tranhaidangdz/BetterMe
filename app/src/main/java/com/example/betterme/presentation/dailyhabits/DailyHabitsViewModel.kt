@@ -8,6 +8,7 @@ import com.example.betterme.domain.repository.CategoryRepository
 import com.example.betterme.domain.repository.HabitLogRepository
 import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.presentation.dailyhabits.model.HabitUiModel
+import com.example.betterme.utils.DateUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -141,9 +142,17 @@ class DailyHabitsViewModel(
         dateMs: Long,
         categoryMap: Map<Int, com.example.betterme.data.local.room.entities.CategoryEntity>
     ): List<HabitUiModel> {
+        // Day-precise inclusion: a habit is active on `dateMs` if its calendar
+        // start day is on or before `dateMs` AND its end day (if any) is on or
+        // after `dateMs`. Normalizing both sides via [DateUtils.startOfDay]
+        // fixes the prior bug where a habit created today at 10:30 AM (so
+        // start_date = today_10:30) was excluded from today (dateMs = today_00:00)
+        // because raw `10:30 <= 00:00` is false. After normalization both
+        // sides land on today_00:00 and the habit shows up on its first day.
         val activeOnDate = habits.filter { habit ->
-            habit.start_date <= dateMs &&
-                (habit.end_date == null || habit.end_date >= dateMs)
+            val habitStart = DateUtils.startOfDay(habit.start_date)
+            val habitEnd = habit.end_date?.let { DateUtils.startOfDay(it) }
+            habitStart <= dateMs && (habitEnd == null || habitEnd >= dateMs)
         }
         val completedOnDate = habitLogRepository.getCompletedHabitIdsByDate(dateMs).toSet()
 
