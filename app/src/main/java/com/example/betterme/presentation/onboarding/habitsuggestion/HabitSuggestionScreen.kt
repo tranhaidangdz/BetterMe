@@ -22,9 +22,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.example.betterme.domain.ai.onboarding.HabitCategoryKey
+import com.example.betterme.domain.ai.onboarding.OnboardingProfile
 import com.example.betterme.presentation.components.button.BetterMeButton
+import com.example.betterme.presentation.onboarding.ai.OnboardingAiBottomSheet
+import com.example.betterme.presentation.onboarding.ai.OnboardingAiIntent
+import com.example.betterme.presentation.onboarding.ai.OnboardingAiViewModel
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeShapes
+import com.example.betterme.presentation.theme.BetterMeTokens
 import com.example.betterme.presentation.theme.BetterMeTypography
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -42,9 +48,11 @@ fun HabitSuggestionScreen(
     navigateToMain: () -> Unit,
     viewModel: HabitSuggestionViewModel = koinViewModel(
         parameters = { parametersOf(selectedCategoryIds) }
-    )
+    ),
+    onboardingAiViewModel: OnboardingAiViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val aiState by onboardingAiViewModel.viewState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
@@ -66,9 +74,36 @@ fun HabitSuggestionScreen(
             modifier = Modifier.padding(padding),
             state = state,
             repeatOptions = viewModel.repeatOptions,
-            onIntent = viewModel::onIntent
+            onIntent = viewModel::onIntent,
+            onOpenAiSuggester = {
+                // Build the onboarding profile from what we already know: the
+                // categories the user picked (mapped enum->enum), beginner
+                // experience by default, plus titles of habits already on the
+                // staging list so the AI doesn't suggest duplicates.
+                val mappedCategories = mapSelectedCategoryNamesToKeys(state.categoryHabits.map { it.categoryName })
+                val existingTitles = state.categoryHabits
+                    .flatMap { it.habits }
+                    .filter { it.isChecked }
+                    .map { it.title }
+                onboardingAiViewModel.processIntent(
+                    OnboardingAiIntent.Analyze(
+                        profile = OnboardingProfile(
+                            selectedCategories = mappedCategories,
+                            existingHabitTitles = existingTitles
+                        )
+                    )
+                )
+            }
         )
     }
+
+    // AI Onboarding suggestion bottom sheet — modal, lifecycle-safe, dies with
+    // the screen. Mounted at screen scope so it overlays both the LazyColumn
+    // and the (existing) habit-settings dialog.
+    OnboardingAiBottomSheet(
+        state = aiState,
+        onIntent = onboardingAiViewModel::processIntent
+    )
 
     // === HABIT SETTINGS DIALOG ===
     val editingHabit = state.editingHabit
@@ -176,7 +211,8 @@ fun HabitSuggestionContent(
     modifier: Modifier = Modifier,
     state: HabitSuggestionState,
     repeatOptions: List<String>,
-    onIntent: (HabitSuggestionIntent) -> Unit
+    onIntent: (HabitSuggestionIntent) -> Unit,
+    onOpenAiSuggester: () -> Unit = {}
 ) {
     Column(
         modifier = modifier
@@ -206,7 +242,14 @@ fun HabitSuggestionContent(
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // AI personalised-starter entry. Tapping opens the OnboardingAiBottomSheet
+        // mounted at screen scope; the AI proposes 4-6 sustainable habits the
+        // user can accept one-by-one or all at once.
+        AiSuggesterPill(onClick = onOpenAiSuggester)
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // ===== HABIT LIST (LazyColumn) =====
         LazyColumn(
@@ -719,3 +762,64 @@ private fun HabitSuggestionPreview() {
         onIntent = {}
     )
 }
+
+/**
+ * Entry-point pill for the AI Onboarding Suggester. Sits above the static
+ * habit list and opens the AI bottom sheet on tap. Visual treatment matches
+ * the "Phân tích lịch trình" pill on the Tasks screen so users see one
+ * consistent "AI assistant" surface across BetterMe.
+ */
+@Composable
+private fun AiSuggesterPill(onClick: () -> Unit) {
+    val accent = BetterMeColors.Primary.Primary
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
+            .background(accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft))
+            .border(
+                width = 1.dp,
+                color = accent.copy(alpha = BetterMeTokens.AccentAlpha.Medium),
+                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Pill)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "✨  AI gợi ý cá nhân hoá",
+                style = BetterMeTypography.Body.Medium,
+                color = accent
+            )
+            Text(
+                text = "Để AI chọn 4–6 thói quen bền vững theo lối sống của bạn",
+                style = BetterMeTypography.Body.Small.Medium,
+                color = BetterMeColors.Text.TextTertiary
+            )
+        }
+        Text(
+            text = "›",
+            style = BetterMeTypography.Title.Small.Bold,
+            color = accent
+        )
+    }
+}
+
+/**
+ * Maps the Vietnamese category names visible in the existing onboarding
+ * picker to the [HabitCategoryKey] enum the AI prompt expects. Substring
+ * matching against the enum's [HabitCategoryKey.matchKeywords] — the same
+ * reverse lookup the use case uses for category-id resolution.
+ *
+ * If a category name has no enum keyword match (rare; user added a custom
+ * category), it's silently skipped. The AI is told to ONLY suggest within
+ * `selectedCategories` when non-empty; dropping unmappable ones keeps the
+ * suggestion set focused on categories we know how to write habits into.
+ */
+private fun mapSelectedCategoryNamesToKeys(names: List<String>): List<HabitCategoryKey> =
+    names.mapNotNull { name ->
+        HabitCategoryKey.entries.firstOrNull { key ->
+            key.matchKeywords.any { name.contains(it, ignoreCase = true) }
+        }
+    }.distinct()

@@ -1,5 +1,7 @@
 package com.example.betterme.domain.ai
 
+import com.example.betterme.domain.ai.onboarding.OnboardingProfile
+import com.example.betterme.domain.ai.onboarding.OnboardingSuggestion
 import com.example.betterme.domain.ai.schedule.ScheduleAnalysis
 import com.example.betterme.domain.ai.schedule.UserLifestyleProfile
 
@@ -81,6 +83,26 @@ interface AiHabitInsightRepository {
         profile: UserLifestyleProfile?,
         habits: List<ScheduleHabitInput>
     ): ScheduleAnalysis
+
+    /**
+     * Generates an opening 4–6 habit starter set for a new BetterMe user.
+     * The prompt enforces sustainable defaults (no 4 AM wake-ups, mostly
+     * EASY/MEDIUM, ≤2 HARD, etc.) and respects [OnboardingProfile.selectedCategories]
+     * when non-empty.
+     *
+     * Always returns an [OnboardingSuggestion]. When every OpenRouter model in
+     * the fallback chain fails, the repo serves a handwritten 4-habit beginner
+     * starter set with `isCanned = true` so the onboarding flow never deadlocks
+     * on a network error.
+     *
+     * @param profile   user inputs (goals, categories, experience, activity, etc.)
+     * @param lifestyle sleep / work / meal anchors. Pass null to use
+     *                  [UserLifestyleProfile.Default] (healthy baseline).
+     */
+    suspend fun suggestOnboardingHabits(
+        profile: OnboardingProfile,
+        lifestyle: UserLifestyleProfile?
+    ): OnboardingSuggestion
 }
 
 /**

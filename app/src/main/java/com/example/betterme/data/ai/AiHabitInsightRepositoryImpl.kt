@@ -9,6 +9,12 @@ import com.example.betterme.domain.ai.AiHabitInsightRepository.AiResult
 import com.example.betterme.domain.ai.AiHabitInsightRepository.AiSuggestResult
 import com.example.betterme.domain.ai.ScheduleHabitInput
 import com.example.betterme.domain.ai.SuggestedHabit
+import com.example.betterme.domain.ai.onboarding.Difficulty
+import com.example.betterme.domain.ai.onboarding.HabitCategoryKey
+import com.example.betterme.domain.ai.onboarding.OnboardingProfile
+import com.example.betterme.domain.ai.onboarding.OnboardingSuggestedHabit
+import com.example.betterme.domain.ai.onboarding.OnboardingSuggestion
+import com.example.betterme.domain.ai.onboarding.Priority
 import com.example.betterme.domain.ai.schedule.BurnoutRisk
 import com.example.betterme.domain.ai.schedule.ConflictType
 import com.example.betterme.domain.ai.schedule.EnergyLevel
@@ -462,6 +468,219 @@ class AiHabitInsightRepositoryImpl(
     )
 
     // ============================================================
+    // ONBOARDING SUGGESTER
+    // ============================================================
+    override suspend fun suggestOnboardingHabits(
+        profile: OnboardingProfile,
+        lifestyle: UserLifestyleProfile?
+    ): OnboardingSuggestion {
+        val effectiveLifestyle = lifestyle ?: UserLifestyleProfile.Default
+        val messages = listOf(
+            ChatMessage(role = "system", content = ONBOARDING_SYSTEM_PROMPT),
+            ChatMessage(role = "user", content = buildOnboardingUserPrompt(profile, effectiveLifestyle))
+        )
+
+        var lastFailure: String? = null
+        for ((index, model) in FALLBACK_MODELS.withIndex()) {
+            val attempt = tryOnboardingModel(model, messages)
+            attempt.onSuccess { return it }
+            lastFailure = attempt.exceptionOrNull()?.message
+            Log.w(TAG, "Onboarding model[$index]=$model failed: $lastFailure")
+        }
+
+        Log.w(TAG, "All onboarding models exhausted — serving canned starter set")
+        return cannedOnboardingSuggestion()
+    }
+
+    private suspend fun tryOnboardingModel(
+        model: String,
+        messages: List<ChatMessage>
+    ): Result<OnboardingSuggestion> {
+        Log.d(TAG, "Using model=$model")
+        return try {
+            val response = api.chatCompletion(
+                ChatRequest(
+                    model = model,
+                    messages = messages,
+                    // 6 habits × ~50 tokens each + summary + recommendedFocus +
+                    // top-level fields ≈ 400 tokens. 500 leaves headroom for
+                    // Vietnamese multi-byte expansion.
+                    maxTokens = ONBOARDING_MAX_TOKENS,
+                    temperature = TEMPERATURE
+                )
+            )
+            if (response.error != null) {
+                return Result.failure(
+                    IllegalStateException(response.error.message ?: "AI từ chối yêu cầu")
+                )
+            }
+            val content = response.choices.firstOrNull()?.message?.content?.trim()
+            if (content.isNullOrBlank()) {
+                return Result.failure(IllegalStateException("AI không trả lời"))
+            }
+            val cleaned = content
+                .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+            val parsed = parseOnboardingSuggestion(cleaned)
+                ?: return Result.failure(IllegalStateException("AI trả về dữ liệu sai định dạng"))
+            Result.success(parsed)
+        } catch (e: java.net.SocketTimeoutException) {
+            Result.failure(IllegalStateException("Mạng chậm (504)"))
+        } catch (e: HttpException) {
+            Result.failure(IllegalStateException(extractHttpErrorMessage(e)))
+        } catch (e: java.io.IOException) {
+            Result.failure(IllegalStateException("Không thể kết nối đến AI"))
+        } catch (e: Exception) {
+            Log.e(TAG, "Onboarding request threw", e)
+            Result.failure(e)
+        }
+    }
+
+    private fun buildOnboardingUserPrompt(
+        profile: OnboardingProfile,
+        lifestyle: UserLifestyleProfile
+    ): String = buildString {
+        appendLine("Goals:")
+        if (profile.goals.isEmpty()) appendLine("[]")
+        else profile.goals.forEach { appendLine("- $it") }
+        appendLine()
+
+        if (profile.selectedCategories.isNotEmpty()) {
+            appendLine("Selected categories:")
+            appendLine(profile.selectedCategories.joinToString(", ") { it.name })
+            appendLine()
+        }
+
+        appendLine("Sleep: ${lifestyle.sleepStart} → ${lifestyle.sleepEnd}")
+        appendLine("Work: ${lifestyle.workStart} → ${lifestyle.workEnd}")
+        appendLine("Meals: breakfast ${lifestyle.breakfast}, lunch ${lifestyle.lunch}, dinner ${lifestyle.dinner}")
+        appendLine("Activity level: ${profile.activityLevel.ifBlank { lifestyle.activityLevel }}")
+        appendLine("Experience level: ${profile.experienceLevel.name}")
+
+        if (profile.existingHabitTitles.isNotEmpty()) {
+            appendLine()
+            appendLine("Existing habit titles:")
+            appendLine(profile.existingHabitTitles.joinToString(", ") { "\"$it\"" })
+        }
+        if (profile.wellnessFlags.isNotEmpty()) {
+            appendLine()
+            appendLine("Wellness flags:")
+            appendLine(profile.wellnessFlags.joinToString(", "))
+        }
+    }
+
+    private fun parseOnboardingSuggestion(raw: String): OnboardingSuggestion? {
+        return try {
+            val dto = jsonParser.decodeFromString(OnboardingSuggestionDto.serializer(), raw)
+            OnboardingSuggestion(
+                summary = dto.summary.trim(),
+                energyProfile = parseEnum<EnergyLevel>(dto.energyProfile) ?: EnergyLevel.MODERATE,
+                recommendedFocus = dto.recommendedFocus.trim(),
+                habits = dto.habits.take(6).mapNotNull { h ->
+                    val category = HabitCategoryKey.fromStringOrNull(h.category) ?: return@mapNotNull null
+                    val difficulty = parseEnum<Difficulty>(h.difficulty) ?: Difficulty.EASY
+                    val priority = parseEnum<Priority>(h.priority) ?: Priority.MEDIUM
+                    if (h.title.isBlank()) return@mapNotNull null
+                    if (!h.reminderTime.matches(HHMM_REGEX)) return@mapNotNull null
+                    OnboardingSuggestedHabit(
+                        title = h.title.trim(),
+                        emoji = h.emoji.ifBlank { "✨" }.trim(),
+                        description = h.description.trim(),
+                        category = category,
+                        difficulty = difficulty,
+                        priority = priority,
+                        estimatedMinutes = h.estimatedMinutes.coerceIn(1, 120),
+                        reminderTime = h.reminderTime,
+                        motivation = h.motivation.trim()
+                    )
+                },
+                isCanned = false
+            ).takeIf { it.habits.isNotEmpty() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse onboarding JSON: $raw", e)
+            null
+        }
+    }
+
+    /**
+     * Handwritten 4-habit beginner starter set served when every OpenRouter
+     * model fails. All EASY, all ≤15 minutes, spread across morning / day /
+     * evening so the user never lands on a blank screen.
+     */
+    private fun cannedOnboardingSuggestion(): OnboardingSuggestion = OnboardingSuggestion(
+        summary = "Bộ thói quen khởi đầu nhẹ nhàng và bền vững cho bạn.",
+        energyProfile = EnergyLevel.MODERATE,
+        recommendedFocus = "Hãy bắt đầu với những thói quen ngắn để xây dựng đà đều đặn.",
+        habits = listOf(
+            OnboardingSuggestedHabit(
+                title = "Uống 1 cốc nước sau khi thức",
+                emoji = "💧",
+                description = "Bù nước cho cơ thể ngay khi bắt đầu ngày mới.",
+                category = HabitCategoryKey.HEALTH,
+                difficulty = Difficulty.EASY,
+                priority = Priority.MEDIUM,
+                estimatedMinutes = 2,
+                reminderTime = "07:30",
+                motivation = "Một thói quen nhỏ tạo đà cho cả ngày."
+            ),
+            OnboardingSuggestedHabit(
+                title = "Đi bộ 15 phút sau giờ làm",
+                emoji = "🚶",
+                description = "Vận động nhẹ giúp giãn cơ và làm dịu đầu óc.",
+                category = HabitCategoryKey.FITNESS,
+                difficulty = Difficulty.EASY,
+                priority = Priority.MEDIUM,
+                estimatedMinutes = 15,
+                reminderTime = "18:00",
+                motivation = "15 phút mỗi ngày tốt hơn 1 giờ mỗi tuần."
+            ),
+            OnboardingSuggestedHabit(
+                title = "Đọc 10 phút trước khi ngủ",
+                emoji = "📖",
+                description = "Đọc gì cũng được — một cuốn sách bạn thích.",
+                category = HabitCategoryKey.STUDY,
+                difficulty = Difficulty.EASY,
+                priority = Priority.LOW,
+                estimatedMinutes = 10,
+                reminderTime = "21:30",
+                motivation = "10 phút mỗi tối tích lũy thành kiến thức bền."
+            ),
+            OnboardingSuggestedHabit(
+                title = "Ghi 3 điều biết ơn",
+                emoji = "📝",
+                description = "Viết ngắn 3 điều bạn biết ơn hôm nay.",
+                category = HabitCategoryKey.MINDFULNESS,
+                difficulty = Difficulty.EASY,
+                priority = Priority.LOW,
+                estimatedMinutes = 5,
+                reminderTime = "22:00",
+                motivation = "Tâm trí nhẹ nhõm trước khi ngủ."
+            )
+        ),
+        isCanned = true
+    )
+
+    @Serializable
+    private data class OnboardingSuggestionDto(
+        val summary: String = "",
+        val energyProfile: String = "MODERATE",
+        val recommendedFocus: String = "",
+        val habits: List<OnboardingHabitDto> = emptyList()
+    )
+
+    @Serializable
+    private data class OnboardingHabitDto(
+        val title: String = "",
+        val emoji: String = "",
+        val description: String = "",
+        val category: String = "",
+        val difficulty: String = "EASY",
+        val priority: String = "MEDIUM",
+        val estimatedMinutes: Int = 10,
+        val reminderTime: String = "",
+        val motivation: String = ""
+    )
+
+    // ============================================================
     // RETRY POLICY
     // ============================================================
     /**
@@ -743,6 +962,10 @@ class AiHabitInsightRepositoryImpl(
          *  summary + positiveFeedback + enum/scores. 300 covers Vietnamese text. */
         const val SCHEDULE_MAX_TOKENS = 300
 
+        /** Onboarding suggester: 6 habits × ~50 tokens + summary + recommendedFocus
+         *  + top-level fields ≈ 400. 500 leaves Vietnamese expansion headroom. */
+        const val ONBOARDING_MAX_TOKENS = 500
+
         const val RETRY_DELAY_MS = 800L
 
         /** Strict "HH:mm" 24-hour validator used everywhere a schedule string
@@ -823,6 +1046,100 @@ class AiHabitInsightRepositoryImpl(
               ],
               "optimizedSchedule": [
                 { "habit": "Reading", "suggestedTime": "07:30" }
+              ]
+            }
+        """.trimIndent()
+
+        /**
+         * Finalized system prompt for the AI Onboarding Suggester. Coaching
+         * stance + healthy baseline + strict-JSON output rules, all in one
+         * constant so future tweaks happen in one place. The runtime user
+         * prompt is built per-call by [buildOnboardingUserPrompt].
+         */
+        val ONBOARDING_SYSTEM_PROMPT = """
+            You are an intelligent AI onboarding coach inside a self-improvement app called BetterMe.
+
+            Your role is to help users build realistic, healthy, and sustainable habits based on their goals, lifestyle, energy level, and daily schedule.
+
+            You are NOT a productivity guru. You are NOT a strict life coach. You should behave like a supportive habit mentor focused on long-term consistency.
+
+            CORE PHILOSOPHY:
+            - Prioritize consistency over intensity
+            - Build routines gradually
+            - Avoid overwhelming schedules
+            - Avoid toxic productivity culture
+            - Avoid guilt-based language
+            - Avoid unrealistic "perfect life" routines
+            - Avoid extreme wake-up schedules (e.g. 4AM routines)
+            - Beginner users should receive easier habits first
+            - Sustainable habits are more important than maximum productivity
+
+            HEALTHY DEFAULT ASSUMPTIONS (ONLY when the user did not provide real lifestyle data):
+            - Sleep 23:00 → 07:00, target 8h
+            - Work 08:30 → 17:30
+            - Meals: breakfast 07:30, lunch 12:00, dinner 18:30
+            - Energy: 07-11 highest focus; 13-17 moderate; 21+ low
+            - Avoid HARD habits after 21:00; avoid intense exercise within 2h of sleep
+            - Leave 15-30 min between HARD habits; max 3 habits in a 90-min window
+
+            ONBOARDING GENERATION RULES:
+            - Generate 4-6 habits total
+            - Most habits EASY or MEDIUM; at most 2 HARD
+            - No duplicates; do not suggest habits already in existingHabitTitles
+            - If selectedCategories is non-empty, ONLY generate habits in those categories
+            - Realistic reminder times; achievable for normal people; gradual improvement
+
+            DIFFICULTY RULES:
+            - EASY: 2-15 minutes, low resistance
+            - MEDIUM: 15-45 minutes
+            - HARD: high energy/discipline; limit carefully
+
+            REMINDER WINDOWS:
+            - Workout 06:30-08:00 or 17:00-19:00
+            - Meditation 06:00-08:00 or 20:00-22:00
+            - Reading 20:00-22:00
+            - Deep work/study 08:00-11:00 or 14:00-17:00
+            - Walking/stretching 12:00-18:00
+            - Journaling 20:00-22:30
+            - Hydration: spaced every 2-3 hours
+            - Sleep preparation: after 21:00 only
+
+            OUTPUT RULES:
+            - Return STRICT JSON ONLY. No markdown, no ```json blocks, no text outside the JSON object.
+            - All strings in Vietnamese.
+            - summary ≤ 1 sentence; recommendedFocus ≤ 1 sentence; description ≤ 1 sentence; motivation ≤ 1 sentence.
+            - habits is 4-6 items max.
+            - reminderTime is HH:mm 24-hour.
+            - estimatedMinutes is between 1 and 120.
+
+            ENUMS (must match exactly):
+            - energyProfile: LOW | MODERATE | HIGH
+            - difficulty:    EASY | MEDIUM | HARD
+            - priority:      LOW | MEDIUM | HIGH
+            - category:      FITNESS | HEALTH | PRODUCTIVITY | STUDY | SLEEP | MINDFULNESS | SELF_CARE | DISCIPLINE
+
+            IMPORTANT:
+            - energyProfile reflects the user's current lifestyle balance inferred from sleep, work, and activity level.
+            - Favour sustainable routines over aggressive optimization.
+            - When user data is incomplete, still generate safe beginner-friendly habits.
+
+            JSON SCHEMA:
+            {
+              "summary": "string",
+              "energyProfile": "MODERATE",
+              "recommendedFocus": "string",
+              "habits": [
+                {
+                  "title": "string",
+                  "emoji": "string",
+                  "description": "string",
+                  "category": "FITNESS",
+                  "difficulty": "EASY",
+                  "priority": "MEDIUM",
+                  "estimatedMinutes": 15,
+                  "reminderTime": "07:30",
+                  "motivation": "string"
+                }
               ]
             }
         """.trimIndent()

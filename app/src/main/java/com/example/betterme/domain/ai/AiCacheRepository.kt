@@ -42,6 +42,11 @@ interface AiCacheRepository {
          *  schedule doesn't change every hour. */
         const val TYPE_SCHEDULE_ANALYSIS = "SCHEDULE_ANALYSIS"
 
+        /** AI onboarding starter-habit suggestions. Cached for the duration of
+         *  the onboarding session so revisits don't burn quota; cleared when
+         *  the user finalizes their habit selection. */
+        const val TYPE_ONBOARDING = "ONBOARDING"
+
         /** Default TTL — 12 hours. */
         const val TTL_MS_DEFAULT = 12L * 60L * 60L * 1000L
 

@@ -63,6 +63,7 @@ import com.example.betterme.domain.usecase.ai.AnalyzeScheduleUseCase
 import com.example.betterme.domain.usecase.ai.ApplyScheduleSuggestionsUseCase
 import com.example.betterme.domain.usecase.ai.GenerateHabitGroupReviewUseCase
 import com.example.betterme.domain.usecase.ai.SuggestHabitsForCategoryUseCase
+import com.example.betterme.domain.usecase.ai.SuggestOnboardingHabitsUseCase
 import com.example.betterme.domain.usecase.user.GetUserUseCase
 import com.example.betterme.domain.usecase.user.SaveUserUseCase
 import com.example.betterme.presentation.challenge.achievements.ChallengeAchievementsViewModel
@@ -79,6 +80,7 @@ import com.example.betterme.presentation.main.MainViewModel
 import com.example.betterme.presentation.home.HomeViewModel
 import com.example.betterme.presentation.dailyhabits.DailyHabitsViewModel
 import com.example.betterme.presentation.dailyhabits.schedule.ScheduleAnalysisViewModel
+import com.example.betterme.presentation.onboarding.ai.OnboardingAiViewModel
 import com.example.betterme.presentation.addhabit.AddHabitViewModel
 import com.example.betterme.presentation.categorydetail.CategoryDetailViewModel
 import com.example.betterme.presentation.habitdetail.HabitDetailViewModel
@@ -262,6 +264,11 @@ val useCaseModule = module {
     // Schedule Conflict Analyzer
     factory { AnalyzeScheduleUseCase(get(), get(), get(), get()) }
     factory { ApplyScheduleSuggestionsUseCase(get(), get(), get()) }
+    // Onboarding AI Suggester — order: dataStore, aiRepo, cache, categoryRepo,
+    // habitRepo, scheduleHabitReminderUseCase
+    factory {
+        SuggestOnboardingHabitsUseCase(get(), get(), get(), get(), get(), get())
+    }
 }
 
 val viewModelModule = module {
@@ -274,6 +281,7 @@ val viewModelModule = module {
     viewModelOf(::HomeViewModel)
     viewModelOf(::DailyHabitsViewModel)
     viewModelOf(::ScheduleAnalysisViewModel)
+    viewModelOf(::OnboardingAiViewModel)
     viewModelOf(::AddHabitViewModel)
     viewModelOf(::CategoryDetailViewModel)
     viewModelOf(::HabitDetailViewModel)

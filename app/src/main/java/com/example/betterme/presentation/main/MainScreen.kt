@@ -210,7 +210,7 @@ fun MainScreen(
                             CategoryDetailIntent.AddAiSuggestion(suggestion)
                         )
                     }
-                )   
+                )
 
                 SnackbarHost(
                     hostState = snackbarHostState,
