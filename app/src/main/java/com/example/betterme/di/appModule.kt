@@ -272,7 +272,9 @@ val useCaseModule = module {
 
     // AI use cases — last `get()` is the AiCacheRepository.
     factory { GenerateHabitGroupReviewUseCase(get(), get(), get(), get(), get()) }
-    factory { SuggestHabitsForCategoryUseCase(get(), get(), get(), get()) }
+    // SuggestHabitsForCategoryUseCase — order: dataStore, habitRepo,
+    // habitLogRepo, categoryRepo, aiRepo, cache.
+    factory { SuggestHabitsForCategoryUseCase(get(), get(), get(), get(), get(), get()) }
     // Schedule Conflict Analyzer
     factory { AnalyzeScheduleUseCase(get(), get(), get(), get()) }
     factory { ApplyScheduleSuggestionsUseCase(get(), get(), get()) }

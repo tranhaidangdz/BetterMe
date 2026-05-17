@@ -8,7 +8,13 @@ import com.example.betterme.domain.ai.AiCoachPersonality
 import com.example.betterme.domain.ai.AiHabitInsightRepository
 import com.example.betterme.domain.ai.AiHabitInsightRepository.AiSuggestResult
 import com.example.betterme.domain.ai.SuggestedHabit
+import com.example.betterme.domain.ai.personalization.CategoryKind
+import com.example.betterme.domain.ai.personalization.PersonalitySignal
+import com.example.betterme.domain.ai.personalization.SuggestionContext
+import com.example.betterme.domain.repository.CategoryRepository
+import com.example.betterme.domain.repository.HabitLogRepository
 import com.example.betterme.domain.repository.HabitRepository
+import com.example.betterme.utils.DateUtils
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -17,20 +23,26 @@ import kotlinx.serialization.json.Json
 /**
  * Generates AI habit suggestions for a category.
  *
- * - Pulls the user's existing habit titles in that category so the AI never suggests
- *   what they already have.
- * - Cache-first: a fresh cached list returns instantly. `forceRefresh = true` (user
- *   taps "Tạo lại") bypasses cache.
- * - On network failure, falls back to a stale cache entry if one exists so the user
- *   sees suggestions instead of a blank error.
+ * The use case now builds a [SuggestionContext] that includes:
+ *  - habits already in THIS category (avoid duplicate titles),
+ *  - habits across the WHOLE app (avoid duplicate intents in another
+ *    category — a Fitness suggestion shouldn't overlap a Health one),
+ *  - the inferred [CategoryKind] coverage the user already has,
+ *  - derived [PersonalitySignal]s,
+ *  - workload and overall completion rate.
  *
- * Cache content is a small JSON envelope (not the raw OpenRouter blob) so future
- * additions to [SuggestedHabit] auto-tolerate missing fields without breaking older
- * stored rows.
+ * The repo reads these to:
+ *  - feed the AI a context-rich prompt that forbids cardio when the
+ *    user is already a runner, recovery picks when the user is
+ *    overloaded, etc.
+ *  - select a category-aware canned pool with rotation when every
+ *    OpenRouter model fails.
  */
 class SuggestHabitsForCategoryUseCase(
     private val dataStoreManager: DataStoreManager,
     private val habitRepository: HabitRepository,
+    private val habitLogRepository: HabitLogRepository,
+    private val categoryRepository: CategoryRepository,
     private val aiRepository: AiHabitInsightRepository,
     private val cache: AiCacheRepository
 ) {
@@ -50,19 +62,59 @@ class SuggestHabitsForCategoryUseCase(
         if (userId.isBlank()) {
             return AiSuggestResult.Failure("Vui lòng đăng nhập để dùng AI")
         }
-        val existing = habitRepository.getHabits(userId).first()
-            .filter { it.category_id == categoryId }
-            .map { it.title }
-        val result = aiRepository.suggestHabits(
+
+        val allHabits = habitRepository.getHabits(userId).first()
+        val todayMs = DateUtils.startOfDay()
+        val activeHabits = allHabits.filter { it.end_date == null || it.end_date >= todayMs }
+
+        val existingInCategory = activeHabits.filter { it.category_id == categoryId }.map { it.title }
+        val existingAcrossApp = activeHabits.map { it.title }
+
+        // Resolve category coverage by classifying every existing habit's
+        // category name. Lets the AI / canned pool see "user already has
+        // a Fitness habit in another category" — useful when categories
+        // overlap intent.
+        val allCategories = categoryRepository.getAll().first().associateBy { it.id }
+        val existingKindCoverage = activeHabits
+            .mapNotNull { allCategories[it.category_id ?: -1]?.name }
+            .map { CategoryKind.classify(it) }
+            .toSet()
+
+        // Personality signals + overall completion across all habits.
+        val logsByHabitId = allHabits.associate { habit ->
+            habit.id to habitLogRepository.getLogs(habit.id).first()
+        }
+        val signals = PersonalitySignal.derive(allHabits, logsByHabitId, todayMs)
+
+        var totalPlanned = 0
+        var totalDone = 0
+        for (habit in activeHabits) {
+            val planned = if (habit.end_date != null) {
+                (((habit.end_date - habit.start_date) / DAY_MS) + 1).toInt().coerceAtLeast(1)
+            } else {
+                (((todayMs - habit.start_date) / DAY_MS) + 1).toInt().coerceAtLeast(1)
+            }
+            totalPlanned += planned
+            totalDone += habitLogRepository.countCompleted(habit.id)
+        }
+        val overallRate = if (totalPlanned > 0) ((totalDone.toFloat() / totalPlanned) * 100).toInt() else 0
+
+        val context = SuggestionContext(
             categoryName = categoryName,
-            existingHabitTitles = existing,
+            categoryKind = CategoryKind.classify(categoryName),
+            existingInCategory = existingInCategory,
+            existingAcrossApp = existingAcrossApp,
+            existingKindCoverage = existingKindCoverage,
+            signals = signals,
+            activeHabitCount = activeHabits.size,
+            overallRate = overallRate
+        )
+
+        val result = aiRepository.suggestHabits(
+            context = context,
             personality = personality
         )
 
-        // Real model success → persist for the next 12h.
-        // Canned success (all models failed) → DO NOT cache. Canned suggestions
-        // are generic; we don't want them to sit in cache for 12h once the
-        // network is back.
         if (result is AiSuggestResult.Success) {
             if (!result.isCanned) {
                 cache.save(categoryId, TYPE_SUGGESTIONS, encode(result.suggestions))
@@ -70,7 +122,6 @@ class SuggestHabitsForCategoryUseCase(
             return result
         }
 
-        // Network failed entirely → fall back to whatever we have, fresh or stale.
         cache.getAny(categoryId, TYPE_SUGGESTIONS)?.let { stale ->
             decode(stale.content)?.let { return AiSuggestResult.Success(it) }
         }
@@ -118,5 +169,9 @@ class SuggestHabitsForCategoryUseCase(
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
+    }
+
+    private companion object {
+        const val DAY_MS: Long = 24L * 60L * 60L * 1000L
     }
 }

@@ -4,6 +4,8 @@ import com.example.betterme.domain.ai.habitcreation.HabitCreationAnalysis
 import com.example.betterme.domain.ai.habitcreation.HabitCreationInput
 import com.example.betterme.domain.ai.lifestyle.HabitCompletionRecord
 import com.example.betterme.domain.ai.lifestyle.LifestyleInsight
+import com.example.betterme.domain.ai.personalization.GroupInsightContext
+import com.example.betterme.domain.ai.personalization.SuggestionContext
 import com.example.betterme.domain.ai.progression.HabitProgressionAnalysis
 import com.example.betterme.domain.ai.progression.HabitProgressionInput
 import com.example.betterme.domain.ai.recovery.HabitRecoveryAnalysis
@@ -43,15 +45,15 @@ interface AiHabitInsightRepository {
     /**
      * Coach-style review of one habit category for the user.
      *
-     * @param categoryName    "Vận động & thể chất", "Học tập", …
-     * @param stats           narrative summary of the analytics. The repo embeds this verbatim
-     *                        into the user prompt — pre-formatting keeps the AI from inventing
-     *                        numbers.
-     * @param personality     coaching tone selected by the user.
+     * The [context] bundle is the AI's window into the user's actual
+     * routine — per-habit completion lines, derived personality signals,
+     * the category's coaching kind, and trend label. The repo embeds the
+     * fields directly into the user prompt and uses them to pick a canned
+     * template when every OpenRouter model fails, so even offline users
+     * see meaningfully different copy across groups.
      */
     suspend fun reviewHabitGroup(
-        categoryName: String,
-        stats: String,
+        context: GroupInsightContext,
         personality: AiCoachPersonality
     ): AiResult
 
@@ -61,10 +63,15 @@ interface AiHabitInsightRepository {
      * to do any string parsing. On parse failure the call falls back to
      * [AiSuggestResult.Failure] with a clear message — no half-rendered suggestions
      * surface.
+     *
+     * The [context] bundle carries the user's broader routine — habits in
+     * THIS category plus habits across the app, plus the implied category
+     * coverage. The system prompt uses this to avoid suggesting habits
+     * whose intent the user already covers (no more "drink water" when
+     * the user has 3 hydration habits).
      */
     suspend fun suggestHabits(
-        categoryName: String,
-        existingHabitTitles: List<String>,
+        context: SuggestionContext,
         personality: AiCoachPersonality
     ): AiSuggestResult
 

@@ -22,6 +22,10 @@ import com.example.betterme.domain.ai.lifestyle.HabitCompletionRecord
 import com.example.betterme.domain.ai.lifestyle.LifestyleInsight
 import com.example.betterme.domain.ai.lifestyle.OverallTrend
 import com.example.betterme.domain.ai.lifestyle.SuggestionType
+import com.example.betterme.domain.ai.personalization.CannedTemplatePool
+import com.example.betterme.domain.ai.personalization.GroupInsightContext
+import com.example.betterme.domain.ai.personalization.PersonalitySignal
+import com.example.betterme.domain.ai.personalization.SuggestionContext
 import com.example.betterme.domain.ai.progression.HabitProgressionAction
 import com.example.betterme.domain.ai.progression.HabitProgressionAnalysis
 import com.example.betterme.domain.ai.progression.HabitProgressionInput
@@ -86,16 +90,14 @@ class AiHabitInsightRepositoryImpl(
 ) : AiHabitInsightRepository {
 
     // ============================================================
-    // REVIEW
+    // REVIEW — group-aware, personality-signal-aware
     // ============================================================
     override suspend fun reviewHabitGroup(
-        categoryName: String,
-        stats: String,
+        context: GroupInsightContext,
         personality: AiCoachPersonality
     ): AiResult {
-        val systemPrompt = personality.systemPromptPrefix +
-            "\nTrả lời tiếng Việt, 3-4 câu, súc tích, chỉ dùng số có trong dữ liệu."
-        val userPrompt = "Nhóm: \"$categoryName\".\n$stats"
+        val systemPrompt = personality.systemPromptPrefix + "\n" + REVIEW_SYSTEM_PROMPT_RULES
+        val userPrompt = buildReviewUserPrompt(context)
 
         val messages = listOf(
             ChatMessage(role = "system", content = systemPrompt),
@@ -111,28 +113,35 @@ class AiHabitInsightRepositoryImpl(
         }
 
         Log.w(TAG, "All review models exhausted — serving canned review")
-        return AiResult.Success(text = cannedReview(categoryName), isCanned = true)
+        return AiResult.Success(text = CannedTemplatePool.pickReview(context), isCanned = true)
+    }
+
+    private fun buildReviewUserPrompt(c: GroupInsightContext): String = buildString {
+        appendLine("Nhóm: \"${c.categoryName}\" (loại: ${c.categoryKind.coachingTag}).")
+        appendLine("Tổng quan: ${c.habitCount} thói quen, hoàn thành ${c.overallRate}%, " +
+            "đã xong hành trình ${c.completedJourneys}, bỏ lỡ ${c.missedDays} ngày, " +
+            "chuỗi dài nhất ${c.bestStreak} ngày.")
+        if (c.signals.isNotEmpty()) {
+            appendLine("Tín hiệu hành vi: " + c.signals.joinToString(", ") { it.tag })
+        }
+        if (c.timeOfDayHints.isNotEmpty()) {
+            appendLine("Phân bố giờ: " + c.timeOfDayHints.joinToString(", "))
+        }
+        appendLine("Xu hướng tuần qua: ${c.trendLabel}")
+        appendLine()
+        appendLine("Chi tiết từng thói quen:")
+        c.perHabitLines.forEach { appendLine(it) }
     }
 
     // ============================================================
-    // SUGGESTIONS
+    // SUGGESTIONS — context-aware, anti-duplicate
     // ============================================================
     override suspend fun suggestHabits(
-        categoryName: String,
-        existingHabitTitles: List<String>,
+        context: SuggestionContext,
         personality: AiCoachPersonality
     ): AiSuggestResult {
-        val existingList = if (existingHabitTitles.isEmpty()) "không có"
-        else existingHabitTitles.joinToString("; ")
-
-        // Compact JSON-only prompt. No markdown rules, no "BẮT BUỘC" filler — the
-        // model is told the exact schema once and asked to fill it.
-        val systemPrompt =
-            """
-            Trả về JSON: {"suggestions":[{"title":"","emoji":"","description":"","difficulty":"EASY|MEDIUM|HARD","estimatedImpact":"","streakBenefit":""}]}
-            3-4 mục, tiếng Việt rất ngắn, không trùng thói quen đã có. Không kèm chữ ngoài JSON.
-            """.trimIndent()
-        val userPrompt = "Nhóm: \"$categoryName\". Đã có: $existingList."
+        val systemPrompt = personality.systemPromptPrefix + "\n" + SUGGEST_SYSTEM_PROMPT_RULES
+        val userPrompt = buildSuggestUserPrompt(context)
 
         val messages = listOf(
             ChatMessage(role = "system", content = systemPrompt),
@@ -148,7 +157,36 @@ class AiHabitInsightRepositoryImpl(
         }
 
         Log.w(TAG, "All suggest models exhausted — serving canned suggestions")
-        return AiSuggestResult.Success(suggestions = cannedSuggestions(), isCanned = true)
+        return AiSuggestResult.Success(
+            suggestions = CannedTemplatePool.pickSuggestions(context),
+            isCanned = true
+        )
+    }
+
+    private fun buildSuggestUserPrompt(c: SuggestionContext): String = buildString {
+        appendLine("Nhóm: \"${c.categoryName}\" (loại: ${c.categoryKind.coachingTag}).")
+        appendLine("Đã có trong nhóm này: " +
+            if (c.existingInCategory.isEmpty()) "không có"
+            else c.existingInCategory.joinToString("; ") { "\"$it\"" })
+        if (c.existingAcrossApp.size > c.existingInCategory.size) {
+            val others = c.existingAcrossApp.filterNot { it in c.existingInCategory }
+            if (others.isNotEmpty()) {
+                appendLine("Thói quen ở nhóm khác (tránh trùng ý định): " +
+                    others.joinToString("; ") { "\"$it\"" })
+            }
+        }
+        if (c.existingKindCoverage.isNotEmpty()) {
+            appendLine("Người dùng đã có thói quen cho các nhóm: " +
+                c.existingKindCoverage.joinToString(", ") { it.coachingTag })
+        }
+        if (c.signals.isNotEmpty()) {
+            appendLine("Tín hiệu hành vi: " + c.signals.joinToString(", ") { it.tag })
+            // Hard rule the prompt can read: don't add load to a tired user.
+            if (PersonalitySignal.OVERLOADED in c.signals || PersonalitySignal.RECOVERY_NEEDING in c.signals) {
+                appendLine("ƯU TIÊN: đề xuất phục hồi / giảm tải / giãn cơ / thở / ngủ — KHÔNG đề xuất thêm cường độ.")
+            }
+        }
+        appendLine("Tổng số thói quen đang hoạt động: ${c.activeHabitCount}. Hoàn thành tổng: ${c.overallRate}%.")
     }
 
     // ============================================================
@@ -2008,59 +2046,14 @@ class AiHabitInsightRepositoryImpl(
     }
 
     // ============================================================
-    // CANNED FALLBACK (last-resort, never empty UI)
+    // CANNED FALLBACK — see CannedTemplatePool for the actual content.
     // ============================================================
-    /**
-     * Handwritten coaching message used when every model in [FALLBACK_MODELS]
-     * fails. Honest about not knowing the user's specific numbers — names the
-     * category so it doesn't feel like a generic error.
-     */
-    private fun cannedReview(categoryName: String): String = """
-        Bạn đang duy trì nhóm "**$categoryName**" khá tốt 🌱. Hãy thử tăng độ ổn định bằng các thói quen nhỏ mỗi ngày — sự nhất quán quan trọng hơn sự hoàn hảo.
-
-        - Chọn 1 thói quen quan trọng nhất hôm nay và làm nó trước, dù chỉ 5 phút.
-        - Cho phép mình "lỡ một ngày" mà không bỏ luôn cả tuần.
-    """.trimIndent()
-
-    /**
-     * Generic-but-useful suggestions that fit any category. Curated so even when
-     * OpenRouter is fully unreachable the user gets four real, actionable ideas
-     * rendered through the standard premium card.
-     */
-    private fun cannedSuggestions(): List<SuggestedHabit> = listOf(
-        SuggestedHabit(
-            title = "Khởi động 5 phút buổi sáng",
-            emoji = "🌅",
-            description = "Vài động tác nhẹ ngay sau khi thức dậy.",
-            difficulty = "EASY",
-            estimatedImpact = "Tạo đà tích cực cho cả ngày",
-            streakBenefit = "Lặp lại 21 ngày sẽ thành phản xạ"
-        ),
-        SuggestedHabit(
-            title = "Ghi 3 điều biết ơn trước khi ngủ",
-            emoji = "📝",
-            description = "Viết ngắn 3 điều bạn biết ơn hôm nay.",
-            difficulty = "EASY",
-            estimatedImpact = "Cải thiện tâm trạng và giấc ngủ",
-            streakBenefit = "Càng đều đặn, tâm trí càng nhẹ nhõm"
-        ),
-        SuggestedHabit(
-            title = "Học/đọc 15 phút mỗi ngày",
-            emoji = "📚",
-            description = "Một chủ đề bạn quan tâm, kể cả 1 trang sách.",
-            difficulty = "MEDIUM",
-            estimatedImpact = "Bồi đắp kiến thức theo thời gian",
-            streakBenefit = "30 ngày = hơn 7 giờ học sâu"
-        ),
-        SuggestedHabit(
-            title = "Đi bộ 10 phút sau bữa chính",
-            emoji = "🚶",
-            description = "Vận động nhẹ giúp tiêu hoá và tỉnh táo.",
-            difficulty = "MEDIUM",
-            estimatedImpact = "Tốt cho thể chất lẫn tinh thần",
-            streakBenefit = "Đều đặn sẽ thay đổi mức năng lượng"
-        )
-    )
+    // Both reviewHabitGroup() and suggestHabits() now delegate to
+    // CannedTemplatePool when every OpenRouter model fails. The pool is
+    // group-aware (per CategoryKind), trend-aware (per completion bucket),
+    // and signal-aware (recovery overlay for overloaded users), and it
+    // rotates by category so revisiting the same group doesn't show the
+    // same canned copy twice in a row.
 
     // ============================================================
     // DTO / JSON
@@ -2142,6 +2135,44 @@ class AiHabitInsightRepositoryImpl(
         /** Strict "HH:mm" 24-hour validator used everywhere a schedule string
          *  enters the pipeline (input filtering AND parsing the model's output). */
         val HHMM_REGEX = Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
+
+        /**
+         * Hard rules added to the personality prefix when generating a
+         * habit-group review. Together with the use-case-built user prompt
+         * (per-habit lines, signals, trend label) these stop the model from
+         * defaulting to generic coaching text that reads the same for every
+         * group.
+         */
+        val REVIEW_SYSTEM_PROMPT_RULES = """
+            Trả lời bằng tiếng Việt, 3-4 câu súc tích, đúng tone đã chọn.
+
+            BẮT BUỘC:
+            - Nhắc tên ít nhất MỘT thói quen cụ thể từ danh sách "Chi tiết từng thói quen" (đặt trong dấu ngoặc kép).
+            - Coaching phải đúng với loại nhóm: vận động → tránh quá tải / phục hồi; học tập → tránh học khuya / quá tải nhận thức; ngủ → giờ đi ngủ cố định / giảm màn hình; tinh thần → ổn định, giảm căng thẳng; dinh dưỡng → bữa ăn / nước; tài chính → tiết kiệm / theo dõi; quan hệ → kết nối ngắn / đều.
+            - Nếu có tín hiệu "overloaded" hoặc "recovery_needing" → ưu tiên giảm tải, KHÔNG đẩy thêm cường độ.
+            - Nếu có tín hiệu "steady_improver" → khen tiến bộ cụ thể, đề xuất bước nhỏ tiếp theo.
+            - Nếu có tín hiệu "night_owl" và xu hướng "drifting" → đề xuất dời sớm hơn.
+            - KHÔNG dùng câu chung chung như "hãy nhất quán hơn". Phải cụ thể.
+            - KHÔNG bịa số. Chỉ dùng số có trong dữ liệu.
+        """.trimIndent()
+
+        /**
+         * Hard rules added to the personality prefix when generating habit
+         * suggestions. Forces the model to anchor on what the user already
+         * has rather than producing the same 4 generic ideas every time.
+         */
+        val SUGGEST_SYSTEM_PROMPT_RULES = """
+            Trả về JSON: {"suggestions":[{"title":"","emoji":"","description":"","difficulty":"EASY|MEDIUM|HARD","estimatedImpact":"","streakBenefit":""}]}
+            3-4 mục, tiếng Việt rất ngắn. Không kèm chữ ngoài JSON.
+
+            BẮT BUỘC:
+            - KHÔNG đề xuất bất kỳ thói quen nào trùng tên hoặc trùng ý định với danh sách "Đã có trong nhóm này" hoặc "Thói quen ở nhóm khác".
+            - Đề xuất phải PHÙ HỢP với loại nhóm: vận động → tập luyện / phục hồi; học tập → kỹ năng / ôn tập; ngủ → giờ đi ngủ / màn hình; tinh thần → thở / biết ơn; dinh dưỡng → bữa ăn / nước; tài chính → ghi chi tiêu / tiết kiệm; quan hệ → kết nối / gọi điện.
+            - Nếu có tín hiệu "overloaded" hoặc "recovery_needing" → đề xuất phục hồi / giảm tải / ngủ / thở. TUYỆT ĐỐI KHÔNG đề xuất thêm thói quen nặng (cardio, HARD, > 30 phút).
+            - Nếu user đã có nhóm "vận động" rồi → đừng đề xuất thêm cardio. Thay bằng giãn cơ / phục hồi.
+            - Tránh nhắc lại 4 thói quen kinh điển (đi bộ, uống nước, đọc sách, thiền) khi user đã có chúng.
+            - difficulty phải đúng nghĩa: thói quen 5 phút = EASY; 30 phút = MEDIUM; > 30 phút hoặc cường độ cao = HARD.
+        """.trimIndent()
 
         /**
          * Finalized system prompt for the schedule analyzer. Mirrors the
