@@ -59,6 +59,7 @@ import com.example.betterme.data.ai.OpenRouterNetwork
 import com.example.betterme.data.repository.AiCacheRepositoryImpl
 import com.example.betterme.domain.ai.AiCacheRepository
 import com.example.betterme.domain.ai.AiHabitInsightRepository
+import com.example.betterme.domain.ai.AiHomeSessionMemory
 import com.example.betterme.domain.usecase.ai.AnalyzeHabitCreationUseCase
 import com.example.betterme.domain.usecase.ai.AnalyzeHabitProgressionUseCase
 import com.example.betterme.domain.usecase.ai.AnalyzeHabitRecoveryUseCase
@@ -225,6 +226,9 @@ val repositoryModule = module {
     }
     single<AiHabitInsightRepository> { AiHabitInsightRepositoryImpl(get()) }
     single<AiCacheRepository> { AiCacheRepositoryImpl(get()) }
+    // Process-scoped throttle for Home AI surfaces — keeps Recovery /
+    // Progression / Lifestyle cards from re-analyzing on every Home entry.
+    single { AiHomeSessionMemory() }
 
     // Image upload repo: Cloudinary if configured, local-passthrough otherwise. Pick at
     // DI time so the rest of the app never has to branch on whether the cloud is set up.

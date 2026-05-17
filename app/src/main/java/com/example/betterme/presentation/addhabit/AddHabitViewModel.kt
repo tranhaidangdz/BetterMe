@@ -55,7 +55,69 @@ class AddHabitViewModel(
                 copy(showCategorySelector = !showCategorySelector)
             }
             AddHabitIntent.Submit -> submitHabit()
+            is AddHabitIntent.ApplyAiSuggestions -> applyAiSuggestions(intent.suggestions)
         }
+    }
+
+    /**
+     * Patch form state from a list of AI suggestions. Multiple suggestions
+     * are merged in order — later ones can override earlier picks for the
+     * same field. Only the three fields that have backing HabitEntity
+     * columns mutate (title, reminderTime, categoryId); the rest are
+     * silently ignored so we never lie to the user about what an apply
+     * actually did.
+     *
+     * Category is matched by name against the already-loaded categories
+     * list — exact match first, then case-insensitive fallback. Unknown
+     * category names are dropped silently rather than crashing the form.
+     *
+     * Emits [AddHabitEvent.AppliedSuggestions] with a human-readable
+     * summary so the screen can flash a snackbar listing the mutations.
+     */
+    private fun applyAiSuggestions(suggestions: List<com.example.betterme.domain.ai.habitcreation.HabitCreationSuggestion>) {
+        if (suggestions.isEmpty()) return
+        val applicable = suggestions.filter { it.hasApplicableMutation }
+        if (applicable.isEmpty()) return
+
+        val state = currentState
+        var newTitle = state.title
+        var newReminder = state.reminderTime
+        var newCategoryId = state.selectedCategoryId
+        var newCategoryName = state.selectedCategoryName
+        val changes = mutableListOf<String>()
+
+        applicable.forEach { s ->
+            s.suggestedTitle?.takeIf { it.isNotBlank() && it != newTitle }?.let {
+                newTitle = it
+                changes += "tên"
+            }
+            s.suggestedReminderTime?.takeIf { it.isNotBlank() && it != newReminder }?.let {
+                newReminder = it
+                changes += "giờ nhắc → $it"
+            }
+            s.suggestedCategory?.takeIf { it.isNotBlank() }?.let { suggestedName ->
+                val match = state.categories.firstOrNull { it.name == suggestedName }
+                    ?: state.categories.firstOrNull { it.name.equals(suggestedName, ignoreCase = true) }
+                if (match != null && match.id != newCategoryId) {
+                    newCategoryId = match.id
+                    newCategoryName = match.name
+                    changes += "nhóm → ${match.name}"
+                }
+            }
+        }
+
+        if (changes.isEmpty()) return
+
+        updateState {
+            copy(
+                title = newTitle,
+                titleError = null,
+                reminderTime = newReminder,
+                selectedCategoryId = newCategoryId,
+                selectedCategoryName = newCategoryName
+            )
+        }
+        sendEvent(AddHabitEvent.AppliedSuggestions("Đã áp dụng: " + changes.joinToString(", ")))
     }
 
     // ============================================================

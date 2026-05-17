@@ -80,8 +80,13 @@ class AnalyzeHabitRecoveryUseCase(
             val daysSinceStart = (((todayMs - habit.start_date) / DAY_MS) + 1)
                 .toInt().coerceAtLeast(1)
 
-            val rate7 = completionInWindow(logs, todayMs, 7, daysSinceStart)
-            val rate14 = completionInWindow(logs, todayMs, 14, daysSinceStart)
+            val rate7 = completionInWindow(logs, todayMs, 7, daysSinceStart, offsetDays = 0)
+            val rate14 = completionInWindow(logs, todayMs, 14, daysSinceStart, offsetDays = 0)
+            // "Last week" = days 7-14 ago. Used for the week-over-week delta
+            // signal in the prompt — see RECOVERY_SYSTEM_PROMPT.
+            val prevWeek = completionInWindow(
+                logs, todayMs, windowDays = 7, daysSinceStart = daysSinceStart, offsetDays = 7
+            )
             val missStreak = computeMissStreak(logs, todayMs)
             HabitStatRow(
                 title = habit.title,
@@ -89,6 +94,7 @@ class AnalyzeHabitRecoveryUseCase(
                 difficulty = "MEDIUM", // until HabitEntity carries difficulty
                 completionRate7d = rate7,
                 completionRate14d = rate14,
+                previousWeekCompletionRate = prevWeek,
                 missStreak = missStreak
             )
         }
@@ -208,16 +214,28 @@ class AnalyzeHabitRecoveryUseCase(
      * Completion rate inside a [windowDays] window ending today, capped by
      * the habit's actual age so a 3-day-old habit isn't judged against 14.
      */
+    /**
+     * Completion rate inside a [windowDays] window ending at `today - offsetDays`,
+     * capped by the habit's actual age so a 3-day-old habit isn't judged
+     * against 14. [offsetDays] = 0 means "the most recent windowDays days";
+     * [offsetDays] = 7 with windowDays = 7 means "the seven days BEFORE the
+     * last seven days" — i.e. the prior week for week-over-week deltas.
+     *
+     * Returns 0 when the offset window is older than the habit's start —
+     * a freshly-created habit doesn't have a meaningful "last week".
+     */
     private fun completionInWindow(
         logs: List<com.example.betterme.data.local.room.entities.HabitLogEntity>,
         todayMs: Long,
         windowDays: Int,
-        daysSinceStart: Int
+        daysSinceStart: Int,
+        offsetDays: Int = 0
     ): Int {
-        val windowMs = windowDays * DAY_MS
-        val windowStart = todayMs - windowMs
-        val done = logs.count { it.status == "DONE" && it.date in windowStart..todayMs }
-        val denom = minOf(windowDays, daysSinceStart).coerceAtLeast(1)
+        if (daysSinceStart <= offsetDays) return 0
+        val windowEnd = todayMs - offsetDays * DAY_MS
+        val windowStart = windowEnd - windowDays * DAY_MS
+        val done = logs.count { it.status == "DONE" && it.date in windowStart..windowEnd }
+        val denom = minOf(windowDays, daysSinceStart - offsetDays).coerceAtLeast(1)
         return ((done.toFloat() / denom.toFloat()) * 100f).toInt().coerceIn(0, 100)
     }
 
@@ -251,7 +269,10 @@ class AnalyzeHabitRecoveryUseCase(
      */
     private fun fingerprint(input: HabitRecoveryInput): String = buildString {
         input.allHabitStats.sortedBy { it.title }.forEach { row ->
-            append("${row.title}@${row.completionRate7d}/${row.completionRate14d}/m${row.missStreak};")
+            append(
+                "${row.title}@${row.completionRate7d}/${row.completionRate14d}" +
+                    "/p${row.previousWeekCompletionRate}/m${row.missStreak};"
+            )
         }
         append("||t:")
         append(input.detectedTriggers.sortedBy { it.name }.joinToString(",") { it.name })

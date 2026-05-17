@@ -2,6 +2,7 @@ package com.example.betterme.presentation.home.recovery
 
 import androidx.lifecycle.viewModelScope
 import com.example.betterme.base.BaseMviViewModel
+import com.example.betterme.domain.ai.AiHomeSessionMemory
 import com.example.betterme.domain.usecase.ai.AnalyzeHabitRecoveryUseCase
 import kotlinx.coroutines.launch
 
@@ -19,7 +20,8 @@ import kotlinx.coroutines.launch
  * keeps the other suggestions visible.
  */
 class HabitRecoveryAssistantViewModel(
-    private val analyzeHabitRecovery: AnalyzeHabitRecoveryUseCase
+    private val analyzeHabitRecovery: AnalyzeHabitRecoveryUseCase,
+    private val sessionMemory: AiHomeSessionMemory
 ) : BaseMviViewModel<HabitRecoveryIntent, HabitRecoveryState, HabitRecoveryEvent>() {
 
     override fun initState(): HabitRecoveryState = HabitRecoveryState()
@@ -28,14 +30,34 @@ class HabitRecoveryAssistantViewModel(
         when (intent) {
             is HabitRecoveryIntent.Analyze -> analyze(intent.forceRefresh)
             is HabitRecoveryIntent.ApplyAction -> applyAction(intent.index, intent.action)
-            is HabitRecoveryIntent.Dismiss -> updateState {
-                copy(ui = HabitRecoveryUi.Hidden)
+            is HabitRecoveryIntent.Dismiss -> {
+                sessionMemory.markDismissed(AiHomeSessionMemory.Surface.RECOVERY)
+                updateState { copy(ui = HabitRecoveryUi.Hidden) }
             }
         }
     }
 
+    /**
+     * Two-layer throttle:
+     *  1. Session memory — skip analysis entirely when the Home auto-launch
+     *     was already served recently (default 4h) OR the user dismissed
+     *     this card today. Keeps the previous Success/Hidden state visible
+     *     instead of flashing the Loading skeleton on every Home re-entry.
+     *  2. Re-entrancy — skip while already Loading.
+     *
+     * `forceRefresh = true` (user tapped "Phân tích lại") bypasses the
+     * session-memory gate but still skips the in-flight Loading state.
+     */
     private fun analyze(forceRefresh: Boolean) {
         if (currentState.ui is HabitRecoveryUi.Loading) return
+        if (!forceRefresh && !sessionMemory.shouldAutoAnalyze(AiHomeSessionMemory.Surface.RECOVERY)) {
+            // Honor the throttle. If we already have a terminal result in
+            // state (Success / Hidden / Error), keep showing it — the user
+            // sees their last analysis instantly with no Loading flicker.
+            // If state is Idle (fresh process), leaving it Idle means the
+            // card stays hidden until the next eligible window.
+            return
+        }
         viewModelScope.launch {
             updateState { copy(ui = HabitRecoveryUi.Loading) }
             val result = runCatching {
@@ -48,6 +70,7 @@ class HabitRecoveryAssistantViewModel(
                 }
                 return@launch
             }
+            sessionMemory.markAnalyzed(AiHomeSessionMemory.Surface.RECOVERY)
             if (!result.shouldRecover) {
                 updateState { copy(ui = HabitRecoveryUi.Hidden) }
             } else {

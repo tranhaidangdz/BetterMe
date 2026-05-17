@@ -28,10 +28,25 @@ class HabitCreationAssistantViewModel(
         when (intent) {
             is HabitCreationAssistantIntent.Analyze -> analyze(intent)
             HabitCreationAssistantIntent.ConfirmSave -> confirmSave()
+            is HabitCreationAssistantIntent.ApplySuggestions -> applySuggestions(intent.suggestions)
             HabitCreationAssistantIntent.Dismiss -> updateState {
                 copy(ui = HabitCreationAssistantUi.Idle)
             }
         }
+    }
+
+    /**
+     * Forward to the screen via an event so AddHabit VM can mutate form
+     * state. The sheet closes itself immediately so the user sees the
+     * patched form behind it. Filtering to applicable-only happens here
+     * — passing a list with no actionable fields is a no-op + close.
+     */
+    private fun applySuggestions(suggestions: List<com.example.betterme.domain.ai.habitcreation.HabitCreationSuggestion>) {
+        val applicable = suggestions.filter { it.hasApplicableMutation }
+        if (applicable.isNotEmpty()) {
+            sendEvent(HabitCreationAssistantEvent.ApplySuggestions(applicable))
+        }
+        updateState { copy(ui = HabitCreationAssistantUi.Idle) }
     }
 
     private fun analyze(intent: HabitCreationAssistantIntent.Analyze) {

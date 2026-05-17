@@ -89,19 +89,24 @@ fun AddHabitScreen(
                     onBackClick()
                 }
                 is AddHabitEvent.ShowError -> snackbarHostState.showSnackbar(event.message)
+                is AddHabitEvent.AppliedSuggestions -> snackbarHostState.showSnackbar(event.summary)
             }
         }
     }
 
-    // Bridge from the assistant VM back to the AddHabit submit pipeline.
-    // The sheet's "Vẫn tạo" button fires ConfirmedSave; we forward to the
-    // existing AddHabitIntent.Submit. Form state is unchanged — the assistant
-    // never mutates AddHabitState directly.
+    // Bridge from the assistant VM back to the AddHabit pipeline.
+    //  - ConfirmedSave    → dispatch Submit (the original "Vẫn tạo" path).
+    //  - ApplySuggestions → dispatch ApplyAiSuggestions which patches form
+    //                        state. The sheet has already moved itself to
+    //                        Idle so the user sees the corrected form.
     LaunchedEffect(Unit) {
         assistantVm.singleEvent.collect { event ->
             when (event) {
                 HabitCreationAssistantEvent.ConfirmedSave -> {
                     viewModel.processIntent(AddHabitIntent.Submit)
+                }
+                is HabitCreationAssistantEvent.ApplySuggestions -> {
+                    viewModel.processIntent(AddHabitIntent.ApplyAiSuggestions(event.suggestions))
                 }
             }
         }

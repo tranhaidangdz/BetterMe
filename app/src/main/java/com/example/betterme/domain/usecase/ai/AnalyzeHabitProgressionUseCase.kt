@@ -74,8 +74,13 @@ class AnalyzeHabitProgressionUseCase(
             val daysSinceStart = (((todayMs - habit.start_date) / DAY_MS) + 1)
                 .toInt().coerceAtLeast(1)
 
-            val rate7 = completionInWindow(logs, todayMs, 7, daysSinceStart)
-            val rate14 = completionInWindow(logs, todayMs, 14, daysSinceStart)
+            val rate7 = completionInWindow(logs, todayMs, 7, daysSinceStart, offsetDays = 0)
+            val rate14 = completionInWindow(logs, todayMs, 14, daysSinceStart, offsetDays = 0)
+            // Days 7-14 ago — "last week" window for the prompt's
+            // week-over-week trend signal.
+            val prevWeek = completionInWindow(
+                logs, todayMs, windowDays = 7, daysSinceStart = daysSinceStart, offsetDays = 7
+            )
             val streak = computeCurrentStreak(logs, todayMs)
             ProgressionStatRow(
                 title = habit.title,
@@ -83,6 +88,7 @@ class AnalyzeHabitProgressionUseCase(
                 difficulty = "MEDIUM", // until HabitEntity carries difficulty
                 completionRate7d = rate7,
                 completionRate14d = rate14,
+                previousWeekCompletionRate = prevWeek,
                 currentStreak = streak
             )
         }
@@ -166,16 +172,26 @@ class AnalyzeHabitProgressionUseCase(
     @Suppress("UNUSED_PARAMETER")
     suspend fun applyAction(action: com.example.betterme.domain.ai.progression.HabitProgressionAction): Boolean = false
 
+    /**
+     * Completion rate inside a [windowDays] window ending at
+     * `today - offsetDays`. [offsetDays] = 0 covers the most recent
+     * [windowDays] days; [offsetDays] = 7 with windowDays = 7 covers
+     * days 7-14 ago (the prior week) for week-over-week deltas. Returns
+     * 0 when the window predates the habit's start so we don't slander
+     * fresh habits with a misleading "0% last week".
+     */
     private fun completionInWindow(
         logs: List<com.example.betterme.data.local.room.entities.HabitLogEntity>,
         todayMs: Long,
         windowDays: Int,
-        daysSinceStart: Int
+        daysSinceStart: Int,
+        offsetDays: Int = 0
     ): Int {
-        val windowMs = windowDays * DAY_MS
-        val windowStart = todayMs - windowMs
-        val done = logs.count { it.status == "DONE" && it.date in windowStart..todayMs }
-        val denom = minOf(windowDays, daysSinceStart).coerceAtLeast(1)
+        if (daysSinceStart <= offsetDays) return 0
+        val windowEnd = todayMs - offsetDays * DAY_MS
+        val windowStart = windowEnd - windowDays * DAY_MS
+        val done = logs.count { it.status == "DONE" && it.date in windowStart..windowEnd }
+        val denom = minOf(windowDays, daysSinceStart - offsetDays).coerceAtLeast(1)
         return ((done.toFloat() / denom.toFloat()) * 100f).toInt().coerceIn(0, 100)
     }
 
@@ -210,7 +226,10 @@ class AnalyzeHabitProgressionUseCase(
      */
     private fun fingerprint(input: HabitProgressionInput): String = buildString {
         input.allHabitStats.sortedBy { it.title }.forEach { row ->
-            append("${row.title}@${row.completionRate7d}/${row.completionRate14d}/s${row.currentStreak};")
+            append(
+                "${row.title}@${row.completionRate7d}/${row.completionRate14d}" +
+                    "/p${row.previousWeekCompletionRate}/s${row.currentStreak};"
+            )
         }
         append("||t:")
         append(input.detectedTriggers.sortedBy { it.name }.joinToString(",") { it.name })

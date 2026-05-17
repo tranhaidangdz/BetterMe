@@ -2,6 +2,7 @@ package com.example.betterme.presentation.statistics.lifestyle
 
 import androidx.lifecycle.viewModelScope
 import com.example.betterme.base.BaseMviViewModel
+import com.example.betterme.domain.ai.AiHomeSessionMemory
 import com.example.betterme.domain.usecase.ai.AnalyzeLifestyleUseCase
 import kotlinx.coroutines.launch
 
@@ -14,7 +15,8 @@ import kotlinx.coroutines.launch
  * the "Phân tích lại" pill doesn't fan out into parallel network calls.
  */
 class LifestyleInsightViewModel(
-    private val analyzeLifestyle: AnalyzeLifestyleUseCase
+    private val analyzeLifestyle: AnalyzeLifestyleUseCase,
+    private val sessionMemory: AiHomeSessionMemory
 ) : BaseMviViewModel<LifestyleInsightIntent, LifestyleInsightState, LifestyleInsightEvent>() {
 
     override fun initState(): LifestyleInsightState = LifestyleInsightState()
@@ -25,8 +27,18 @@ class LifestyleInsightViewModel(
         }
     }
 
+    /**
+     * Same two-layer throttle as the Home AI VMs — see
+     * [com.example.betterme.domain.ai.AiHomeSessionMemory] for the rules.
+     * Statistics screen entry runs through the session-memory gate so
+     * tab-toggling doesn't burn quota; the user's manual "Phân tích lại"
+     * pill always passes `forceRefresh = true`.
+     */
     private fun analyze(forceRefresh: Boolean) {
         if (currentState.ui is LifestyleInsightUi.Loading) return
+        if (!forceRefresh && !sessionMemory.shouldAutoAnalyze(AiHomeSessionMemory.Surface.LIFESTYLE_INSIGHT)) {
+            return
+        }
         viewModelScope.launch {
             updateState { copy(ui = LifestyleInsightUi.Loading) }
             val result = runCatching {
@@ -39,6 +51,7 @@ class LifestyleInsightViewModel(
                 }
                 return@launch
             }
+            sessionMemory.markAnalyzed(AiHomeSessionMemory.Surface.LIFESTYLE_INSIGHT)
             updateState { copy(ui = LifestyleInsightUi.Success(result)) }
         }
     }

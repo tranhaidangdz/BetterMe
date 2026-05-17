@@ -28,8 +28,18 @@ data class HabitStatRow(
     val reminderTime: String,
     /** EASY | MEDIUM | HARD. Defaults to MEDIUM until HabitEntity stores difficulty. */
     val difficulty: String,
+    /** Completion rate over the last 7 days (i.e. "this week"). */
     val completionRate7d: Int,
+    /** Rolling completion rate over the last 14 days. */
     val completionRate14d: Int,
+    /**
+     * Completion rate over days 7-14 ago — "last week" relative to today.
+     * Combined with [completionRate7d] this gives a coarse week-over-week
+     * delta the prompt can describe ("better than last week", "drifting",
+     * "stable"). Defaults to 0 for binary-compat with cached payloads
+     * written before this field existed.
+     */
+    val previousWeekCompletionRate: Int = 0,
     val missStreak: Int
 )
 

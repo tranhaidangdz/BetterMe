@@ -2,6 +2,7 @@ package com.example.betterme.presentation.home.progression
 
 import androidx.lifecycle.viewModelScope
 import com.example.betterme.base.BaseMviViewModel
+import com.example.betterme.domain.ai.AiHomeSessionMemory
 import com.example.betterme.domain.usecase.ai.AnalyzeHabitProgressionUseCase
 import kotlinx.coroutines.launch
 
@@ -18,7 +19,8 @@ import kotlinx.coroutines.launch
  * advisory. The card surfaces a "Tham khảo" hint instead of an Apply CTA.
  */
 class HabitProgressionAssistantViewModel(
-    private val analyzeHabitProgression: AnalyzeHabitProgressionUseCase
+    private val analyzeHabitProgression: AnalyzeHabitProgressionUseCase,
+    private val sessionMemory: AiHomeSessionMemory
 ) : BaseMviViewModel<HabitProgressionIntent, HabitProgressionState, HabitProgressionEvent>() {
 
     override fun initState(): HabitProgressionState = HabitProgressionState()
@@ -26,14 +28,24 @@ class HabitProgressionAssistantViewModel(
     override fun processIntent(intent: HabitProgressionIntent) {
         when (intent) {
             is HabitProgressionIntent.Analyze -> analyze(intent.forceRefresh)
-            is HabitProgressionIntent.Dismiss -> updateState {
-                copy(ui = HabitProgressionUi.Hidden)
+            is HabitProgressionIntent.Dismiss -> {
+                sessionMemory.markDismissed(AiHomeSessionMemory.Surface.PROGRESSION)
+                updateState { copy(ui = HabitProgressionUi.Hidden) }
             }
         }
     }
 
+    /**
+     * Throttle in parallel with the Recovery VM — see
+     * [com.example.betterme.domain.ai.AiHomeSessionMemory] for the rules.
+     * `forceRefresh = true` (user tapped "Phân tích lại") bypasses the
+     * session-memory gate.
+     */
     private fun analyze(forceRefresh: Boolean) {
         if (currentState.ui is HabitProgressionUi.Loading) return
+        if (!forceRefresh && !sessionMemory.shouldAutoAnalyze(AiHomeSessionMemory.Surface.PROGRESSION)) {
+            return
+        }
         viewModelScope.launch {
             updateState { copy(ui = HabitProgressionUi.Loading) }
             val result = runCatching {
@@ -44,6 +56,7 @@ class HabitProgressionAssistantViewModel(
                 }
                 return@launch
             }
+            sessionMemory.markAnalyzed(AiHomeSessionMemory.Surface.PROGRESSION)
             if (!result.shouldProgress) {
                 updateState { copy(ui = HabitProgressionUi.Hidden) }
             } else {

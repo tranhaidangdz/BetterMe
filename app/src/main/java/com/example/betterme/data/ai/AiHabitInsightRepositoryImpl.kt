@@ -459,6 +459,18 @@ class AiHabitInsightRepositoryImpl(
         return h * 60 + m
     }
 
+    /**
+     * Add [deltaMinutes] to an "HH:mm" string, returning the new "HH:mm" (or
+     * null when the input is malformed). Wraps mod-1440 so 23:30 + 60 → 00:30.
+     * Used by the canned creation analysis to propose a safe non-colliding
+     * reminder slot.
+     */
+    private fun offsetHhMm(value: String, deltaMinutes: Int): String? {
+        val base = parseHhMm(value) ?: return null
+        val total = ((base + deltaMinutes) % (24 * 60) + (24 * 60)) % (24 * 60)
+        return String.format("%02d:%02d", total / 60, total % 60)
+    }
+
     private fun ScheduleHabitInput.toMinutesOrNull(): Int? {
         val parts = reminderTime.split(":")
         if (parts.size != 2) return null
@@ -1094,7 +1106,21 @@ class AiHabitInsightRepositoryImpl(
             val suggestions = dto.suggestions.take(3).mapNotNull { s ->
                 val type = parseEnum<CreationSuggestionType>(s.type) ?: return@mapNotNull null
                 if (s.message.isBlank()) return@mapNotNull null
-                HabitCreationSuggestion(type = type, message = s.message.trim())
+                HabitCreationSuggestion(
+                    type = type,
+                    message = s.message.trim(),
+                    suggestedTitle = s.suggestedTitle?.trim()?.takeIf { it.isNotEmpty() },
+                    suggestedReminderTime = s.suggestedReminderTime?.trim()
+                        ?.takeIf { it.matches(HHMM_REGEX) },
+                    suggestedDifficulty = s.suggestedDifficulty?.trim()?.uppercase()
+                        ?.takeIf { it in setOf("EASY", "MEDIUM", "HARD") },
+                    suggestedFrequency = s.suggestedFrequency?.trim()?.takeIf { it.isNotEmpty() },
+                    suggestedCategory = s.suggestedCategory?.trim()?.takeIf { it.isNotEmpty() },
+                    suggestedDurationMinutes = s.suggestedDurationMinutes
+                        ?.takeIf { it in 1..240 },
+                    suggestedReplacementHabit = s.suggestedReplacementHabit?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                )
             }
             HabitCreationAnalysis(
                 shouldWarn = dto.shouldWarn,
@@ -1142,9 +1168,14 @@ class AiHabitInsightRepositoryImpl(
                     WarningType.TIME_CONFLICT,
                     "Giờ nhắc mới sát với thói quen \"${collision.title}\" (${collision.reminderTime})."
                 )
+                // Suggest a slot 60 minutes away from the collision (or fall
+                // back to a safe morning slot when arithmetic would wrap).
+                val suggestedSlot = offsetHhMm(collision.reminderTime, deltaMinutes = 60)
+                    ?: "07:00"
                 suggestions += HabitCreationSuggestion(
-                    CreationSuggestionType.CHANGE_TIME,
-                    "Bạn có thể dời sang một khung khác cách ít nhất 15-30 phút để dễ duy trì cả hai."
+                    type = CreationSuggestionType.CHANGE_TIME,
+                    message = "Bạn có thể dời sang một khung khác cách ít nhất 15-30 phút để dễ duy trì cả hai.",
+                    suggestedReminderTime = suggestedSlot
                 )
             }
         }
@@ -1156,8 +1187,9 @@ class AiHabitInsightRepositoryImpl(
                 "Thói quen này khá muộn (sau ${HealthyDefaults.HARD_HABIT_LATEST_HOUR}:00) — có thể ảnh hưởng nhịp ngủ."
             )
             suggestions += HabitCreationSuggestion(
-                CreationSuggestionType.CHANGE_TIME,
-                "Hãy thử dời sớm hơn 1-2 tiếng để dễ phục hồi và ngủ ngon hơn."
+                type = CreationSuggestionType.CHANGE_TIME,
+                message = "Hãy thử dời sớm hơn 1-2 tiếng để dễ phục hồi và ngủ ngon hơn.",
+                suggestedReminderTime = "18:30"
             )
         }
 
@@ -1186,8 +1218,9 @@ class AiHabitInsightRepositoryImpl(
                     "Bạn đã có một thói quen khá giống: \"${similar.title}\"."
                 )
                 suggestions += HabitCreationSuggestion(
-                    CreationSuggestionType.REPLACE_EXISTING,
-                    "Có thể nâng cấp thói quen hiện tại sẽ bền vững hơn là tạo thêm một thói quen mới."
+                    type = CreationSuggestionType.REPLACE_EXISTING,
+                    message = "Có thể nâng cấp thói quen hiện tại sẽ bền vững hơn là tạo thêm một thói quen mới.",
+                    suggestedReplacementHabit = similar.title
                 )
             }
         }
@@ -1230,7 +1263,14 @@ class AiHabitInsightRepositoryImpl(
     @Serializable
     private data class HabitCreationSuggestionDto(
         val type: String = "",
-        val message: String = ""
+        val message: String = "",
+        val suggestedTitle: String? = null,
+        val suggestedReminderTime: String? = null,
+        val suggestedDifficulty: String? = null,
+        val suggestedFrequency: String? = null,
+        val suggestedCategory: String? = null,
+        val suggestedDurationMinutes: Int? = null,
+        val suggestedReplacementHabit: String? = null
     )
 
     // ============================================================
@@ -1298,10 +1338,18 @@ class AiHabitInsightRepositoryImpl(
         appendLine("Active habits (${input.activeHabitCount}):")
         if (input.allHabitStats.isEmpty()) appendLine("[]")
         else input.allHabitStats.forEach { row ->
+            val delta = row.completionRate7d - row.previousWeekCompletionRate
+            val trend = when {
+                row.previousWeekCompletionRate == 0 && row.completionRate7d == 0 -> "no-data"
+                delta >= 10 -> "improving (+$delta)"
+                delta <= -10 -> "drifting ($delta)"
+                else -> "stable"
+            }
             appendLine(
                 "- \"${row.title}\" — ${row.reminderTime.ifBlank { "no reminder" }}, " +
                     "${row.difficulty}, 7d=${row.completionRate7d}%, " +
-                    "14d=${row.completionRate14d}%, missStreak=${row.missStreak}"
+                    "14d=${row.completionRate14d}%, prev-week=${row.previousWeekCompletionRate}%, " +
+                    "trend=$trend, missStreak=${row.missStreak}"
             )
         }
         appendLine()
@@ -1459,13 +1507,25 @@ class AiHabitInsightRepositoryImpl(
             input.detectedTriggers.size >= 2 -> RecoveryIntensity.MODERATE
             else -> RecoveryIntensity.LIGHT
         }
+        // Week-over-week trend across the whole stat set. Used to add a
+        // tiny longitudinal clause to the canned message — "đang khôi phục
+        // dần" reads very differently from "đang xấu đi".
+        val avgDelta = if (input.allHabitStats.isNotEmpty()) {
+            input.allHabitStats.map { it.completionRate7d - it.previousWeekCompletionRate }
+                .average().toInt()
+        } else 0
+        val trendClause = when {
+            avgDelta >= 10 -> " Khá hơn tuần trước một chút —"
+            avgDelta <= -10 -> " Đang chững so với tuần trước —"
+            else -> ""
+        }
         val message = when (tone) {
             RecoveryIntensity.AGGRESSIVE ->
-                "Bạn đang khá đuối — hãy giảm tải để hồi phục, đừng tự trách nhé."
+                "${trendClause.ifBlank { "" }} Bạn đang khá đuối — hãy giảm tải để hồi phục, đừng tự trách nhé.".trim()
             RecoveryIntensity.MODERATE ->
-                "Lịch trình đang hơi nặng — vài điều chỉnh nhỏ sẽ giúp bạn duy trì bền hơn."
+                "${trendClause.ifBlank { "" }} Lịch trình đang hơi nặng — vài điều chỉnh nhỏ sẽ giúp bạn duy trì bền hơn.".trim()
             RecoveryIntensity.LIGHT ->
-                "Một vài thói quen đang chững lại — nghỉ ngơi nhẹ và tiếp tục sẽ ổn thôi."
+                "${trendClause.ifBlank { "" }} Một vài thói quen đang chững lại — nghỉ ngơi nhẹ và tiếp tục sẽ ổn thôi.".trim()
         }
 
         return HabitRecoveryAnalysis(
@@ -1572,10 +1632,18 @@ class AiHabitInsightRepositoryImpl(
         appendLine("Active habits (${input.activeHabitCount}, HARD=${input.hardHabitCount}):")
         if (input.allHabitStats.isEmpty()) appendLine("[]")
         else input.allHabitStats.forEach { row ->
+            val delta = row.completionRate7d - row.previousWeekCompletionRate
+            val trend = when {
+                row.previousWeekCompletionRate == 0 && row.completionRate7d == 0 -> "no-data"
+                delta >= 10 -> "improving (+$delta)"
+                delta <= -10 -> "easing back ($delta)"
+                else -> "holding steady"
+            }
             appendLine(
                 "- \"${row.title}\" — ${row.reminderTime.ifBlank { "no reminder" }}, " +
                     "${row.difficulty}, 7d=${row.completionRate7d}%, " +
-                    "14d=${row.completionRate14d}%, streak=${row.currentStreak}d"
+                    "14d=${row.completionRate14d}%, prev-week=${row.previousWeekCompletionRate}%, " +
+                    "trend=$trend, streak=${row.currentStreak}d"
             )
         }
         appendLine()
@@ -1708,10 +1776,20 @@ class AiHabitInsightRepositoryImpl(
 
         val pace = if ((topHabit?.currentStreak ?: 0) >= 21) ProgressionPace.STEADY
         else ProgressionPace.GENTLE
-        val message = when (pace) {
-            ProgressionPace.STEADY ->
+        // Week-over-week delta across the vibrant set. Lets the canned
+        // message acknowledge upward momentum specifically when it exists.
+        val avgDelta = if (vibrantRows.isNotEmpty()) {
+            input.allHabitStats
+                .filter { row -> vibrantRows.any { it.title == row.title } }
+                .map { it.completionRate7d - it.previousWeekCompletionRate }
+                .average().toInt()
+        } else 0
+        val message = when {
+            pace == ProgressionPace.STEADY ->
                 "Bạn đã rất ổn định trong 3 tuần qua — có thể nâng nhẹ độ thử thách để tiếp tục phát triển."
-            ProgressionPace.GENTLE ->
+            avgDelta >= 10 ->
+                "Tuần này bạn nhất quán hơn tuần trước — một bước nhỏ tiếp theo sẽ vừa sức và bền vững."
+            else ->
                 "Bạn đang duy trì rất tốt — một bước nhỏ tiếp theo sẽ vừa sức và bền vững."
         }
 
@@ -2391,6 +2469,31 @@ class AiHabitInsightRepositoryImpl(
             - At most 3 warnings. At most 3 suggestions.
             - shouldWarn = true only when warnings is non-empty; false otherwise.
 
+            STRUCTURED SUGGESTION FIELDS (all optional, fill what applies):
+            Each suggestion can carry concrete values that the app will apply to the
+            form when the user taps "Áp dụng". When the field matches the user's
+            actual form, the user gets a one-tap mutation instead of retyping.
+
+            - suggestedTitle           — proposed new habit title (string)
+            - suggestedReminderTime    — "HH:mm" 24-hour. Used by CHANGE_TIME.
+            - suggestedDifficulty      — "EASY" | "MEDIUM" | "HARD". Used by REDUCE_INTENSITY.
+            - suggestedFrequency       — free text, e.g. "3 lần/tuần". Used by REDUCE_FREQUENCY.
+            - suggestedCategory        — exact Vietnamese category name from the user's list.
+            - suggestedDurationMinutes — integer 1..240. Used by START_SMALLER.
+            - suggestedReplacementHabit — title of an EXISTING habit (must appear in the
+                                          input's active habits list). Used by
+                                          REPLACE_EXISTING / MERGE_EXISTING.
+
+            RULES for structured fields:
+            - Always fill the field that matches the suggestion's intent — e.g. a
+              CHANGE_TIME suggestion MUST set suggestedReminderTime; a REPLACE_EXISTING
+              suggestion MUST set suggestedReplacementHabit to an exact existing title.
+            - Omit (or null) fields that don't apply. Never fabricate values you don't
+              actually recommend.
+            - suggestedReminderTime is "HH:mm" — never "8 PM" or "morning".
+            - suggestedCategory must be one of the categories the user actually has
+              (passed in the prompt context). Never invent a category name.
+
             ENUMS (must match exactly):
             - overallRisk: LOW | MODERATE | HIGH
             - warnings.type: TIME_CONFLICT | DUPLICATE_INTENT | OVERLOAD_RISK | SLEEP_CONFLICT
@@ -2406,7 +2509,17 @@ class AiHabitInsightRepositoryImpl(
                 { "type": "DUPLICATE_INTENT", "message": "string" }
               ],
               "suggestions": [
-                { "type": "REPLACE_EXISTING", "message": "string" }
+                {
+                  "type": "CHANGE_TIME",
+                  "message": "string",
+                  "suggestedReminderTime": "18:30",
+                  "suggestedTitle": null,
+                  "suggestedDifficulty": null,
+                  "suggestedFrequency": null,
+                  "suggestedCategory": null,
+                  "suggestedDurationMinutes": null,
+                  "suggestedReplacementHabit": null
+                }
               ],
               "encouragement": "string"
             }
@@ -2438,11 +2551,18 @@ class AiHabitInsightRepositoryImpl(
 
             INPUT CONTRACT:
             The user prompt provides:
-            - per-habit stats (7d completion, 14d completion, miss streak)
+            - per-habit stats (7d completion, 14d completion, prev-week, trend, miss streak)
             - which habit titles are flagged as struggling
             - which RecoveryTrigger values fired (deterministically, from the use case)
             - late-night habit titles (reminder ≥ 21:00)
             - lifestyle anchors (sleep / work)
+
+            Each habit row carries `prev-week=X%` (the 7-14 days ago window) and a
+            `trend` summary (improving / stable / drifting). Use this longitudinal
+            context when writing the coaching message — "You're recovering from
+            last week's dip" reads very differently from "You've been struggling
+            for two weeks straight". Quote the trend in your message when it adds
+            real information; don't fabricate trend language when stats are flat.
 
             Your job is to TURN these into a human, warm coaching message + 1-4 concrete
             recovery actions. The deterministic triggers are authoritative — do not
@@ -2559,11 +2679,19 @@ class AiHabitInsightRepositoryImpl(
 
             INPUT CONTRACT:
             The user prompt provides:
-            - per-habit stats (7d completion, 14d completion, current streak)
+            - per-habit stats (7d completion, 14d completion, prev-week, trend, streak)
             - which habit titles are flagged as vibrant (≥85% over 14 days)
             - which ProgressionTrigger values fired (deterministically, from the use case)
             - active habit count, HARD-difficulty habit count
             - lifestyle anchors (sleep / work)
+
+            Each habit row carries `prev-week=X%` (the 7-14 days ago window) and a
+            `trend` summary (improving / holding steady / easing back). When the trend
+            is "improving", your coaching can acknowledge the upward direction
+            specifically ("You're more consistent than last week — a small step up
+            looks doable"). When "holding steady", lean into stability language. When
+            "easing back", suggest CONSISTENCY_REWARD only — never push a habit that
+            is trending DOWN, even from a high baseline.
 
             Your job is to TURN these into a warm, encouraging coaching message + 1-4
             gentle progression actions. The deterministic triggers are authoritative —

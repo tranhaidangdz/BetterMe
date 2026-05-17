@@ -101,7 +101,16 @@ fun HabitCreationAssistantBottomSheet(
                 is HabitCreationAssistantUi.Success -> SuccessBody(
                     analysis = ui.analysis,
                     onConfirm = { onIntent(HabitCreationAssistantIntent.ConfirmSave) },
-                    onApplyAdvice = { onIntent(HabitCreationAssistantIntent.Dismiss) }
+                    onApplyAll = {
+                        onIntent(
+                            HabitCreationAssistantIntent.ApplySuggestions(
+                                ui.analysis.suggestions.filter { it.hasApplicableMutation }
+                            )
+                        )
+                    },
+                    onApplyOne = { s ->
+                        onIntent(HabitCreationAssistantIntent.ApplySuggestions(listOf(s)))
+                    }
                 )
                 is HabitCreationAssistantUi.Error -> ErrorBody(
                     message = ui.message,
@@ -220,7 +229,8 @@ private fun ErrorBody(message: String, onConfirm: () -> Unit) {
 private fun SuccessBody(
     analysis: HabitCreationAnalysis,
     onConfirm: () -> Unit,
-    onApplyAdvice: () -> Unit
+    onApplyAll: () -> Unit,
+    onApplyOne: (HabitCreationSuggestion) -> Unit
 ) {
     Column {
         // ─── Risk badge ──────────────────────────────────────────
@@ -261,24 +271,36 @@ private fun SuccessBody(
         }
 
         // ─── Suggestions ────────────────────────────────────────
+        val applicableSuggestions = analysis.suggestions.filter { it.hasApplicableMutation }
         if (analysis.suggestions.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             SectionLabel("Gợi ý điều chỉnh", analysis.suggestions.size)
             Spacer(Modifier.height(8.dp))
             analysis.suggestions.forEach { s ->
-                SuggestionCard(s)
+                SuggestionCard(
+                    suggestion = s,
+                    onApply = if (s.hasApplicableMutation) {
+                        { onApplyOne(s) }
+                    } else null
+                )
                 Spacer(Modifier.height(8.dp))
             }
         }
 
         // ─── Buttons ────────────────────────────────────────────
+        // The global "Áp dụng gợi ý" button is meaningful only when at
+        // least one suggestion carries structured fields the form can
+        // accept. Otherwise it would silently no-op, so we hide it and
+        // let the user proceed via "Vẫn tạo" alone.
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SecondaryButton(
-                label = "Áp dụng gợi ý",
-                onClick = onApplyAdvice,
-                modifier = Modifier.weight(1f)
-            )
+            if (applicableSuggestions.isNotEmpty()) {
+                SecondaryButton(
+                    label = if (applicableSuggestions.size > 1) "Áp dụng tất cả" else "Áp dụng gợi ý",
+                    onClick = onApplyAll,
+                    modifier = Modifier.weight(1f)
+                )
+            }
             PrimaryButton(
                 label = "Vẫn tạo",
                 onClick = onConfirm,
@@ -386,9 +408,12 @@ private fun WarningCard(w: HabitCreationWarning) {
 }
 
 @Composable
-private fun SuggestionCard(s: HabitCreationSuggestion) {
+private fun SuggestionCard(
+    suggestion: HabitCreationSuggestion,
+    onApply: (() -> Unit)? = null
+) {
     val accent = BetterMeColors.Primary.Primary
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Body))
@@ -398,34 +423,93 @@ private fun SuggestionCard(s: HabitCreationSuggestion) {
                 color = accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft),
                 shape = RoundedCornerShape(BetterMeTokens.CardRadius.Body)
             )
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.Top
+            .padding(12.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft)),
-            contentAlignment = Alignment.Center
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            Text(text = suggestionLabelEmoji(s.type), fontSize = 16.sp)
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = suggestionLabelEmoji(suggestion.type), fontSize = 16.sp)
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = suggestionLabel(suggestion.type),
+                    style = BetterMeTypography.Body.Small.Medium,
+                    color = accent,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = suggestion.message,
+                    style = BetterMeTypography.Body.Medium,
+                    color = BetterMeColors.Text.TextPrimary
+                )
+                // Render a structured-value preview if any field is set —
+                // gives the user a clear sense of what tapping "Áp dụng"
+                // will actually change on the form.
+                val hint = suggestionMutationHint(suggestion)
+                if (hint.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "💡 $hint",
+                        style = BetterMeTypography.Body.Small.Medium,
+                        color = accent,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
         }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = suggestionLabel(s.type),
-                style = BetterMeTypography.Body.Small.Medium,
-                color = accent,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = s.message,
-                style = BetterMeTypography.Body.Medium,
-                color = BetterMeColors.Text.TextPrimary
-            )
+        // Per-card "Áp dụng" pill — only shown when the suggestion has at
+        // least one field the form can actually accept.
+        if (onApply != null) {
+            Spacer(Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
+                    .background(accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft))
+                    .border(
+                        width = 1.dp,
+                        color = accent.copy(alpha = BetterMeTokens.AccentAlpha.Medium),
+                        shape = RoundedCornerShape(BetterMeTokens.CardRadius.Pill)
+                    )
+                    .clickable { onApply() }
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                    .semantics { contentDescription = "Áp dụng gợi ý" }
+            ) {
+                Text(
+                    text = "✓  Áp dụng",
+                    style = BetterMeTypography.Body.Small.Medium,
+                    color = accent,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
     }
+}
+
+/**
+ * Builds a short Vietnamese preview of the structured fields on a
+ * suggestion — used as the 💡 hint line under the message. Returns
+ * blank when no field would mutate the form.
+ */
+private fun suggestionMutationHint(s: HabitCreationSuggestion): String {
+    val parts = mutableListOf<String>()
+    s.suggestedReminderTime?.takeIf { it.isNotBlank() }?.let { parts += "giờ → $it" }
+    s.suggestedCategory?.takeIf { it.isNotBlank() }?.let { parts += "nhóm → $it" }
+    s.suggestedTitle?.takeIf { it.isNotBlank() }?.let { parts += "tên → $it" }
+    s.suggestedDifficulty?.takeIf { it.isNotBlank() }?.let { parts += "mức độ → $it" }
+    s.suggestedDurationMinutes?.let { parts += "thời lượng → $it phút" }
+    s.suggestedFrequency?.takeIf { it.isNotBlank() }?.let { parts += "tần suất → $it" }
+    s.suggestedReplacementHabit?.takeIf { it.isNotBlank() }?.let { parts += "thay cho \"$it\"" }
+    return parts.joinToString(" · ")
 }
 
 @Composable

@@ -4,6 +4,7 @@ import com.example.betterme.base.MviIntent
 import com.example.betterme.base.MviSingleEvent
 import com.example.betterme.base.MviViewState
 import com.example.betterme.data.local.room.entities.CategoryEntity
+import com.example.betterme.domain.ai.habitcreation.HabitCreationSuggestion
 
 // ============================================================
 // STATE
@@ -35,6 +36,16 @@ sealed class AddHabitIntent : MviIntent {
     data class InputEndDate(val dateMillis: Long?) : AddHabitIntent()
     data object ToggleCategorySelector : AddHabitIntent()
     data object Submit : AddHabitIntent()
+
+    /**
+     * Apply the structured fields of one (or more) AI suggestions to the
+     * form. Only mutates fields that have backing entity columns today
+     * (title, reminderTime, categoryId); advisory fields are ignored so the
+     * VM never silently fakes a mutation. The user always retains the
+     * final word — this intent is fired from the assistant sheet's
+     * per-suggestion "Áp dụng" CTA.
+     */
+    data class ApplyAiSuggestions(val suggestions: List<HabitCreationSuggestion>) : AddHabitIntent()
 }
 
 // ============================================================
@@ -43,4 +54,10 @@ sealed class AddHabitIntent : MviIntent {
 sealed class AddHabitEvent : MviSingleEvent {
     data object SaveSuccess : AddHabitEvent()
     data class ShowError(val message: String) : AddHabitEvent()
+    /**
+     * Fired after the form is mutated from an AI suggestion. Carries a
+     * short Vietnamese summary the screen can surface in a snackbar so
+     * the user immediately sees what changed.
+     */
+    data class AppliedSuggestions(val summary: String) : AddHabitEvent()
 }
