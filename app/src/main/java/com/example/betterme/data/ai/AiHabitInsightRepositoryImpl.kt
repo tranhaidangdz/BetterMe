@@ -12,6 +12,7 @@ import com.example.betterme.domain.ai.SuggestedHabit
 import com.example.betterme.domain.ai.schedule.BurnoutRisk
 import com.example.betterme.domain.ai.schedule.ConflictType
 import com.example.betterme.domain.ai.schedule.EnergyLevel
+import com.example.betterme.domain.ai.schedule.HealthyDefaults
 import com.example.betterme.domain.ai.schedule.OptimizedHabitTime
 import com.example.betterme.domain.ai.schedule.ScheduleAnalysis
 import com.example.betterme.domain.ai.schedule.ScheduleConflict
@@ -214,8 +215,15 @@ class AiHabitInsightRepositoryImpl(
             )
         }
         appendLine()
-        appendLine("Sleep: ${profile.sleepStart} → ${profile.sleepEnd}")
+        appendLine("Sleep: ${profile.sleepStart} → ${profile.sleepEnd} (target ${profile.sleepDurationTargetHours}h)")
         appendLine("Work: ${profile.workStart} → ${profile.workEnd}")
+        appendLine("Meals: breakfast ${profile.breakfast}, lunch ${profile.lunch}, dinner ${profile.dinner}")
+        appendLine("Activity level: ${profile.activityLevel}")
+        appendLine()
+        // Compact one-line reference. Gives the model concrete healthy windows
+        // to suggest *toward* when it proposes rescheduling, instead of
+        // inventing thresholds case-by-case.
+        appendLine(HealthyDefaults.PROMPT_HINT)
     }
 
     private fun parseScheduleAnalysis(raw: String): ScheduleAnalysis? {
@@ -338,13 +346,16 @@ class AiHabitInsightRepositoryImpl(
             }
         }
 
-        // (3) Late-night reminder (at or after 22:00).
-        habits.firstOrNull { (it.toMinutesOrNull() ?: -1) >= 22 * 60 }?.let { late ->
+        // (3) Late-night reminder. Threshold tracks HealthyDefaults.HARD_HABIT_LATEST_HOUR
+        // (21:00) — the same boundary the system prompt uses, so offline and online
+        // analyses don't disagree on what counts as "late".
+        val lateBoundary = HealthyDefaults.HARD_HABIT_LATEST_HOUR * 60
+        habits.firstOrNull { (it.toMinutesOrNull() ?: -1) >= lateBoundary }?.let { late ->
             detected += ScheduleConflict(
                 type = ConflictType.LATE_NIGHT,
                 habitA = late.title,
                 habitB = null,
-                issue = "Thói quen này được đặt khá muộn vào ban đêm.",
+                issue = "Thói quen này được đặt khá muộn (sau ${HealthyDefaults.HARD_HABIT_LATEST_HOUR}:00).",
                 suggestion = "Hãy thử dời sớm hơn ~1 tiếng để dễ phục hồi."
             )
             score -= 10
