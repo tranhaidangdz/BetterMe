@@ -33,6 +33,13 @@ sealed class DailyHabitsIntent : MviIntent {
     data object LoadData : DailyHabitsIntent()
     data class SelectDate(val index: Int) : DailyHabitsIntent()
     data class SelectFilter(val filter: DailyHabitFilter) : DailyHabitsIntent()
+    /**
+     * Cheap day-drift check fired by the screen on every (re-)entry. The VM
+     * rebuilds the date strip only when the local calendar day has rolled past
+     * the cached `dates[todayIndex]`. Replaces the prior background midnight
+     * ticker — same correctness, no long-lived coroutine.
+     */
+    data object RefreshIfDayChanged : DailyHabitsIntent()
 }
 
 sealed class DailyHabitsEvent : MviSingleEvent

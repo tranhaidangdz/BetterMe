@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -37,6 +38,16 @@ fun DailyHabitsScreen(
     viewModel: DailyHabitsViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
+
+    // Event-driven cross-midnight refresh. Fires once each time the screen
+    // (re-)enters composition — including when the user toggles back to the
+    // Tasks tab after the wall clock has rolled past midnight. The VM's
+    // RefreshIfDayChanged handler is cheap (one Calendar.getInstance() + an
+    // equality check) and only rebuilds the date strip when the day actually
+    // changed; otherwise it returns immediately.
+    LaunchedEffect(Unit) {
+        viewModel.processIntent(DailyHabitsIntent.RefreshIfDayChanged)
+    }
 
     DailyHabitsContent(
         state = state,

@@ -9,10 +9,7 @@ import com.example.betterme.domain.repository.HabitLogRepository
 import com.example.betterme.domain.repository.HabitRepository
 import com.example.betterme.presentation.dailyhabits.model.HabitUiModel
 import com.example.betterme.utils.DateUtils
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -47,14 +44,6 @@ class DailyHabitsViewModel(
 
     private val selectedDateMillis = MutableStateFlow(startOfDay(Calendar.getInstance()))
 
-    /**
-     * Tracks the live bootstrap coroutine so a re-entrant [DailyHabitsIntent.LoadData]
-     * or a midnight rollover doesn't leak a second infinite `combine` collector on
-     * top of the first. The cancel-then-relaunch pattern keeps the VM safe even if
-     * the screen gains a manual refresh trigger in the future.
-     */
-    private var bootstrapJob: Job? = null
-
     override fun initState(): DailyHabitsState = DailyHabitsState()
 
     init {
@@ -66,21 +55,21 @@ class DailyHabitsViewModel(
             DailyHabitsIntent.LoadData -> bootstrap()
             is DailyHabitsIntent.SelectDate -> selectDate(intent.index)
             is DailyHabitsIntent.SelectFilter -> selectFilter(intent.filter)
+            DailyHabitsIntent.RefreshIfDayChanged -> refreshIfDayChanged()
         }
     }
 
     /**
      * One-time setup of the date strip + the long-lived combine that keeps the
-     * visible list in sync with Room. Internally hosts a midnight-tick coroutine
-     * that re-runs the strip rebuild every time the local calendar day rolls
-     * over — so a user who keeps the app open across 00:00 sees the date strip
-     * advance, and check-ins land under the new day.
+     * visible list in sync with Room. The cross-midnight case is handled
+     * event-style via [refreshIfDayChanged] — the screen fires that intent on
+     * every (re-)entry, so a user returning to Tasks after a day rollover
+     * triggers a date-strip rebuild without any background ticker.
      */
     private fun bootstrap() {
-        bootstrapJob?.cancel()
-        bootstrapJob = viewModelScope.launch {
+        viewModelScope.launch {
             updateState { copy(isLoading = true) }
-            rebuildDateStripForCurrentDay(initial = true)
+            buildDateStrip(snapToToday = true)
 
             val userId = dataStoreManager.getCurrentUserId().first().orEmpty()
             if (userId.isBlank()) {
@@ -92,25 +81,18 @@ class DailyHabitsViewModel(
                 categoryRepository.getAll().first().associateBy { it.id }
             }.getOrDefault(emptyMap())
 
-            // Midnight rollover ticker. Sleeps until the next local 00:00, then
-            // rebuilds the date strip in place. The user's selected day is preserved
-            // when possible (we find the same absolute date in the new strip);
-            // otherwise we snap to the new today. Lives as a child of bootstrapJob
-            // so it dies with the VM and re-spawns on a fresh bootstrap.
-            launch { runMidnightTicker() }
-
-            // collectLatest cancels in-flight buildUiHabits when a newer (habits,
-            // date, logs) tuple arrives, so a rapid sequence of check-ins or
-            // tab-switches only commits the freshest list to state. With plain
-            // collect, every emission queues — under burst load that would surface
-            // briefly as stale rows before the latest list lands.
+            // Plain collect (not collectLatest): buildUiHabits is ~5–20 ms and
+            // user-driven emissions (add habit, check-in, date pick) don't burst
+            // faster than that. Sequential processing keeps state updates strictly
+            // ordered with the emissions that triggered them, which is the more
+            // predictable choice for a lightweight pipeline.
             combine(
                 habitRepository.getHabits(userId),
                 selectedDateMillis,
                 habitLogRepository.observeAllLogs()
             ) { habits, dateMs, _ ->
                 buildUiHabits(habits, dateMs, categoryMap)
-            }.collectLatest { uiHabits ->
+            }.collect { uiHabits ->
                 updateState {
                     copy(
                         isLoading = false,
@@ -123,12 +105,25 @@ class DailyHabitsViewModel(
     }
 
     /**
-     * Builds the 7-day strip centered on today and writes it into state. When
-     * [initial] is true we always snap selection to today (fresh load). When
-     * called from the midnight ticker, we preserve the user's absolute selected
-     * date if it's still in the new window, otherwise we snap to the new today.
+     * Cheap drift check. If the day in state still matches the current local
+     * calendar day, this is a no-op. Otherwise the strip is rebuilt; the user's
+     * previously-selected absolute date is preserved when it still fits in the
+     * new 7-day window, else we snap to the new today.
      */
-    private fun rebuildDateStripForCurrentDay(initial: Boolean) {
+    private fun refreshIfDayChanged() {
+        val currentTodayMs = startOfDay(Calendar.getInstance())
+        val cachedTodayMs = currentState.dates.getOrNull(currentState.todayIndex)?.dateMillis
+        if (cachedTodayMs == currentTodayMs) return
+        buildDateStrip(snapToToday = false)
+    }
+
+    /**
+     * Generates the 7-day strip centered on today and commits it to state.
+     * [snapToToday] = true on a fresh bootstrap (user lands on today). On a
+     * day-rollover refresh, we keep the user's absolute selection if it's still
+     * inside the new window.
+     */
+    private fun buildDateStrip(snapToToday: Boolean) {
         val todayIndex = 3
         val dates = (-3..3).map { offset ->
             val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, offset) }
@@ -143,7 +138,7 @@ class DailyHabitsViewModel(
         val previousSelectedMillis = selectedDateMillis.value
         val preservedIndex = dates.indexOfFirst { it.dateMillis == previousSelectedMillis }
         val newSelectedIndex = when {
-            initial -> todayIndex
+            snapToToday -> todayIndex
             preservedIndex >= 0 -> preservedIndex
             else -> todayIndex
         }
@@ -155,33 +150,6 @@ class DailyHabitsViewModel(
             )
         }
         selectedDateMillis.value = dates[newSelectedIndex].dateMillis
-    }
-
-    /**
-     * Sleeps until the next local 00:00 (plus a 1s safety buffer to land *after*
-     * the boundary), rebuilds the strip, then loops. The delay is computed against
-     * wall-clock time so a backgrounded VM whose process survived across midnight
-     * still fires exactly once when the user resumes.
-     *
-     * `while (true)` is safe: [delay] is a cancellation point, so when
-     * [bootstrapJob] is cancelled (VM clear or re-bootstrap) the loop exits
-     * cleanly via CancellationException without leaking the coroutine.
-     */
-    private suspend fun runMidnightTicker() {
-        while (true) {
-            val now = System.currentTimeMillis()
-            val nextMidnight = Calendar.getInstance().apply {
-                add(Calendar.DAY_OF_YEAR, 1)
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-            // Minimum 1-minute sleep prevents an accidental hot-loop if the system
-            // clock is set exactly at midnight when we enter this coroutine.
-            delay((nextMidnight - now + 1_000L).coerceAtLeast(60_000L))
-            rebuildDateStripForCurrentDay(initial = false)
-        }
     }
 
     private fun selectDate(index: Int) {
