@@ -31,7 +31,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -154,9 +153,10 @@ fun HabitCard(
                     text = habit.title,
                     style = BetterMeTypography.Body.Medium.copy(fontWeight = FontWeight.SemiBold),
                     color = BetterMeColors.Text.TextPrimary,
-                    // Subtle strike-through when done — rewarding visual without
-                    // making the row feel "dimmed" or deactivated.
-                    textDecoration = if (habit.isCheckedInToday) TextDecoration.LineThrough else null,
+                    // No strikethrough on completed rows: a checked-in habit lives
+                    // in the DONE tab and signals its finished state through the
+                    // green border + green check disc, which reads as a reward
+                    // rather than deactivation.
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )

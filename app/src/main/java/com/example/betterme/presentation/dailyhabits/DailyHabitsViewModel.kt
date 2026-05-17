@@ -188,14 +188,29 @@ class DailyHabitsViewModel(
     }
 
     /**
-     * "Đang thực hiện" filters out habits whose journey has finished — they belong in
-     * "Đã hoàn thành". A habit cannot appear in both buckets at the same time.
+     * Tab semantics are anchored to the *selected day's* check-in status, not the
+     * habit's overall journey:
+     *
+     * - IN_PROGRESS ("Đang thực hiện"): the user still has something to do on this
+     *   day — habit hasn't been checked in for this date yet.
+     * - DONE ("Đã hoàn thành"): the user already completed this habit on this date.
+     *
+     * The instant a check-in lands (HabitLog row inserted → observeAllLogs emits →
+     * combine() in bootstrap() re-runs buildUiHabits → isCheckedInToday flips to
+     * true), the habit moves from IN_PROGRESS to DONE without any manual refresh.
+     * That moves the user's mental model from "is the journey done?" to "did I do
+     * it today?" — which matches how people actually use a daily-tasks screen.
+     *
+     * Habits whose overall journey is fully complete have their end_date in the
+     * past, so the active-on-date filter in buildUiHabits already excludes them
+     * from future selected dates. They only appear under DONE on the actual day
+     * their check-in landed.
      */
     private fun applyFilter(filter: DailyHabitFilter, habits: List<HabitUiModel>): List<HabitUiModel> {
         return when (filter) {
             DailyHabitFilter.ALL -> habits
-            DailyHabitFilter.IN_PROGRESS -> habits.filter { !it.isJourneyComplete }
-            DailyHabitFilter.DONE -> habits.filter { it.isJourneyComplete }
+            DailyHabitFilter.IN_PROGRESS -> habits.filter { !it.isCheckedInToday }
+            DailyHabitFilter.DONE -> habits.filter { it.isCheckedInToday }
         }
     }
 
