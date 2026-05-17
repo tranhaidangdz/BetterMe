@@ -85,13 +85,30 @@ class ChallengeDiscoverViewModel(
                     .sortedByDescending { it.created_at }
                     .take(10)
                     .map { it.toNewUi() }
+
+                // Phase 3 — grouped-by-difficulty showcase. Surfaces the
+                // top-N most-popular challenge in each tier so the user
+                // can browse the ladder at a glance. Sorted by
+                // participant_count desc as a proxy for credibility +
+                // social proof. Up to 6 per tier so a tier's section
+                // header stays readable on small phones.
+                val activeChallenges = challenges.filter { (it.start_date ?: 0L) <= now }
+                val grouped = Difficulty.entries.associateWith { tier ->
+                    activeChallenges
+                        .filter { Difficulty.fromRaw(it.difficulty) == tier }
+                        .sortedByDescending { it.participant_count }
+                        .take(6)
+                        .map { it.toNewUi() }
+                }.filterValues { it.isNotEmpty() }
+
                 updateState {
                     copy(
                         isLoading = false,
                         featured = featured,
                         upcomingFeatured = upcomingFeatured,
                         categories = tiles,
-                        newest = newest
+                        newest = newest,
+                        groupedByDifficulty = grouped
                     )
                 }
             }

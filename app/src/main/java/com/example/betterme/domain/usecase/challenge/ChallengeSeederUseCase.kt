@@ -7,6 +7,7 @@ import com.example.betterme.data.seed.BadgesSeed
 import com.example.betterme.data.seed.ChallengesSeed
 import com.example.betterme.data.seed.EliteChallengesSeed
 import com.example.betterme.data.seed.GroupTeamsSeed
+import com.example.betterme.data.seed.PrestigeChallengesSeed
 import com.example.betterme.data.seed.StarterChallengesSeed
 import com.example.betterme.data.seed.UpcomingChallengesSeed
 import com.example.betterme.domain.repository.AchievementRepository
@@ -17,15 +18,16 @@ import com.example.betterme.domain.repository.GroupTeamRepository
  * Seeds the challenge catalog, badge catalog, and mock group teams on first launch
  * (and after destructive Room migrations). Idempotent via [DataStoreManager.isChallengesSeeded].
  *
- * The challenge catalog is the union of four coexisting sources — they are merged,
+ * The challenge catalog is the union of five coexisting sources — they are merged,
  * never replaced:
  * - [ChallengesSeed]           — 48 entries, IDs 1..48 (mix of EASY/MEDIUM/HARD/LEGENDARY)
  * - [UpcomingChallengesSeed]   — 20 entries, IDs 100..119 (seasonal future-dated)
  * - [EliteChallengesSeed]      — 20 entries, IDs 200..219 (10 HARD + 10 LEGENDARY)
  * - [StarterChallengesSeed]    — 20 entries, IDs 300..319 (10 EASY + 10 MEDIUM)
+ * - [PrestigeChallengesSeed]   — 15 entries, IDs 400..414 (5 MEDIUM + 5 HARD + 5 LEGENDARY)
  *
- * All four insert into the same `challenges` table via the same DAO, so every screen
- * (Discover, Overview, Detail) sees a single unified catalog of 108 challenges.
+ * All five insert into the same `challenges` table via the same DAO, so every screen
+ * (Discover, Overview, Detail) sees a single unified catalog of 123 challenges.
  *
  * Order matters: badges first (challenges FK to reward_badge_id), then challenges, then teams
  * (teams FK to challenge_id). DAO inserts use OnConflictStrategy.IGNORE so re-seeding on
@@ -53,7 +55,8 @@ class ChallengeSeederUseCase(
         val expectedChallenges = ChallengesSeed.challenges().size +
             UpcomingChallengesSeed.upcoming().size +
             EliteChallengesSeed.elite().size +
-            StarterChallengesSeed.starter().size
+            StarterChallengesSeed.starter().size +
+            PrestigeChallengesSeed.prestige().size
         val expectedBadges = BadgesSeed.badges.size
         val flagSet = dataStoreManager.isChallengesSeeded()
         val challengeCount = challengeRepository.count()
@@ -75,6 +78,11 @@ class ChallengeSeederUseCase(
             // for new users — beginner-friendly entries with smaller commitments and
             // proportionally lower coin rewards.
             challengeRepository.insertAll(StarterChallengesSeed.starter())
+            // Prestige expansion (5 MEDIUM + 5 HARD + 5 LEGENDARY) — hand-curated
+            // themes (No Sugar 90d, Deep Work 100d, 75 Hard, Wake Before 6AM 60d,
+            // Digital Detox Master) anchoring the long-form ladder. Same
+            // OnConflictStrategy.IGNORE semantics: new IDs only.
+            challengeRepository.insertAll(PrestigeChallengesSeed.prestige())
             groupTeamRepository.insertAll(GroupTeamsSeed.teams)
         }
 

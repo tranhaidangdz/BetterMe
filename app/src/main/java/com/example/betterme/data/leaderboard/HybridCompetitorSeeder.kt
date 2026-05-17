@@ -42,12 +42,18 @@ class HybridCompetitorSeeder {
      *        provides the real number when it's available.
      * @param targetStreak the challenge's `target_streak` field —
      *        proxy for difficulty.
+     * @param difficulty optional explicit difficulty (EASY / MEDIUM /
+     *        HARD / LEGENDARY). When provided, the seeder shifts the
+     *        top-score band upward so harder challenges feel tougher
+     *        to climb. Defaults to deriving from [targetStreak] alone
+     *        for backward compatibility with older call sites.
      */
     fun seedFor(
         challengeId: Int,
         seasonKey: String,
         targetStreak: Int,
-        participantHint: Int = 0
+        participantHint: Int = 0,
+        difficulty: String? = null
     ): List<LeaderboardEntry> {
         val seed = makeSeed(challengeId, seasonKey)
         val rng = Random(seed)
@@ -63,9 +69,18 @@ class HybridCompetitorSeeder {
         val avatars = AVATAR_POOL.shuffled(rng)
         val targetForNames = minOf(targetCount, shuffledNames.size)
 
-        // Top score anchored in a believable range; jitter shrinks the
-        // gap as we go down so the curve looks real instead of linear.
-        var nextScore = rng.nextInt(1180, 1420)
+        // Top-score band is difficulty-aware: HARD and LEGENDARY land
+        // higher to communicate "this leaderboard is for serious
+        // competitors". The score numbers feed into Phase 2A badges +
+        // Phase 2B league tier rendering, so this nudges the elite
+        // tiers into Gold/Platinum/Diamond territory naturally.
+        val (lowEnd, highEnd) = when (difficulty?.uppercase()) {
+            "LEGENDARY" -> 1500 to 1850
+            "HARD" -> 1350 to 1650
+            "MEDIUM" -> 1240 to 1480
+            else -> 1180 to 1420
+        }
+        var nextScore = rng.nextInt(lowEnd, highEnd)
         val now = System.currentTimeMillis()
 
         return (0 until targetForNames).map { i ->
@@ -93,14 +108,22 @@ class HybridCompetitorSeeder {
 
             // Compute next rank's score. Top-of-leaderboard gaps are
             // tighter (championship competition); mid/bottom gaps
-            // widen so the bottom anchors at ~200-400.
+            // widen so the bottom anchors at ~200-400 for EASY and
+            // higher for harder tiers — even the tail of a LEGENDARY
+            // leaderboard should feel respectable.
             val drop = when {
                 i < 5 -> rng.nextInt(8, 25)
                 i < 20 -> rng.nextInt(15, 35)
                 i < 50 -> rng.nextInt(10, 28)
                 else -> rng.nextInt(5, 18)
             }
-            nextScore = (nextScore - drop).coerceAtLeast(180 + rng.nextInt(0, 80))
+            val floor = when (difficulty?.uppercase()) {
+                "LEGENDARY" -> 420
+                "HARD" -> 320
+                "MEDIUM" -> 220
+                else -> 180
+            }
+            nextScore = (nextScore - drop).coerceAtLeast(floor + rng.nextInt(0, 80))
             entry
         }
     }

@@ -23,9 +23,12 @@ import com.example.betterme.R
 import com.example.betterme.presentation.challenge.discover.components.CategoryFilterChips
 import com.example.betterme.presentation.challenge.discover.components.CategoryTile
 import com.example.betterme.presentation.challenge.discover.components.DifficultyFilterChips
+import com.example.betterme.presentation.challenge.discover.components.DifficultySectionHeader
 import com.example.betterme.presentation.challenge.discover.components.DiscoverSearchBar
 import com.example.betterme.presentation.challenge.discover.components.FeaturedChallengeCard
+import com.example.betterme.presentation.challenge.discover.components.LegendaryChallengeRow
 import com.example.betterme.presentation.challenge.discover.components.NewChallengeRow
+import com.example.betterme.presentation.challenge.shared.Difficulty
 import com.example.betterme.presentation.components.view.BetterMeTopBar
 import com.example.betterme.presentation.components.view.SectionHeader
 import com.example.betterme.presentation.theme.BetterMeColors
@@ -184,6 +187,48 @@ fun ChallengeDiscoverScreen(
                 }
             }
 
+            // ───────── Grouped-by-difficulty showcase ─────────
+            // Only surfaced when the user hasn't filtered or searched —
+            // becomes a passive ladder browser rather than fighting the
+            // flat list below. LEGENDARY rows use a prestige-styled
+            // variant; the other tiers reuse the standard NewChallengeRow.
+            val showGrouped = state.query.isBlank() &&
+                state.selectedDifficulty == null &&
+                state.selectedCategoryId == null &&
+                state.groupedByDifficulty.isNotEmpty()
+            if (showGrouped) {
+                item {
+                    SectionHeader(
+                        title = "Theo độ khó",
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+                // Render in tier order EASY → MEDIUM → HARD → LEGENDARY so
+                // the visual escalation matches the user's progression
+                // intuition.
+                Difficulty.entries.forEach { tier ->
+                    val rows = state.groupedByDifficulty[tier] ?: return@forEach
+                    item(key = "tier-header-${tier.raw}") {
+                        DifficultySectionHeader(difficulty = tier, count = rows.size)
+                    }
+                    items(rows, key = { row -> "tier-${tier.raw}-${row.challengeId}" }) { row ->
+                        if (tier == Difficulty.LEGENDARY) {
+                            LegendaryChallengeRow(
+                                model = row,
+                                onClick = routeOpen,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        } else {
+                            NewChallengeRow(
+                                model = row,
+                                onClick = routeOpen,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             item {
                 SectionHeader(
                     title = if (state.query.isNotBlank()) "Kết quả" else "Mới",
@@ -193,11 +238,19 @@ fun ChallengeDiscoverScreen(
                 )
             }
             items(visibleNewest, key = { "new-${it.challengeId}" }) { row ->
-                NewChallengeRow(
-                    model = row,
-                    onClick = routeOpen,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
+                if (row.difficulty == Difficulty.LEGENDARY) {
+                    LegendaryChallengeRow(
+                        model = row,
+                        onClick = routeOpen,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                } else {
+                    NewChallengeRow(
+                        model = row,
+                        onClick = routeOpen,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
             }
             if (visibleNewest.isEmpty()) {
                 item {

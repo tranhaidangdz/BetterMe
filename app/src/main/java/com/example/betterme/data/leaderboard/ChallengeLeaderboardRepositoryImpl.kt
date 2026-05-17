@@ -90,7 +90,11 @@ class ChallengeLeaderboardRepositoryImpl(
             challengeId = challengeId,
             seasonKey = seasonKey,
             targetStreak = targetStreak,
-            participantHint = meta.participantCount
+            participantHint = meta.participantCount,
+            // Phase 3 — pass difficulty so the seeder lifts the top
+            // score band on HARD / LEGENDARY ladders, making them feel
+            // proportionally tougher to climb.
+            difficulty = challenge?.difficulty
         )
 
         // Merge — real rows take precedence when userIds collide.
