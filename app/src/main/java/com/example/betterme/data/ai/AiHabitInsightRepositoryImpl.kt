@@ -152,7 +152,7 @@ class AiHabitInsightRepositoryImpl(
         }
 
         Log.w(TAG, "All schedule models exhausted — serving canned analysis")
-        return cannedScheduleAnalysis(withReminders)
+        return cannedScheduleAnalysis(withReminders, effectiveProfile)
     }
 
     private suspend fun tryScheduleModel(
@@ -280,55 +280,139 @@ class AiHabitInsightRepositoryImpl(
     )
 
     /**
-     * Local deterministic fallback when every OpenRouter model fails. Detects only
-     * the simplest case (two reminders within 15 minutes) — a real analysis would
-     * be a much bigger rule engine. Returning *some* meaningful insight is
-     * preferable to a blank error card: the user sees the most obvious overlap
-     * and a generic positive line.
+     * Local deterministic fallback served when every OpenRouter model fails.
+     *
+     * Runs four rule-based detectors against the user's actual schedule + lifestyle
+     * profile so the offline result feels believable instead of generic:
+     *
+     * 1. **OVERLAP** — any two consecutive reminders within 15 minutes.
+     *    Cost: −10 / suggestion: dời một trong hai trễ hơn ~15 phút.
+     * 2. **OVERLOAD** — 3+ reminders inside any sliding 90-minute window.
+     *    Cost: −15 / suggestion: rút bớt 1 thói quen khỏi khung này.
+     * 3. **LATE_NIGHT** — a reminder at or after 22:00. Cost: −10.
+     * 4. **POOR_SLEEP** — sleep duration under 6h. Cost: −20.
+     *
+     * At most 3 conflicts surface (matches the prompt's contract). Score
+     * starts at 100 and decrements per rule, floored at 0. Burnout risk
+     * derives from rule severity: POOR_SLEEP → HIGH; LATE_NIGHT or
+     * OVERLOAD → MODERATE; otherwise LOW. Mirrors the same thresholds the
+     * remote prompt uses so the user can't tell offline from online by score.
      */
-    private fun cannedScheduleAnalysis(habits: List<ScheduleHabitInput>): ScheduleAnalysis {
-        // Pairwise scan for reminders within 15 minutes of each other.
+    private fun cannedScheduleAnalysis(
+        habits: List<ScheduleHabitInput>,
+        profile: UserLifestyleProfile
+    ): ScheduleAnalysis {
         val sorted = habits
             .mapNotNull { h -> h.toMinutesOrNull()?.let { h to it } }
             .sortedBy { it.second }
-        val overlap = sorted.zipWithNext { a, b ->
-            if (b.second - a.second <= 15) Triple(a.first.title, b.first.title, a.first.reminderTime to b.first.reminderTime)
-            else null
-        }.firstOrNull { it != null }
+        val detected = mutableListOf<ScheduleConflict>()
+        var score = 100
 
-        return if (overlap != null) {
-            ScheduleAnalysis(
-                hasConflict = true,
-                scheduleScore = 70,
-                energyLevel = EnergyLevel.MODERATE,
-                burnoutRisk = BurnoutRisk.LOW,
-                summary = "Lịch trình của bạn nhìn chung ổn, có một khoảng chuyển tiếp khá gấp.",
-                positiveFeedback = "Bạn đang duy trì lịch trình đều đặn — đó là điểm cộng quan trọng.",
-                conflicts = listOf(
-                    ScheduleConflict(
-                        type = ConflictType.TRANSITION,
-                        habitA = overlap.first,
-                        habitB = overlap.second,
-                        issue = "Hai thói quen này sát nhau, có thể tạo cảm giác vội vàng.",
-                        suggestion = "Hãy cân nhắc dời một trong hai sang muộn hơn ~15 phút."
-                    )
-                ),
-                optimizedSchedule = emptyList(),
-                isCanned = true
+        // (1) Pairwise overlap.
+        sorted.zipWithNext().firstOrNull { (a, b) -> b.second - a.second <= 15 }?.let { (a, b) ->
+            detected += ScheduleConflict(
+                type = ConflictType.OVERLAP,
+                habitA = a.first.title,
+                habitB = b.first.title,
+                issue = "Hai thói quen này cách nhau dưới 15 phút.",
+                suggestion = "Hãy thử dời một trong hai ra xa hơn ~15 phút."
             )
-        } else {
-            ScheduleAnalysis(
-                hasConflict = false,
-                scheduleScore = 85,
-                energyLevel = EnergyLevel.MODERATE,
-                burnoutRisk = BurnoutRisk.LOW,
-                summary = "Lịch trình của bạn nhìn chung khá cân đối.",
-                positiveFeedback = "Bạn đang duy trì lịch trình đều đặn — đó là điểm cộng quan trọng.",
-                conflicts = emptyList(),
-                optimizedSchedule = emptyList(),
-                isCanned = true
-            )
+            score -= 10
         }
+
+        // (2) Sliding 90-min overload — find the first window containing 3+ reminders.
+        run {
+            for (i in sorted.indices) {
+                val window = sorted.drop(i).takeWhile { it.second - sorted[i].second <= 90 }
+                if (window.size >= 3) {
+                    detected += ScheduleConflict(
+                        type = ConflictType.OVERLOAD,
+                        habitA = window[0].first.title,
+                        habitB = window[1].first.title,
+                        issue = "Có ${window.size} thói quen trong vòng 90 phút quanh ${window[0].first.reminderTime}.",
+                        suggestion = "Cân nhắc dời một thói quen ra khỏi khung này để dễ thở hơn."
+                    )
+                    score -= 15
+                    break
+                }
+            }
+        }
+
+        // (3) Late-night reminder (at or after 22:00).
+        habits.firstOrNull { (it.toMinutesOrNull() ?: -1) >= 22 * 60 }?.let { late ->
+            detected += ScheduleConflict(
+                type = ConflictType.LATE_NIGHT,
+                habitA = late.title,
+                habitB = null,
+                issue = "Thói quen này được đặt khá muộn vào ban đêm.",
+                suggestion = "Hãy thử dời sớm hơn ~1 tiếng để dễ phục hồi."
+            )
+            score -= 10
+        }
+
+        // (4) Sleep duration. Handles ranges that cross midnight (start > end).
+        val sleepMinutes = sleepDurationMinutes(profile)
+        if (sleepMinutes != null && sleepMinutes < 6 * 60) {
+            detected += ScheduleConflict(
+                type = ConflictType.POOR_SLEEP,
+                habitA = "Giờ ngủ",
+                habitB = null,
+                issue = "Tổng thời gian ngủ của bạn dưới 6 tiếng.",
+                suggestion = "Hãy cố gắng giữ giấc ngủ ít nhất 7 tiếng mỗi đêm."
+            )
+            score -= 20
+        }
+
+        val finalConflicts = detected.take(3)
+        val burnout = when {
+            finalConflicts.any { it.type == ConflictType.POOR_SLEEP } -> BurnoutRisk.HIGH
+            finalConflicts.any { it.type == ConflictType.LATE_NIGHT } -> BurnoutRisk.MODERATE
+            finalConflicts.any { it.type == ConflictType.OVERLOAD } -> BurnoutRisk.MODERATE
+            else -> BurnoutRisk.LOW
+        }
+        val energy = when (burnout) {
+            BurnoutRisk.HIGH -> EnergyLevel.LOW
+            BurnoutRisk.MODERATE -> EnergyLevel.MODERATE
+            BurnoutRisk.LOW -> EnergyLevel.HIGH
+        }
+        val summary = when {
+            finalConflicts.isEmpty() -> "Lịch trình của bạn nhìn chung khá cân đối."
+            finalConflicts.size == 1 -> "Lịch trình của bạn ổn, có một điểm nhỏ nên điều chỉnh."
+            else -> "Lịch trình có ${finalConflicts.size} điểm cần điều chỉnh nhẹ."
+        }
+
+        return ScheduleAnalysis(
+            hasConflict = finalConflicts.isNotEmpty(),
+            scheduleScore = score.coerceAtLeast(0),
+            energyLevel = energy,
+            burnoutRisk = burnout,
+            summary = summary,
+            positiveFeedback = "Bạn đang duy trì lịch trình đều đặn — đó là điểm cộng quan trọng.",
+            conflicts = finalConflicts,
+            optimizedSchedule = emptyList(),
+            isCanned = true
+        )
+    }
+
+    /**
+     * Total sleep duration in minutes given a profile, handling sleep that
+     * crosses midnight (e.g. 22:00 → 06:00 = 480 minutes). Returns null when
+     * either time string fails to parse, so the caller can skip the rule
+     * rather than emit a misleading conflict.
+     */
+    private fun sleepDurationMinutes(profile: UserLifestyleProfile): Int? {
+        val start = parseHhMm(profile.sleepStart) ?: return null
+        val end = parseHhMm(profile.sleepEnd) ?: return null
+        return if (end > start) end - start else (24 * 60 - start) + end
+    }
+
+    private fun parseHhMm(value: String): Int? {
+        val parts = value.split(":")
+        if (parts.size != 2) return null
+        val h = parts[0].toIntOrNull() ?: return null
+        val m = parts[1].toIntOrNull() ?: return null
+        if (h !in 0..23 || m !in 0..59) return null
+        return h * 60 + m
     }
 
     private fun ScheduleHabitInput.toMinutesOrNull(): Int? {

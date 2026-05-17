@@ -1,5 +1,10 @@
 package com.example.betterme.presentation.dailyhabits.schedule
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,6 +30,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +42,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,22 +55,25 @@ import com.example.betterme.domain.ai.schedule.ScheduleConflict
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTokens
 import com.example.betterme.presentation.theme.BetterMeTypography
+import kotlinx.coroutines.delay
 
 /**
  * Premium bottom sheet that renders [ScheduleAnalysisUi].
  *
- * Sections (when Success):
- * - Header: title + close
- * - Score ring (Canvas, accent color) + burnout-risk pill
- * - Positive feedback line (skipped when empty)
- * - Conflicts list (cards, max 3)
- * - Optimized schedule list (rows, max 5) + "Áp dụng đề xuất" CTA when non-empty
- * - "Phân tích lại" pill (forces a fresh AI call)
+ * Visual hierarchy:
+ *   header → hero (score ring + burnout pill + summary) → optional positive
+ *   feedback card → conflicts → optimized schedule + Apply CTA → footer pills.
  *
- * Loading shows a spinner + a one-line "đang phân tích…" message. Error shows
- * a friendly Vietnamese line + a retry pill. Idle returns nothing — the parent
- * shouldn't render this composable at all when state is Idle, but the guard
- * keeps the composition safe.
+ * Empty-state polish:
+ *   - "Chưa đủ dữ liệu" gets a calm sun-icon hero with helper copy instead of
+ *     the standard zero-conflict success treatment.
+ *   - hasConflict = false with non-empty habits gets a green celebratory hero.
+ *   - All-models-failed (isCanned = true) shows a quiet "Bản phân tích nhanh
+ *     (ngoại tuyến)" chip so the user knows why suggestions are sparse.
+ *
+ * Loading message rotates every ~1.8s. The rotation is implemented as a
+ * single [LaunchedEffect] inside the Loading branch, so it dies with the
+ * Loading composition and never leaks past a state transition.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,7 +98,7 @@ fun ScheduleAnalysisBottomSheet(
                 .heightIn(min = 200.dp)
         ) {
             Header(onClose = { onIntent(ScheduleAnalysisIntent.Dismiss) })
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
 
             when (val ui = state.ui) {
                 ScheduleAnalysisUi.Idle -> Unit
@@ -109,6 +123,9 @@ fun ScheduleAnalysisBottomSheet(
     }
 }
 
+// ============================================================
+// HEADER
+// ============================================================
 @Composable
 private fun Header(onClose: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -120,59 +137,103 @@ private fun Header(onClose: () -> Unit) {
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Huấn luyện viên AI sẽ giúp bạn cân bằng nhiệm vụ trong ngày",
+                text = "Huấn luyện viên AI giúp bạn cân bằng nhiệm vụ trong ngày",
                 style = BetterMeTypography.Body.Small.Medium,
                 color = BetterMeColors.Text.TextTertiary
             )
         }
+        // 48dp touch target for accessibility (visual 36dp circle, transparent
+        // padding extends the click area).
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(48.dp)
                 .clip(CircleShape)
-                .clickable { onClose() },
+                .clickable { onClose() }
+                .semantics { contentDescription = "Đóng phân tích lịch trình" },
             contentAlignment = Alignment.Center
         ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(BetterMeColors.Gray.Gray3),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "✕",
+                    color = BetterMeColors.Text.TextTertiary,
+                    fontSize = 18.sp
+                )
+            }
+        }
+    }
+}
+
+// ============================================================
+// LOADING — rotating messages
+// ============================================================
+@Composable
+private fun LoadingBody() {
+    val messages = remember {
+        listOf(
+            "Đang phân tích lịch trình của bạn…",
+            "Soát cân bằng giữa các thói quen…",
+            "Tìm khoảng nghỉ phục hồi…",
+            "Kiểm tra giờ ngủ và giờ làm việc…",
+            "Phát hiện các điểm có nguy cơ kiệt sức…"
+        )
+    }
+    var index by remember { mutableStateOf(0) }
+    // Single LaunchedEffect scoped to the Loading composition. When the UI
+    // transitions to Success/Error the whole branch leaves composition and
+    // this coroutine is cancelled automatically — no timers leak past the
+    // visible Loading state.
+    LaunchedEffect(messages) {
+        while (true) {
+            delay(1800)
+            index = (index + 1) % messages.size
+        }
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(28.dp),
+            color = BetterMeColors.Primary.Primary,
+            strokeWidth = 2.6.dp
+        )
+        AnimatedContent(
+            targetState = messages[index],
+            transitionSpec = {
+                (fadeIn(tween(280)) togetherWith fadeOut(tween(180)))
+            },
+            label = "loading_rotator"
+        ) { msg ->
             Text(
-                text = "✕",
-                color = BetterMeColors.Text.TextTertiary,
-                fontSize = 18.sp
+                text = msg,
+                style = BetterMeTypography.Body.Medium,
+                color = BetterMeColors.Text.TextSecondary
             )
         }
     }
 }
 
-@Composable
-private fun LoadingBody() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 24.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(22.dp),
-            color = BetterMeColors.Primary.Primary,
-            strokeWidth = 2.5.dp
-        )
-        Text(
-            text = "Đang phân tích lịch trình của bạn…",
-            style = BetterMeTypography.Body.Medium,
-            color = BetterMeColors.Text.TextSecondary
-        )
-    }
-}
-
+// ============================================================
+// ERROR
+// ============================================================
 @Composable
 private fun ErrorBody(message: String, onRetry: () -> Unit) {
     val errorColor = BetterMeColors.Red
-    Column {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
-            text = message,
+            text = "⚠️  $message",
             style = BetterMeTypography.Body.Medium,
             color = errorColor
         )
-        Spacer(Modifier.height(12.dp))
         Pill(
             label = "↻  Thử lại",
             color = errorColor,
@@ -182,6 +243,9 @@ private fun ErrorBody(message: String, onRetry: () -> Unit) {
     }
 }
 
+// ============================================================
+// SUCCESS — main composable
+// ============================================================
 @Composable
 private fun SuccessBody(
     analysis: ScheduleAnalysis,
@@ -191,21 +255,134 @@ private fun SuccessBody(
     onRegenerate: () -> Unit,
     onClearToast: () -> Unit
 ) {
-    // Auto-clear the applied-count snackbar marker after ~2s so the sheet
-    // doesn't sit permanently in a "just applied N" state if the user lingers.
+    // Auto-clear the applied-count snackbar marker after ~2.4s. Effect is keyed
+    // on appliedCount so re-triggers don't pile up.
     LaunchedEffect(appliedCount) {
         if (appliedCount != null) {
-            kotlinx.coroutines.delay(2400)
+            delay(2400)
             onClearToast()
         }
     }
 
-    val accent = BetterMeColors.Primary.Primary
+    val isEmptyData = analysis.summary == "Chưa đủ dữ liệu để phân tích"
 
+    when {
+        isEmptyData -> EmptyDataHero(onRegenerate = onRegenerate)
+        !analysis.hasConflict && analysis.conflicts.isEmpty() -> CelebratoryHero(
+            analysis = analysis,
+            onRegenerate = onRegenerate
+        )
+        else -> ConflictsBody(
+            analysis = analysis,
+            isApplying = isApplying,
+            appliedCount = appliedCount,
+            onApply = onApply,
+            onRegenerate = onRegenerate
+        )
+    }
+}
+
+// ============================================================
+// EMPTY-DATA hero (<2 habits with reminders)
+// ============================================================
+@Composable
+private fun EmptyDataHero(onRegenerate: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(BetterMeColors.Primary.Primary.copy(alpha = BetterMeTokens.AccentAlpha.Soft)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = "🌤️", fontSize = 34.sp)
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = "Cần thêm dữ liệu để phân tích",
+            style = BetterMeTypography.Title.Small.Bold,
+            color = BetterMeColors.Text.TextPrimary,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Thêm vài thói quen có giờ nhắc, mình sẽ giúp bạn cân đối lịch trình hơn.",
+            style = BetterMeTypography.Body.Small.Medium,
+            color = BetterMeColors.Text.TextSecondary,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+        Spacer(Modifier.height(14.dp))
+        Pill(
+            label = "↻  Thử lại",
+            color = BetterMeColors.Primary.Primary,
+            background = BetterMeColors.Primary.Primary.copy(alpha = BetterMeTokens.AccentAlpha.Soft),
+            onClick = onRegenerate
+        )
+    }
+}
+
+// ============================================================
+// NO-CONFLICTS celebratory hero
+// ============================================================
+@Composable
+private fun CelebratoryHero(
+    analysis: ScheduleAnalysis,
+    onRegenerate: () -> Unit
+) {
+    val green = Color(0xFF16A34A)
     Column {
-        // ─── Hero row: ring + summary + burnout pill ─────────────────
         Row(verticalAlignment = Alignment.CenterVertically) {
-            ScoreRing(score = analysis.scheduleScore, accent = accent)
+            ScoreRing(score = analysis.scheduleScore, accentOverride = green)
+            Spacer(Modifier.size(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                BurnoutPill(risk = analysis.burnoutRisk)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "✨ ${analysis.summary}",
+                    style = BetterMeTypography.Body.Medium,
+                    color = BetterMeColors.Text.TextPrimary
+                )
+            }
+        }
+        if (analysis.positiveFeedback.isNotBlank()) {
+            Spacer(Modifier.height(12.dp))
+            PositiveCard(text = analysis.positiveFeedback)
+        }
+        Spacer(Modifier.height(16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Pill(
+                label = "↻  Phân tích lại",
+                color = BetterMeColors.Primary.Primary,
+                background = BetterMeColors.Primary.Primary.copy(alpha = BetterMeTokens.AccentAlpha.Soft),
+                onClick = onRegenerate
+            )
+            if (analysis.isCanned) {
+                Spacer(Modifier.size(8.dp))
+                OfflineChip()
+            }
+        }
+    }
+}
+
+// ============================================================
+// CONFLICTS body (analysis has issues to surface)
+// ============================================================
+@Composable
+private fun ConflictsBody(
+    analysis: ScheduleAnalysis,
+    isApplying: Boolean,
+    appliedCount: Int?,
+    onApply: () -> Unit,
+    onRegenerate: () -> Unit
+) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ScoreRing(score = analysis.scheduleScore)
             Spacer(Modifier.size(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 BurnoutPill(risk = analysis.burnoutRisk)
@@ -219,60 +396,29 @@ private fun SuccessBody(
         }
 
         if (analysis.positiveFeedback.isNotBlank()) {
-            Spacer(Modifier.height(10.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Body))
-                    .background(BetterMeColors.Green.copy(alpha = 0.08f))
-                    .border(
-                        width = 1.dp,
-                        color = BetterMeColors.Green.copy(alpha = 0.30f),
-                        shape = RoundedCornerShape(BetterMeTokens.CardRadius.Body)
-                    )
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
-            ) {
-                Text(
-                    text = "🌱  ${analysis.positiveFeedback}",
-                    style = BetterMeTypography.Body.Small.Medium,
-                    color = BetterMeColors.Text.TextPrimary
-                )
-            }
+            Spacer(Modifier.height(12.dp))
+            PositiveCard(text = analysis.positiveFeedback)
         }
 
-        // ─── Conflicts ───────────────────────────────────────────────
         if (analysis.conflicts.isNotEmpty()) {
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = "Cần điều chỉnh",
-                style = BetterMeTypography.Title.Small.Bold,
-                color = BetterMeColors.Text.TextPrimary,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(8.dp))
-            // The list is bounded to ≤3 by the prompt and the repo's parser, so
-            // a Column is fine — no LazyColumn nesting headache inside the sheet.
+            Spacer(Modifier.height(18.dp))
+            SectionLabel(text = "Cần điều chỉnh", count = analysis.conflicts.size)
+            Spacer(Modifier.height(10.dp))
             analysis.conflicts.forEach { conflict ->
                 ConflictCard(conflict = conflict)
                 Spacer(Modifier.height(8.dp))
             }
         }
 
-        // ─── Optimized schedule + Apply ──────────────────────────────
         if (analysis.optimizedSchedule.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            SectionLabel(text = "Gợi ý sắp xếp lại", count = analysis.optimizedSchedule.size)
             Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Gợi ý sắp xếp lại",
-                style = BetterMeTypography.Title.Small.Bold,
-                color = BetterMeColors.Text.TextPrimary,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(6.dp))
             analysis.optimizedSchedule.forEach { opt ->
                 OptimizedRow(opt)
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
             ApplyButton(
                 isApplying = isApplying,
                 appliedCount = appliedCount,
@@ -280,52 +426,114 @@ private fun SuccessBody(
             )
         }
 
-        // ─── Footer actions ─────────────────────────────────────────
-        Spacer(Modifier.height(14.dp))
-        Row {
+        Spacer(Modifier.height(16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Pill(
                 label = "↻  Phân tích lại",
-                color = accent,
-                background = accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft),
+                color = BetterMeColors.Primary.Primary,
+                background = BetterMeColors.Primary.Primary.copy(alpha = BetterMeTokens.AccentAlpha.Soft),
                 onClick = onRegenerate
             )
             if (analysis.isCanned) {
                 Spacer(Modifier.size(8.dp))
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
-                        .background(BetterMeColors.Gray.Gray3)
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "Bản phân tích nhanh (ngoại tuyến)",
-                        style = BetterMeTypography.Body.Small.Medium,
-                        color = BetterMeColors.Text.TextTertiary
-                    )
-                }
+                OfflineChip()
             }
         }
     }
 }
 
+// ============================================================
+// SUB-COMPONENTS
+// ============================================================
 @Composable
-private fun ScoreRing(score: Int, accent: Color) {
+private fun SectionLabel(text: String, count: Int) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = text,
+            style = BetterMeTypography.Title.Small.Bold,
+            color = BetterMeColors.Text.TextPrimary,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.weight(1f)
+        )
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
+                .background(BetterMeColors.Gray.Gray3)
+                .padding(horizontal = 10.dp, vertical = 2.dp)
+        ) {
+            Text(
+                text = "$count",
+                style = BetterMeTypography.Body.Small.Medium,
+                color = BetterMeColors.Text.TextSecondary,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+@Composable
+private fun PositiveCard(text: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Body))
+            .background(BetterMeColors.Green.copy(alpha = 0.08f))
+            .border(
+                width = 1.dp,
+                color = BetterMeColors.Green.copy(alpha = 0.30f),
+                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Body)
+            )
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Text(
+            text = "🌱  $text",
+            style = BetterMeTypography.Body.Small.Medium,
+            color = BetterMeColors.Text.TextPrimary
+        )
+    }
+}
+
+@Composable
+private fun OfflineChip() {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
+            .background(BetterMeColors.Gray.Gray3)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = "📴 Bản phân tích nhanh",
+            style = BetterMeTypography.Body.Small.Medium,
+            color = BetterMeColors.Text.TextTertiary
+        )
+    }
+}
+
+@Composable
+private fun ScoreRing(score: Int, accentOverride: Color? = null) {
     val clamped = score.coerceIn(0, 100)
     val fraction = clamped / 100f
-    val color = when {
+    val color = accentOverride ?: when {
         clamped >= 70 -> Color(0xFF16A34A)
         clamped >= 50 -> Color(0xFFEA580C)
         else -> Color(0xFFDC2626)
     }
+    val label = when {
+        clamped >= 70 -> "Bền vững"
+        clamped >= 50 -> "Tạm ổn"
+        else -> "Cần điều chỉnh"
+    }
     Box(
-        modifier = Modifier.size(84.dp),
+        modifier = Modifier
+            .size(88.dp)
+            .semantics { contentDescription = "Điểm lịch trình $clamped trên 100, $label" },
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.size(84.dp)) {
+        Canvas(modifier = Modifier.size(88.dp)) {
             val stroke = 9.dp.toPx()
             val pad = stroke / 2
             drawArc(
-                color = accent.copy(alpha = 0.10f),
+                color = color.copy(alpha = 0.12f),
                 startAngle = -90f,
                 sweepAngle = 360f,
                 useCenter = false,
@@ -351,9 +559,10 @@ private fun ScoreRing(score: Int, accent: Color) {
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "điểm",
+                text = label,
                 style = BetterMeTypography.Body.Small.Medium,
-                color = BetterMeColors.Text.TextTertiary
+                color = BetterMeColors.Text.TextTertiary,
+                fontSize = 10.sp
             )
         }
     }
@@ -361,19 +570,20 @@ private fun ScoreRing(score: Int, accent: Color) {
 
 @Composable
 private fun BurnoutPill(risk: BurnoutRisk) {
-    val (label, color) = when (risk) {
-        BurnoutRisk.LOW -> "Cân đối" to Color(0xFF16A34A)
-        BurnoutRisk.MODERATE -> "Tải vừa phải" to Color(0xFFEA580C)
-        BurnoutRisk.HIGH -> "Nguy cơ kiệt sức" to Color(0xFFDC2626)
+    val (emoji, label, color) = when (risk) {
+        BurnoutRisk.LOW -> Triple("✅", "Cân đối", Color(0xFF16A34A))
+        BurnoutRisk.MODERATE -> Triple("⚠️", "Tải vừa phải", Color(0xFFEA580C))
+        BurnoutRisk.HIGH -> Triple("🔥", "Nguy cơ kiệt sức", Color(0xFFDC2626))
     }
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
             .background(color.copy(alpha = 0.12f))
             .padding(horizontal = 10.dp, vertical = 3.dp)
+            .semantics { contentDescription = "Mức cảnh báo kiệt sức: $label" }
     ) {
         Text(
-            text = label,
+            text = "$emoji  $label",
             style = BetterMeTypography.Body.Small.Medium,
             color = color,
             fontWeight = FontWeight.SemiBold
@@ -391,16 +601,16 @@ private fun ConflictCard(conflict: ScheduleConflict) {
             .background(BetterMeColors.BackGround.BackgroundSecondary)
             .border(
                 width = 1.dp,
-                color = accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft),
+                color = accent.copy(alpha = BetterMeTokens.AccentAlpha.Medium),
                 shape = RoundedCornerShape(BetterMeTokens.CardRadius.Body)
             )
-            .padding(12.dp),
+            .padding(14.dp),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(38.dp)
                 .clip(CircleShape)
                 .background(accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft)),
             contentAlignment = Alignment.Center
@@ -410,21 +620,21 @@ private fun ConflictCard(conflict: ScheduleConflict) {
         Column(modifier = Modifier.weight(1f)) {
             val title = when {
                 conflict.habitB.isNullOrBlank() -> conflict.habitA
-                else -> "${conflict.habitA} ↔ ${conflict.habitB}"
+                else -> "${conflict.habitA}  ↔  ${conflict.habitB}"
             }
             Text(
                 text = title,
                 style = BetterMeTypography.Body.Medium.copy(fontWeight = FontWeight.SemiBold),
                 color = BetterMeColors.Text.TextPrimary
             )
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = conflict.issue,
                 style = BetterMeTypography.Body.Small.Medium,
                 color = BetterMeColors.Text.TextSecondary
             )
             if (conflict.suggestion.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
                     text = "💡  ${conflict.suggestion}",
                     style = BetterMeTypography.Body.Small.Medium,
@@ -441,11 +651,13 @@ private fun OptimizedRow(opt: OptimizedHabitTime) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp),
+            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Body))
+            .background(BetterMeColors.Primary.Primary.copy(alpha = BetterMeTokens.AccentAlpha.Subtle))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "•  ${opt.habit}",
+            text = opt.habit,
             style = BetterMeTypography.Body.Medium,
             color = BetterMeColors.Text.TextPrimary,
             modifier = Modifier.weight(1f)
@@ -453,13 +665,13 @@ private fun OptimizedRow(opt: OptimizedHabitTime) {
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
-                .background(BetterMeColors.Primary.Primary.copy(alpha = BetterMeTokens.AccentAlpha.Soft))
-                .padding(horizontal = 10.dp, vertical = 3.dp)
+                .background(BetterMeColors.Primary.Primary)
+                .padding(horizontal = 10.dp, vertical = 4.dp)
         ) {
             Text(
                 text = "⏰ ${opt.suggestedTime}",
                 style = BetterMeTypography.Body.Small.Medium,
-                color = BetterMeColors.Primary.Primary,
+                color = Color.White,
                 fontWeight = FontWeight.SemiBold
             )
         }
@@ -473,18 +685,25 @@ private fun ApplyButton(
     onApply: () -> Unit
 ) {
     val accent = BetterMeColors.Primary.Primary
+    val isSuccess = appliedCount != null
     val label = when {
         isApplying -> "Đang áp dụng…"
-        appliedCount != null -> "✓ Đã áp dụng $appliedCount đề xuất"
-        else -> "Áp dụng đề xuất"
+        isSuccess -> "🎉  Đã áp dụng $appliedCount đề xuất"
+        else -> "Áp dụng đề xuất ngay"
     }
+    val backgroundColor = if (isSuccess) Color(0xFF16A34A) else accent
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
-            .background(if (appliedCount != null) Color(0xFF16A34A) else accent)
-            .clickable(enabled = !isApplying && appliedCount == null) { onApply() }
-            .padding(vertical = 12.dp),
+            .background(backgroundColor)
+            .clickable(enabled = !isApplying && !isSuccess) { onApply() }
+            .padding(vertical = 12.dp)
+            .semantics {
+                contentDescription = if (isSuccess) "Đã áp dụng đề xuất"
+                else "Áp dụng các đề xuất lịch trình"
+            },
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -507,8 +726,10 @@ private fun Pill(
         modifier = Modifier
             .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
             .background(background)
+            .heightIn(min = 40.dp)
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center
     ) {
         Text(
             text = label,
@@ -521,7 +742,7 @@ private fun Pill(
 
 private fun decorationFor(type: ConflictType): Pair<String, Color> = when (type) {
     ConflictType.OVERLAP -> "🔀" to Color(0xFFEA580C)
-    ConflictType.OVERLOAD -> "🚦" to Color(0xFFEA580C)
+    ConflictType.OVERLOAD -> "🚦" to Color(0xFFDB7B0A)
     ConflictType.POOR_SLEEP -> "🌙" to Color(0xFF6366F1)
     ConflictType.LATE_NIGHT -> "🌒" to Color(0xFF6366F1)
     ConflictType.TRANSITION -> "↔" to Color(0xFFEA580C)
