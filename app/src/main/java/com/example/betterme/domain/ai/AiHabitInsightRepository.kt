@@ -4,6 +4,8 @@ import com.example.betterme.domain.ai.habitcreation.HabitCreationAnalysis
 import com.example.betterme.domain.ai.habitcreation.HabitCreationInput
 import com.example.betterme.domain.ai.lifestyle.HabitCompletionRecord
 import com.example.betterme.domain.ai.lifestyle.LifestyleInsight
+import com.example.betterme.domain.ai.recovery.HabitRecoveryAnalysis
+import com.example.betterme.domain.ai.recovery.HabitRecoveryInput
 import com.example.betterme.domain.ai.onboarding.OnboardingProfile
 import com.example.betterme.domain.ai.onboarding.OnboardingSuggestion
 import com.example.betterme.domain.ai.schedule.ScheduleAnalysis
@@ -145,6 +147,19 @@ interface AiHabitInsightRepository {
      * flags `isCanned = true`.
      */
     suspend fun analyzeHabitCreation(input: HabitCreationInput): HabitCreationAnalysis
+
+    /**
+     * Proactive recovery coaching when the user is struggling. Should be
+     * called by the use case ONLY after deterministic trigger detection
+     * (low completion, miss streaks, late-night failures, overload) — the
+     * AI never decides on its own whether to surface a recovery card.
+     *
+     * Always returns a [HabitRecoveryAnalysis]. When every model in the
+     * fallback chain fails, the repo derives a deterministic local plan from
+     * the same struggle stats the prompt would have consumed and flags
+     * `isCanned = true`.
+     */
+    suspend fun analyzeHabitRecovery(input: HabitRecoveryInput): HabitRecoveryAnalysis
 }
 
 /**

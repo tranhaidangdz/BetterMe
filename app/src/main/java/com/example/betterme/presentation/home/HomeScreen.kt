@@ -37,6 +37,12 @@ import com.example.betterme.presentation.home.components.NotificationBell
 import com.example.betterme.presentation.home.components.NotificationCenterScreen
 import com.example.betterme.presentation.home.model.CantMiss
 import com.example.betterme.presentation.home.model.HomeProgress
+import com.example.betterme.presentation.home.recovery.HabitRecoveryAssistantCard
+import com.example.betterme.presentation.home.recovery.HabitRecoveryAssistantViewModel
+import com.example.betterme.presentation.home.recovery.HabitRecoveryEvent
+import com.example.betterme.presentation.home.recovery.HabitRecoveryIntent
+import com.example.betterme.presentation.home.recovery.HabitRecoveryState
+import com.example.betterme.presentation.home.recovery.HabitRecoveryUi
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
 import kotlinx.coroutines.flow.collectLatest
@@ -51,9 +57,11 @@ fun HomeScreen(
     onChallengePreviewClick: (Int) -> Unit = {},
     onViewProgress: () -> Unit = {},
     onLogoutSuccess: () -> Unit = {},
-    viewModel: HomeViewModel = koinViewModel()
+    viewModel: HomeViewModel = koinViewModel(),
+    recoveryViewModel: HabitRecoveryAssistantViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
+    val recoveryState by recoveryViewModel.viewState.collectAsState()
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
@@ -73,8 +81,26 @@ fun HomeScreen(
         viewModel.processIntent(HomeIntent.LoadData)
     }
 
+    // Auto-load the recovery analysis on first Home entry. Cache-first inside
+    // the use case keeps repeat visits cheap; the AI is only called when
+    // deterministic triggers fire (see AnalyzeHabitRecoveryUseCase).
+    LaunchedEffect(Unit) {
+        recoveryViewModel.processIntent(HabitRecoveryIntent.Analyze())
+    }
+
+    LaunchedEffect(recoveryViewModel) {
+        recoveryViewModel.singleEvent.collectLatest { event ->
+            val msg = when (event) {
+                is HabitRecoveryEvent.ActionApplied -> "✅ Đã áp dụng: ${event.title}"
+                is HabitRecoveryEvent.ActionFailed -> event.message
+            }
+            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     HomeContent(
         state = state,
+        recoveryState = recoveryState,
         onCategoryClick = onCategoryClick,
         onHabitClick = onHabitClick,
         onViewProgress = onViewProgress,
@@ -93,6 +119,13 @@ fun HomeScreen(
         onChallengeNotificationClick = { ucId, challengeId ->
             if (ucId != null) onChallengeDetailClick(ucId)
             else if (challengeId != null) onChallengePreviewClick(challengeId)
+        },
+        onRecoveryRefresh = {
+            recoveryViewModel.processIntent(HabitRecoveryIntent.Analyze(forceRefresh = true))
+        },
+        onRecoveryDismiss = { recoveryViewModel.processIntent(HabitRecoveryIntent.Dismiss) },
+        onRecoveryApply = { idx, action ->
+            recoveryViewModel.processIntent(HabitRecoveryIntent.ApplyAction(idx, action))
         }
     )
 }
@@ -100,6 +133,7 @@ fun HomeScreen(
 @Composable
 fun HomeContent(
     state: HomeState,
+    recoveryState: HabitRecoveryState = HabitRecoveryState(),
     onCategoryClick: (Int, String, String) -> Unit = { _, _, _ -> },
     onHabitClick: (Int) -> Unit = {},
     onViewProgress: () -> Unit = {},
@@ -112,7 +146,10 @@ fun HomeContent(
     onMarkNotificationRead: (Int) -> Unit = {},
     onMarkAllNotificationsRead: () -> Unit = {},
     onHabitNotificationClick: (Int) -> Unit = {},
-    onChallengeNotificationClick: (Int?, Int?) -> Unit = { _, _ -> }
+    onChallengeNotificationClick: (Int?, Int?) -> Unit = { _, _ -> },
+    onRecoveryRefresh: () -> Unit = {},
+    onRecoveryDismiss: () -> Unit = {},
+    onRecoveryApply: (Int, com.example.betterme.domain.ai.recovery.HabitRecoveryAction) -> Unit = { _, _ -> }
 ) {
     val colors = BetterMeColors.ListColors.list
 
@@ -202,6 +239,18 @@ fun HomeContent(
                 progress = state.progress,
                 onViewProgress = onViewProgress
             )
+        }
+
+        // ===== RECOVERY ASSISTANT (mounts only when triggers fired) =====
+        if (recoveryState.ui !is HabitRecoveryUi.Idle && recoveryState.ui !is HabitRecoveryUi.Hidden) {
+            item(key = "recovery_assistant") {
+                HabitRecoveryAssistantCard(
+                    state = recoveryState,
+                    onRefresh = onRecoveryRefresh,
+                    onDismiss = onRecoveryDismiss,
+                    onApply = onRecoveryApply
+                )
+            }
         }
 
         // ===== SECTION: Đang thực hiện =====

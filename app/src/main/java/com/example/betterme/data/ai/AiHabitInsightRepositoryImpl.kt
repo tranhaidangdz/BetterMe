@@ -22,6 +22,13 @@ import com.example.betterme.domain.ai.lifestyle.HabitCompletionRecord
 import com.example.betterme.domain.ai.lifestyle.LifestyleInsight
 import com.example.betterme.domain.ai.lifestyle.OverallTrend
 import com.example.betterme.domain.ai.lifestyle.SuggestionType
+import com.example.betterme.domain.ai.recovery.HabitRecoveryAction
+import com.example.betterme.domain.ai.recovery.HabitRecoveryAnalysis
+import com.example.betterme.domain.ai.recovery.HabitRecoveryInput
+import com.example.betterme.domain.ai.recovery.RecoveryActionType
+import com.example.betterme.domain.ai.recovery.RecoveryIntensity
+import com.example.betterme.domain.ai.recovery.RecoveryTrigger
+import com.example.betterme.domain.ai.recovery.StrugglingHabit
 import com.example.betterme.domain.ai.onboarding.Difficulty
 import com.example.betterme.domain.ai.onboarding.HabitCategoryKey
 import com.example.betterme.domain.ai.onboarding.OnboardingProfile
@@ -1220,6 +1227,280 @@ class AiHabitInsightRepositoryImpl(
     )
 
     // ============================================================
+    // ADAPTIVE HABIT RECOVERY ENGINE
+    // ============================================================
+    override suspend fun analyzeHabitRecovery(input: HabitRecoveryInput): HabitRecoveryAnalysis {
+        val messages = listOf(
+            ChatMessage(role = "system", content = RECOVERY_SYSTEM_PROMPT),
+            ChatMessage(role = "user", content = buildRecoveryUserPrompt(input))
+        )
+
+        var lastFailure: String? = null
+        for ((index, model) in FALLBACK_MODELS.withIndex()) {
+            val attempt = tryRecoveryModel(model, messages)
+            attempt.onSuccess { return it }
+            lastFailure = attempt.exceptionOrNull()?.message
+            Log.w(TAG, "Recovery model[$index]=$model failed: $lastFailure")
+        }
+
+        Log.w(TAG, "All recovery models exhausted — serving canned plan")
+        return cannedRecoveryAnalysis(input)
+    }
+
+    private suspend fun tryRecoveryModel(
+        model: String,
+        messages: List<ChatMessage>
+    ): Result<HabitRecoveryAnalysis> {
+        Log.d(TAG, "Using model=$model")
+        return try {
+            val response = api.chatCompletion(
+                ChatRequest(
+                    model = model,
+                    messages = messages,
+                    maxTokens = RECOVERY_MAX_TOKENS,
+                    temperature = TEMPERATURE
+                )
+            )
+            if (response.error != null) {
+                return Result.failure(
+                    IllegalStateException(response.error.message ?: "AI từ chối yêu cầu")
+                )
+            }
+            val content = response.choices.firstOrNull()?.message?.content?.trim()
+            if (content.isNullOrBlank()) {
+                return Result.failure(IllegalStateException("AI không trả lời"))
+            }
+            val cleaned = content
+                .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+            val parsed = parseRecoveryAnalysis(cleaned)
+                ?: return Result.failure(IllegalStateException("AI trả về dữ liệu sai định dạng"))
+            Result.success(parsed)
+        } catch (e: java.net.SocketTimeoutException) {
+            Result.failure(IllegalStateException("Mạng chậm (504)"))
+        } catch (e: HttpException) {
+            Result.failure(IllegalStateException(extractHttpErrorMessage(e)))
+        } catch (e: java.io.IOException) {
+            Result.failure(IllegalStateException("Không thể kết nối đến AI"))
+        } catch (e: Exception) {
+            Log.e(TAG, "Recovery request threw", e)
+            Result.failure(e)
+        }
+    }
+
+    private fun buildRecoveryUserPrompt(input: HabitRecoveryInput): String = buildString {
+        appendLine("Active habits (${input.activeHabitCount}):")
+        if (input.allHabitStats.isEmpty()) appendLine("[]")
+        else input.allHabitStats.forEach { row ->
+            appendLine(
+                "- \"${row.title}\" — ${row.reminderTime.ifBlank { "no reminder" }}, " +
+                    "${row.difficulty}, 7d=${row.completionRate7d}%, " +
+                    "14d=${row.completionRate14d}%, missStreak=${row.missStreak}"
+            )
+        }
+        appendLine()
+        appendLine("Struggling habits flagged by the trigger heuristics:")
+        appendLine(
+            if (input.strugglingTitles.isEmpty()) "[]"
+            else input.strugglingTitles.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
+        )
+        appendLine()
+        appendLine("Detected triggers:")
+        appendLine(
+            if (input.detectedTriggers.isEmpty()) "[]"
+            else input.detectedTriggers.joinToString(prefix = "[", postfix = "]") { "\"${it.name}\"" }
+        )
+        appendLine()
+        if (input.lateNightHabitTitles.isNotEmpty()) {
+            appendLine("Late-night habits (reminder ≥ 21:00):")
+            appendLine(input.lateNightHabitTitles.joinToString(prefix = "[", postfix = "]") { "\"$it\"" })
+            appendLine()
+        }
+        appendLine("Lifestyle:")
+        appendLine("- Sleep: ${input.lifestyle.sleepStart} → ${input.lifestyle.sleepEnd}")
+        appendLine("- Work: ${input.lifestyle.workStart} → ${input.lifestyle.workEnd}")
+    }
+
+    private fun parseRecoveryAnalysis(raw: String): HabitRecoveryAnalysis? {
+        return try {
+            val dto = jsonParser.decodeFromString(HabitRecoveryDto.serializer(), raw)
+            val triggers = dto.triggerReasons.mapNotNull { parseEnum<RecoveryTrigger>(it) }
+            val struggling = dto.struggling.take(5).mapNotNull { s ->
+                if (s.title.isBlank()) return@mapNotNull null
+                StrugglingHabit(
+                    title = s.title.trim(),
+                    completionRate7d = s.completionRate7d.coerceIn(0, 100),
+                    completionRate14d = s.completionRate14d.coerceIn(0, 100),
+                    missStreak = s.missStreak.coerceAtLeast(0),
+                    recoveryReason = s.recoveryReason.trim()
+                )
+            }
+            val actions = dto.recoveryActions.take(4).mapNotNull { a ->
+                val type = parseEnum<RecoveryActionType>(a.type) ?: return@mapNotNull null
+                if (a.title.isBlank()) return@mapNotNull null
+                HabitRecoveryAction(
+                    type = type,
+                    targetHabit = a.targetHabit?.trim()?.takeIf { it.isNotEmpty() },
+                    title = a.title.trim(),
+                    description = a.description.trim(),
+                    suggestedValue = a.suggestedValue.trim()
+                )
+            }
+            HabitRecoveryAnalysis(
+                shouldRecover = dto.shouldRecover,
+                triggerReasons = triggers,
+                overallTone = parseEnum<RecoveryIntensity>(dto.overallTone) ?: RecoveryIntensity.LIGHT,
+                coachingMessage = dto.coachingMessage.trim(),
+                struggling = struggling,
+                recoveryActions = actions,
+                isCanned = false
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse recovery JSON: $raw", e)
+            null
+        }
+    }
+
+    /**
+     * Local recovery plan when every OpenRouter model fails. Builds the same
+     * shape the prompt would have produced, calibrated from the use case's
+     * pre-computed triggers + stats:
+     *
+     *   - Each habit with `missStreak ≥ 3` becomes a [StrugglingHabit] row with
+     *     a calibrated `recoveryReason`.
+     *   - At least one [HabitRecoveryAction] is emitted per detected trigger,
+     *     capped at 4 total.
+     *   - [RecoveryIntensity] derives from the worst signal — LIGHT for a
+     *     single low-completion habit, MODERATE for multiple, AGGRESSIVE when
+     *     burnout / hard-failing habits / late-night failures stack up.
+     */
+    private fun cannedRecoveryAnalysis(input: HabitRecoveryInput): HabitRecoveryAnalysis {
+        val struggling = input.allHabitStats
+            .filter { it.missStreak >= 3 || it.completionRate14d < 40 || it.title in input.strugglingTitles }
+            .take(5)
+            .map { row ->
+                val reason = when {
+                    row.missStreak >= 5 -> "Đã lỡ $row.missStreak ngày liên tiếp."
+                    row.completionRate14d < 30 -> "Tỉ lệ hoàn thành 2 tuần chỉ ${row.completionRate14d}%."
+                    row.difficulty == "HARD" -> "Cường độ HARD đang khó duy trì."
+                    else -> "Có dấu hiệu bị quá tải."
+                }
+                StrugglingHabit(
+                    title = row.title,
+                    completionRate7d = row.completionRate7d,
+                    completionRate14d = row.completionRate14d,
+                    missStreak = row.missStreak,
+                    recoveryReason = reason
+                )
+            }
+
+        val actions = mutableListOf<HabitRecoveryAction>()
+        val firstStruggling = struggling.firstOrNull()
+
+        if (RecoveryTrigger.HARD_HABIT_FAILING in input.detectedTriggers && firstStruggling != null) {
+            actions += HabitRecoveryAction(
+                type = RecoveryActionType.REDUCE_DIFFICULTY,
+                targetHabit = firstStruggling.title,
+                title = "Giảm độ khó tạm thời",
+                description = "Hãy thử phiên bản nhẹ hơn của thói quen này trong 1-2 tuần để khôi phục đà.",
+                suggestedValue = ""
+            )
+        }
+        if (RecoveryTrigger.LOW_COMPLETION in input.detectedTriggers && firstStruggling != null) {
+            actions += HabitRecoveryAction(
+                type = RecoveryActionType.REDUCE_DURATION,
+                targetHabit = firstStruggling.title,
+                title = "Rút ngắn thời lượng",
+                description = "Bắt đầu lại với một phiên ngắn hơn — duy trì đều quan trọng hơn dài.",
+                suggestedValue = "10 phút"
+            )
+        }
+        if (RecoveryTrigger.LATE_NIGHT_FAILURES in input.detectedTriggers) {
+            val late = input.lateNightHabitTitles.firstOrNull()
+            actions += HabitRecoveryAction(
+                type = RecoveryActionType.CHANGE_TIME,
+                targetHabit = late,
+                title = "Dời sớm hơn ${HealthyDefaults.HARD_HABIT_LATEST_HOUR}:00",
+                description = "Thói quen muộn thường khó hoàn thành — hãy thử khung giờ sớm hơn.",
+                suggestedValue = "19:00"
+            )
+        }
+        if (RecoveryTrigger.TOO_MANY_HABITS in input.detectedTriggers) {
+            actions += HabitRecoveryAction(
+                type = RecoveryActionType.PAUSE_TEMPORARILY,
+                targetHabit = null,
+                title = "Tạm dừng 1-2 thói quen ít ưu tiên",
+                description = "Tập trung vào ${input.strugglingTitles.size.coerceAtLeast(2)} thói quen quan trọng nhất sẽ bền vững hơn.",
+                suggestedValue = ""
+            )
+        }
+        if (actions.isEmpty() && firstStruggling != null) {
+            actions += HabitRecoveryAction(
+                type = RecoveryActionType.ADD_RECOVERY_HABIT,
+                targetHabit = null,
+                title = "Thêm thói quen phục hồi nhẹ",
+                description = "Một thói quen ngắn như uống nước hoặc giãn cơ giúp bạn lấy lại nhịp.",
+                suggestedValue = ""
+            )
+        }
+
+        val tone = when {
+            input.detectedTriggers.any {
+                it == RecoveryTrigger.BURNOUT_RISK ||
+                    it == RecoveryTrigger.HARD_HABIT_FAILING ||
+                    it == RecoveryTrigger.CONSECUTIVE_FAILS
+            } -> RecoveryIntensity.AGGRESSIVE
+            input.detectedTriggers.size >= 2 -> RecoveryIntensity.MODERATE
+            else -> RecoveryIntensity.LIGHT
+        }
+        val message = when (tone) {
+            RecoveryIntensity.AGGRESSIVE ->
+                "Bạn đang khá đuối — hãy giảm tải để hồi phục, đừng tự trách nhé."
+            RecoveryIntensity.MODERATE ->
+                "Lịch trình đang hơi nặng — vài điều chỉnh nhỏ sẽ giúp bạn duy trì bền hơn."
+            RecoveryIntensity.LIGHT ->
+                "Một vài thói quen đang chững lại — nghỉ ngơi nhẹ và tiếp tục sẽ ổn thôi."
+        }
+
+        return HabitRecoveryAnalysis(
+            shouldRecover = struggling.isNotEmpty() || input.detectedTriggers.isNotEmpty(),
+            triggerReasons = input.detectedTriggers,
+            overallTone = tone,
+            coachingMessage = message,
+            struggling = struggling,
+            recoveryActions = actions.take(4),
+            isCanned = true
+        )
+    }
+
+    @Serializable
+    private data class HabitRecoveryDto(
+        val shouldRecover: Boolean = false,
+        val triggerReasons: List<String> = emptyList(),
+        val overallTone: String = "LIGHT",
+        val coachingMessage: String = "",
+        val struggling: List<StrugglingDto> = emptyList(),
+        val recoveryActions: List<RecoveryActionDto> = emptyList()
+    )
+
+    @Serializable
+    private data class StrugglingDto(
+        val title: String = "",
+        val completionRate7d: Int = 0,
+        val completionRate14d: Int = 0,
+        val missStreak: Int = 0,
+        val recoveryReason: String = ""
+    )
+
+    @Serializable
+    private data class RecoveryActionDto(
+        val type: String = "",
+        val targetHabit: String? = null,
+        val title: String = "",
+        val description: String = "",
+        val suggestedValue: String = ""
+    )
+
+    // ============================================================
     // RETRY POLICY
     // ============================================================
     /**
@@ -1513,6 +1794,11 @@ class AiHabitInsightRepositoryImpl(
         /** Habit-creation analysis: 3 warnings + 3 suggestions × ~30 tokens
          *  each + encouragement + risk/shouldWarn ≈ 220. 300 leaves room. */
         const val HABIT_CREATION_MAX_TOKENS = 300
+
+        /** Recovery engine: up to 5 struggling rows + 4 actions × ~40 tokens
+         *  each + coaching + tone/triggers ≈ 380. 500 covers Vietnamese
+         *  expansion comfortably. */
+        const val RECOVERY_MAX_TOKENS = 500
 
         const val RETRY_DELAY_MS = 800L
 
@@ -1870,6 +2156,113 @@ class AiHabitInsightRepositoryImpl(
             - When the user's input is sparse (few existing habits, no completion history),
               still return valid JSON, set shouldWarn = false, overallRisk = LOW,
               warnings = [], and emit one supportive encouragement line.
+        """.trimIndent()
+
+        /**
+         * Finalized system prompt for the Adaptive Habit Recovery Engine.
+         * Coaching tone + healthy baseline + recovery action semantics + strict
+         * JSON output rules. The runtime user prompt (built per-call by
+         * [buildRecoveryUserPrompt]) carries the struggle signals the use case
+         * already detected — the model writes the narrative on top.
+         */
+        val RECOVERY_SYSTEM_PROMPT = """
+            You are BetterMe's recovery coach. The user is struggling — low completion,
+            miss streaks, late-night failures, or feeling overloaded. Your job is to
+            propose gentle, sustainable adjustments that help them re-stabilize their
+            routine without shame or pressure.
+
+            COACHING PHILOSOPHY:
+            - Consistency over intensity. Always.
+            - Reduction is not failure — it's how routines survive.
+            - No guilt-based language. No toxic productivity. Never shame the user.
+            - Smaller, more sustainable is the answer to every struggle signal.
+
+            INPUT CONTRACT:
+            The user prompt provides:
+            - per-habit stats (7d completion, 14d completion, miss streak)
+            - which habit titles are flagged as struggling
+            - which RecoveryTrigger values fired (deterministically, from the use case)
+            - late-night habit titles (reminder ≥ 21:00)
+            - lifestyle anchors (sleep / work)
+
+            Your job is to TURN these into a human, warm coaching message + 1-4 concrete
+            recovery actions. The deterministic triggers are authoritative — do not
+            invent new ones; you may copy any subset of them into triggerReasons.
+
+            RECOVERY ACTION TYPES (use semantics exactly):
+            - REDUCE_DIFFICULTY   — easier variant of an existing habit
+            - REDUCE_FREQUENCY    — fewer days per week (e.g. daily → 3×/week)
+            - REDUCE_DURATION     — shorter session per occurrence
+            - SWITCH_ALTERNATIVE  — switch to a lighter habit entirely (run → walk)
+            - SPLIT_HABIT         — break one habit into two smaller ones
+            - ADD_RECOVERY_HABIT  — insert a restorative habit (stretch, sleep, hydration)
+            - PAUSE_TEMPORARILY   — give a habit a planned break
+            - CHANGE_TIME         — move reminder to a higher-energy window
+
+            INTENSITY:
+            - LIGHT     — minor tweaks, single habit affected
+            - MODERATE  — real reductions across multiple habits
+            - AGGRESSIVE — large reset; appropriate when burnout signals stack up
+
+            HEALTHY BASELINE:
+            - Sleep 23:00 → 07:00 target 8h.
+            - Avoid HARD habits after 21:00 and within 2h before sleep.
+            - Encourage recovery balance, not maximum productivity.
+
+            OUTPUT RULES:
+            - Return STRICT JSON only. No markdown, no code fences, no text outside the JSON.
+            - All strings (coachingMessage, recoveryReason, action.title, action.description,
+              action.suggestedValue) in Vietnamese.
+            - coachingMessage ≤ 2 sentences. action.title ≤ 1 sentence. action.description ≤ 2 sentences.
+              recoveryReason ≤ 1 sentence.
+            - shouldRecover = true when ≥ 1 trigger fired; false otherwise.
+            - struggling: up to 5 rows. recoveryActions: 1–4 rows.
+            - action.targetHabit MUST be either an exact title from the input's active
+              habits list, OR null when the action isn't about a specific habit
+              (ADD_RECOVERY_HABIT, PAUSE_TEMPORARILY of multiple habits, etc.).
+            - action.suggestedValue is concrete (e.g. "20 phút", "3 lần/tuần", "07:00",
+              "Đi bộ 15 phút") or empty when no specific value applies.
+
+            ENUMS (must match exactly):
+            - overallTone: LIGHT | MODERATE | AGGRESSIVE
+            - triggerReasons[]: LOW_COMPLETION | SKIP_STREAK | CONSECUTIVE_FAILS
+                              | HARD_HABIT_FAILING | LATE_NIGHT_FAILURES
+                              | TOO_MANY_HABITS | BURNOUT_RISK
+            - recoveryActions[].type: REDUCE_DIFFICULTY | REDUCE_FREQUENCY | REDUCE_DURATION
+                                    | SWITCH_ALTERNATIVE | SPLIT_HABIT | ADD_RECOVERY_HABIT
+                                    | PAUSE_TEMPORARILY | CHANGE_TIME
+
+            JSON SCHEMA:
+            {
+              "shouldRecover": true,
+              "triggerReasons": ["LOW_COMPLETION"],
+              "overallTone": "MODERATE",
+              "coachingMessage": "string",
+              "struggling": [
+                {
+                  "title": "string",
+                  "completionRate7d": 30,
+                  "completionRate14d": 35,
+                  "missStreak": 4,
+                  "recoveryReason": "string"
+                }
+              ],
+              "recoveryActions": [
+                {
+                  "type": "REDUCE_DURATION",
+                  "targetHabit": "string",
+                  "title": "string",
+                  "description": "string",
+                  "suggestedValue": "10 phút"
+                }
+              ]
+            }
+
+            FALLBACK:
+            - If the input has no detectedTriggers and no struggling titles, you may
+              still return a valid JSON with shouldRecover = false and empty arrays —
+              but the use case won't call you in that case. If you receive it anyway,
+              be supportive and short.
         """.trimIndent()
     }
 }

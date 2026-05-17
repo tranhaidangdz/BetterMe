@@ -57,6 +57,11 @@ interface AiCacheRepository {
          *  Cached so re-trying the same form within the day doesn't burn quota. */
         const val TYPE_HABIT_CREATION_ANALYSIS = "HABIT_CREATION_ANALYSIS"
 
+        /** Adaptive Habit Recovery Engine — proactive coaching for users who
+         *  are struggling (low completion, miss streaks, late-night failures).
+         *  Cached on the same 24h cadence; struggle signals shift slowly. */
+        const val TYPE_HABIT_RECOVERY = "HABIT_RECOVERY"
+
         /** Default TTL — 12 hours. */
         const val TTL_MS_DEFAULT = 12L * 60L * 60L * 1000L
 
