@@ -34,7 +34,14 @@ data class LeaderboardState(
     val challengeTitle: String = "",
     val activeSeasonKey: String = "",
     val availableSeasons: List<String> = emptyList(),
-    val isRefreshing: Boolean = false
+    val isRefreshing: Boolean = false,
+    /**
+     * Phase 2 — the highest-priority motivational event the latest
+     * refresh produced. Surfaced via the toast composable; null clears
+     * the toast. Auto-cleared by the screen after the toast self-
+     * dismisses (3.5s) so we don't re-show it on recomposition.
+     */
+    val activeMotivationalEvent: com.example.betterme.domain.leaderboard.MotivationalEvent? = null
 ) : MviViewState
 
 sealed class LeaderboardIntent : MviIntent {
@@ -44,6 +51,8 @@ sealed class LeaderboardIntent : MviIntent {
     data class SelectSeason(val seasonKey: String) : LeaderboardIntent()
     /** Manual user-initiated refresh — bypasses the session cache. */
     data object Refresh : LeaderboardIntent()
+    /** User tapped or auto-dismiss timer fired on the toast. */
+    data object DismissMotivationalEvent : LeaderboardIntent()
 }
 
 sealed class LeaderboardEvent : MviSingleEvent {

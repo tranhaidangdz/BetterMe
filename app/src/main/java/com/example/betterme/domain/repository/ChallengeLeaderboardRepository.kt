@@ -2,6 +2,7 @@ package com.example.betterme.domain.repository
 
 import com.example.betterme.domain.leaderboard.ChallengeMeta
 import com.example.betterme.domain.leaderboard.LeaderboardEntry
+import com.example.betterme.domain.leaderboard.MotivationalEvent
 
 /**
  * Single entry point for the monthly challenge leaderboard. Lives in
@@ -83,6 +84,14 @@ interface ChallengeLeaderboardRepository {
         val entries: List<LeaderboardEntry>,
         val meta: ChallengeMeta,
         val myEntry: LeaderboardEntry?,
-        val isStale: Boolean = false
+        val isStale: Boolean = false,
+        /**
+         * Phase 2 — motivational events derived deterministically from
+         * the delta between this snapshot and the previously persisted
+         * one. Ordered by priority. The VM should surface only the
+         * first / highest-priority event and let the rest live as
+         * future fire candidates.
+         */
+        val motivationalEvents: List<MotivationalEvent> = emptyList()
     )
 }

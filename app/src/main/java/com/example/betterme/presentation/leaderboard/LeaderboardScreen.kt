@@ -1,5 +1,7 @@
 package com.example.betterme.presentation.leaderboard
 
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,7 +21,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,6 +39,10 @@ import com.example.betterme.R
 import com.example.betterme.domain.leaderboard.LeaderboardEntry
 import com.example.betterme.domain.leaderboard.Season
 import com.example.betterme.presentation.components.view.BetterMeTopBar
+import com.example.betterme.presentation.leaderboard.components.LeaderboardSkeleton
+import com.example.betterme.presentation.leaderboard.components.MotivationalEventToast
+import com.example.betterme.presentation.leaderboard.components.RankBadgeRow
+import com.example.betterme.presentation.leaderboard.components.RankDeltaChip
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTokens
 import com.example.betterme.presentation.theme.BetterMeTypography
@@ -84,6 +89,16 @@ fun LeaderboardScreen(
                 onLeadingClick = onBackClick
             )
 
+            // Motivational toast — surfaces above the season picker so
+            // it doesn't push the list. Auto-dismisses after 3.5s; tap
+            // collapses it immediately.
+            MotivationalEventToast(
+                event = state.activeMotivationalEvent,
+                onDismiss = {
+                    viewModel.processIntent(LeaderboardIntent.DismissMotivationalEvent)
+                }
+            )
+
             // Season picker — last 6 months as pills.
             SeasonPickerRow(
                 seasons = state.availableSeasons,
@@ -92,7 +107,7 @@ fun LeaderboardScreen(
             )
 
             when (val ui = state.ui) {
-                LeaderboardUi.Idle, LeaderboardUi.Loading -> LoadingState()
+                LeaderboardUi.Idle, LeaderboardUi.Loading -> LeaderboardSkeleton()
                 LeaderboardUi.Empty -> EmptyState()
                 is LeaderboardUi.Error -> ErrorState(ui.message, onRetry = {
                     viewModel.processIntent(LeaderboardIntent.Refresh)
@@ -139,16 +154,6 @@ private fun SeasonPickerRow(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun LoadingState() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        CircularProgressIndicator(color = BetterMeColors.Primary.Primary, strokeWidth = 2.4.dp)
     }
 }
 
@@ -304,10 +309,32 @@ private fun LeaderboardRow(
     highlight: Boolean
 ) {
     val accent = BetterMeColors.Primary.Primary
-    val bg = if (highlight) accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft)
-    else Color.White
-    val borderColor = if (highlight) accent.copy(alpha = BetterMeTokens.AccentAlpha.Medium)
-    else BetterMeColors.Border.BorderLight
+    // Top 3 get a podium tint so the eye lands there first. The chosen
+    // colors mirror the medal palette used inside RankBadge().
+    val podiumTint = when (entry.rank) {
+        1 -> Color(0xFFFFF4D6)
+        2 -> Color(0xFFEBEEF3)
+        3 -> Color(0xFFF6E2CF)
+        else -> null
+    }
+    val bg = when {
+        highlight -> accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft)
+        podiumTint != null -> podiumTint
+        else -> Color.White
+    }
+    val borderColor = when {
+        highlight -> accent.copy(alpha = BetterMeTokens.AccentAlpha.Medium)
+        podiumTint != null -> Color.Transparent
+        else -> BetterMeColors.Border.BorderLight
+    }
+    // Animate the score so a leaderboard refresh that bumps the user's
+    // total feels lively instead of swapping the digits abruptly.
+    val animatedScore by animateIntAsState(
+        targetValue = entry.totalScore,
+        animationSpec = tween(durationMillis = 500),
+        label = "score_anim_${entry.userId}"
+    )
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -334,13 +361,20 @@ private fun LeaderboardRow(
             }
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = entry.displayName + if (entry.isCurrentUser) "  · Bạn" else "",
-                style = BetterMeTypography.Body.Medium,
-                color = BetterMeColors.Text.TextPrimary,
-                fontWeight = if (highlight) FontWeight.Bold else FontWeight.SemiBold,
-                maxLines = 1
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = entry.displayName + if (entry.isCurrentUser) "  · Bạn" else "" +
+                        if (entry.isSuspicious) "  ?" else "",
+                    style = BetterMeTypography.Body.Medium,
+                    color = BetterMeColors.Text.TextPrimary,
+                    fontWeight = if (highlight) FontWeight.Bold else FontWeight.SemiBold,
+                    maxLines = 1
+                )
+                RankBadgeRow(badges = entry.badges)
+            }
             Text(
                 text = "${entry.completedTasks} nhiệm vụ · ${entry.currentStreak}🔥",
                 style = BetterMeTypography.Body.Small.Medium,
@@ -348,8 +382,10 @@ private fun LeaderboardRow(
             )
         }
         Column(horizontalAlignment = Alignment.End) {
+            RankDeltaChip(delta = entry.rankDelta)
+            Spacer(Modifier.height(2.dp))
             Text(
-                text = "${entry.totalScore}",
+                text = "$animatedScore",
                 style = BetterMeTypography.Body.Medium,
                 color = if (highlight) accent else BetterMeColors.Text.TextPrimary,
                 fontWeight = FontWeight.Bold

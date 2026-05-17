@@ -60,6 +60,8 @@ import com.example.betterme.data.leaderboard.ChallengeLeaderboardRepositoryImpl
 import com.example.betterme.data.leaderboard.FirebaseChallengeLeaderboardDataSource
 import com.example.betterme.data.leaderboard.HybridCompetitorSeeder
 import com.example.betterme.data.leaderboard.LeaderboardSessionMemory
+import com.example.betterme.data.leaderboard.MotivationalEventEngine
+import com.example.betterme.data.leaderboard.RankSnapshotStore
 import com.example.betterme.data.repository.AiCacheRepositoryImpl
 import com.example.betterme.domain.ai.AiCacheRepository
 import com.example.betterme.domain.ai.AiHabitInsightRepository
@@ -245,13 +247,21 @@ val repositoryModule = module {
     single { FirebaseChallengeLeaderboardDataSource(get()) }
     single { HybridCompetitorSeeder() }
     single { LeaderboardSessionMemory() }
+    // Phase 2 — persisted rank snapshots + local motivational engine.
+    // RankSnapshotStore is backed by the same Preferences DataStore the
+    // app already wires up so we don't allocate a new file handle.
+    single { RankSnapshotStore(get()) }
+    single { MotivationalEventEngine() }
     single<ChallengeLeaderboardRepository> {
         ChallengeLeaderboardRepositoryImpl(
             firestoreDs = get(),
             seeder = get(),
             sessionMemory = get(),
             dataStoreManager = get(),
-            challengeRepository = get()
+            challengeRepository = get(),
+            userChallengeRepository = get(),
+            rankSnapshotStore = get(),
+            motivationalEventEngine = get()
         )
     }
 

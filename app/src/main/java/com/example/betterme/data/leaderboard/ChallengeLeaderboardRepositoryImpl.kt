@@ -3,40 +3,49 @@ package com.example.betterme.data.leaderboard
 import com.example.betterme.data.local.datastore.DataStoreManager
 import com.example.betterme.domain.leaderboard.ChallengeMeta
 import com.example.betterme.domain.leaderboard.LeaderboardEntry
+import com.example.betterme.domain.leaderboard.LeaderboardIntegrityValidator
+import com.example.betterme.domain.leaderboard.RankBadge
+import com.example.betterme.domain.leaderboard.RankDelta
 import com.example.betterme.domain.leaderboard.ScoreFormula
 import com.example.betterme.domain.repository.ChallengeLeaderboardRepository
 import com.example.betterme.domain.repository.ChallengeLeaderboardRepository.LeaderboardSnapshot
 import com.example.betterme.domain.repository.ChallengeRepository
+import com.example.betterme.domain.repository.UserChallengeRepository
 import kotlinx.coroutines.flow.first
 
 /**
  * Repository orchestrating Firestore I/O + hybrid seeding + session
- * cache for the monthly challenge leaderboard.
+ * cache + Phase 2 enhancements (rank deltas, badges, integrity
+ * validation, motivational events) for the monthly challenge
+ * leaderboard.
  *
- * ### Merge model
- *  1. [seeder] generates the deterministic seeded competitor pool for
- *     (challengeId, seasonKey). These rows have `isSeededRival = true`.
- *  2. Firestore is queried for the top entries.
- *  3. The two lists are concatenated and re-ranked by `totalScore`
- *     descending. The current user's entry is then sticky-marked with
- *     `isCurrentUser = true` regardless of which source it came from.
- *  4. Real Firestore rows take precedence over seeded rivals on userId
- *     collisions (paranoia — userIds are namespaced apart but defense
- *     in depth costs nothing).
+ * ### Merge model (unchanged from Phase 1)
+ *  1. [seeder] generates the deterministic seeded competitor pool.
+ *  2. Firestore is queried for real entries.
+ *  3. The two lists are merged + re-ranked by descending totalScore.
  *
- * ### Why we always include the seeder
- * Even in production with thousands of users, the seeded pool fills the
- * tail when a specific challenge has only a handful of real
- * participants. The competitive feel is most fragile early — for niche
- * challenges. Keeping the seeder in the merge keeps the leaderboard
- * feeling alive everywhere.
+ * ### Phase 2 enrichment layered on top of the merge
+ *  - Each entry runs through [LeaderboardIntegrityValidator] before
+ *    being shown. Suspicious rows are clamped + flagged but not hidden.
+ *  - Rank deltas are computed against the persisted snapshot from
+ *    [RankSnapshotStore].
+ *  - Badges are awarded deterministically by [RankBadge.award] using
+ *    the entry's final rank + streak + delta.
+ *  - Motivational events are produced from the user's delta and
+ *    surface as one event per (kind, day) via
+ *    [MotivationalEventEngine] (cooldown-gated).
+ *  - The fresh snapshot is persisted at the end so the *next* read can
+ *    compute deltas against this one.
  */
 class ChallengeLeaderboardRepositoryImpl(
     private val firestoreDs: FirebaseChallengeLeaderboardDataSource,
     private val seeder: HybridCompetitorSeeder,
     private val sessionMemory: LeaderboardSessionMemory,
     private val dataStoreManager: DataStoreManager,
-    private val challengeRepository: ChallengeRepository
+    private val challengeRepository: ChallengeRepository,
+    private val userChallengeRepository: UserChallengeRepository,
+    private val rankSnapshotStore: RankSnapshotStore,
+    private val motivationalEventEngine: MotivationalEventEngine
 ) : ChallengeLeaderboardRepository {
 
     override suspend fun getLeaderboard(
@@ -46,7 +55,12 @@ class ChallengeLeaderboardRepositoryImpl(
         forceRefresh: Boolean
     ): LeaderboardSnapshot {
         if (!forceRefresh) {
-            sessionMemory.get(challengeId, seasonKey)?.let { return it }
+            // Phase 2 — motivational events are one-shot. The cached
+            // copy gets them stripped on retrieval so a navigation
+            // bounce doesn't re-surface the same toast.
+            sessionMemory.get(challengeId, seasonKey)?.let { cached ->
+                return cached.copy(motivationalEvents = emptyList())
+            }
         }
         return fetchAndMerge(challengeId, seasonKey, limit)
     }
@@ -55,12 +69,7 @@ class ChallengeLeaderboardRepositoryImpl(
         challengeId: Int,
         seasonKey: String,
         forceRefresh: Boolean
-    ): LeaderboardSnapshot {
-        // Reuse the full leaderboard path so the summary and the screen
-        // share one cache slot. The summary card on Overview and the
-        // full screen will share the same cached snapshot.
-        return getLeaderboard(challengeId, seasonKey, limit = 50, forceRefresh)
-    }
+    ): LeaderboardSnapshot = getLeaderboard(challengeId, seasonKey, limit = 50, forceRefresh)
 
     private suspend fun fetchAndMerge(
         challengeId: Int,
@@ -86,16 +95,14 @@ class ChallengeLeaderboardRepositoryImpl(
 
         // Merge — real rows take precedence when userIds collide.
         val realByUid = realTop.associateBy { it.userId }
-        val merged = buildList {
+        val rankedBase = buildList {
             addAll(realTop)
-            // Plus the current user if they're not already in the top.
             realMine?.takeIf { it.userId !in realByUid }?.let { add(it) }
-            // Plus seeded rivals not colliding with real rows.
             seededPool.filter { it.userId !in realByUid }.forEach { add(it) }
         }
             .sortedWith(
                 compareByDescending<LeaderboardEntry> { it.totalScore }
-                    .thenBy { it.updatedAt } // earlier == better tie-break
+                    .thenBy { it.updatedAt }
             )
             .mapIndexed { index, e ->
                 e.copy(
@@ -104,23 +111,76 @@ class ChallengeLeaderboardRepositoryImpl(
                 )
             }
 
-        val myEntry = merged.firstOrNull { it.isCurrentUser }
+        // Load the previously persisted ranks BEFORE we enrich — the
+        // delta has to reflect the snapshot the user last saw, not a
+        // value we just wrote.
+        val previousRanks = rankSnapshotStore.load(challengeId, seasonKey)
+        val challengeStartMs = if (currentUserId.isNotBlank()) {
+            userChallengeRepository
+                .getByUserAndChallenge(currentUserId, challengeId)
+                ?.start_date
+        } else null
+
+        // Phase 2 — enrich each row with integrity check, delta, badges.
+        val participantsForBadge = (meta.participantCount + seededPool.size).coerceAtLeast(rankedBase.size)
+        val enriched = rankedBase.map { entry ->
+            val validated = LeaderboardIntegrityValidator.validate(
+                entry = entry,
+                seasonKey = seasonKey,
+                currentUserChallengeStartMs = if (entry.isCurrentUser) challengeStartMs else null
+            )
+            val delta = if (validated.isSeededRival && previousRanks.isEmpty()) {
+                // First-ever read — seeded rivals show no delta; we'd be
+                // claiming they all just appeared, which is noise.
+                RankDelta.Hidden
+            } else {
+                RankDelta.compute(validated.rank, previousRanks[validated.userId])
+            }
+            val badges = RankBadge.award(
+                rank = validated.rank,
+                currentStreak = validated.currentStreak,
+                participantCount = participantsForBadge,
+                delta = delta
+            )
+            validated.copy(rankDelta = delta, badges = badges)
+        }
+
+        val myEntry = enriched.firstOrNull { it.isCurrentUser }
 
         val mergedMeta = meta.copy(
-            // Inflate participantCount with the seeded pool so the UI's
-            // "2,431 participants" headline isn't dominated by real-user
-            // count alone in the early days.
-            participantCount = (meta.participantCount + seededPool.size),
-            topScore = merged.firstOrNull()?.totalScore ?: meta.topScore
+            participantCount = participantsForBadge,
+            topScore = enriched.firstOrNull()?.totalScore ?: meta.topScore
         )
 
+        // Produce motivational events BEFORE we write the new snapshot —
+        // engine needs the previous ranks to detect crossings.
+        val events = if (currentUserId.isNotBlank()) {
+            motivationalEventEngine.produce(
+                entries = enriched,
+                previousRanks = previousRanks,
+                currentUserId = currentUserId,
+                challengeId = challengeId,
+                seasonKey = seasonKey
+            )
+        } else emptyList()
+
         val snapshot = LeaderboardSnapshot(
-            entries = merged.take(limit),
+            entries = enriched.take(limit),
             meta = mergedMeta,
             myEntry = myEntry,
-            isStale = false
+            isStale = false,
+            motivationalEvents = events
         )
         sessionMemory.put(challengeId, seasonKey, snapshot)
+
+        // Persist the fresh snapshot AFTER everything else so a crash
+        // mid-fetch doesn't poison future delta computations with a
+        // partial map. Best-effort — failures swallowed inside the store.
+        rankSnapshotStore.save(
+            challengeId = challengeId,
+            seasonKey = seasonKey,
+            ranks = enriched.associate { it.userId to it.rank }
+        )
         return snapshot
     }
 
@@ -152,8 +212,6 @@ class ChallengeLeaderboardRepositoryImpl(
         val ok = firestoreDs.upsertEntry(challengeId, seasonKey, userId, entry)
         if (ok) {
             sessionMemory.markWritten(userId, challengeId)
-            // Bust the read cache — next view will hydrate including
-            // the user's new score.
             sessionMemory.invalidate()
         }
     }

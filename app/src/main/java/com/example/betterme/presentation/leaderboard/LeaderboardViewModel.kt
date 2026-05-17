@@ -28,6 +28,9 @@ class LeaderboardViewModel(
             is LeaderboardIntent.Initialize -> initialize(intent)
             is LeaderboardIntent.SelectSeason -> selectSeason(intent.seasonKey)
             LeaderboardIntent.Refresh -> refresh()
+            LeaderboardIntent.DismissMotivationalEvent -> updateState {
+                copy(activeMotivationalEvent = null)
+            }
         }
     }
 
@@ -99,7 +102,19 @@ class LeaderboardViewModel(
             } else {
                 LeaderboardUi.Success(snapshot)
             }
-            updateState { copy(ui = nextUi, isRefreshing = false) }
+            // Phase 2 — surface the top-priority motivational event.
+            // The repo strips events from cached snapshots, so this is
+            // non-null only when a fresh fetch actually produced one.
+            // Cooldown logic (24h per event-kind) already lives in the
+            // engine — we don't filter further here.
+            val topEvent = snapshot.motivationalEvents.firstOrNull()
+            updateState {
+                copy(
+                    ui = nextUi,
+                    isRefreshing = false,
+                    activeMotivationalEvent = topEvent ?: activeMotivationalEvent
+                )
+            }
         }
     }
 }

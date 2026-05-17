@@ -30,7 +30,26 @@ data class LeaderboardEntry(
     val updatedAt: Long,
     val rank: Int = 0,
     val isCurrentUser: Boolean = false,
-    val isSeededRival: Boolean = false
+    val isSeededRival: Boolean = false,
+    /**
+     * Phase 2 — rank movement against the previously persisted snapshot.
+     * [RankDelta.Hidden] is the safe default for unenhanced reads.
+     */
+    val rankDelta: RankDelta = RankDelta.Hidden,
+    /**
+     * Phase 2 — badges awarded deterministically by
+     * [RankBadge.award]. Defaults to empty so callers that ignore Phase 2
+     * fields continue to work.
+     */
+    val badges: List<RankBadge> = emptyList(),
+    /**
+     * Phase 2 — flagged by [com.example.betterme.domain.leaderboard.LeaderboardIntegrityValidator]
+     * when the entry's stats are internally inconsistent (e.g. streak >
+     * days-since-challenge-start). UI does NOT hide suspicious rows; it
+     * just adds a small "?" marker so a human reviewing screenshots can
+     * spot anomalies.
+     */
+    val isSuspicious: Boolean = false
 )
 
 /**
