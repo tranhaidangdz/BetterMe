@@ -8,6 +8,7 @@ import com.example.betterme.domain.repository.ChallengeLogRepository
 import com.example.betterme.domain.repository.ChallengeRepository
 import com.example.betterme.domain.repository.GroupTeamRepository
 import com.example.betterme.domain.repository.UserChallengeRepository
+import com.example.betterme.domain.usecase.leaderboard.SyncGlobalLeaderboardUseCase
 import com.example.betterme.domain.usecase.leaderboard.SyncMyChallengeScoreUseCase
 import com.example.betterme.utils.DateUtils
 
@@ -29,7 +30,8 @@ class CheckInChallengeUseCase(
     private val challengeLogRepository: ChallengeLogRepository,
     private val groupTeamRepository: GroupTeamRepository,
     private val awardCompletionUseCase: AwardChallengeCompletionUseCase,
-    private val syncMyChallengeScore: SyncMyChallengeScoreUseCase
+    private val syncMyChallengeScore: SyncMyChallengeScoreUseCase,
+    private val syncGlobalLeaderboard: SyncGlobalLeaderboardUseCase
 ) {
 
     sealed class Result {
@@ -133,8 +135,16 @@ class CheckInChallengeUseCase(
         // see the post-check-in celebration and expects the leaderboard
         // to be up to date.
         when (txResult) {
-            is Result.Progress -> runCatching { syncMyChallengeScore(userChallengeId, force = false) }
-            is Result.Completed -> runCatching { syncMyChallengeScore(userChallengeId, force = true) }
+            is Result.Progress -> {
+                runCatching { syncMyChallengeScore(userChallengeId, force = false) }
+                runCatching { syncGlobalLeaderboard(force = false) }
+            }
+            is Result.Completed -> {
+                runCatching { syncMyChallengeScore(userChallengeId, force = true) }
+                // Completion bumps completedChallenges + may change
+                // longestStreak — force the global sync too.
+                runCatching { syncGlobalLeaderboard(force = true) }
+            }
             else -> Unit
         }
         return txResult

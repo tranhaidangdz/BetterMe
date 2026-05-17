@@ -24,7 +24,9 @@ data class MainState(
     val challengeCelebrationId: Int? = null,
     /** When non-null, render the monthly Leaderboard overlay for this challenge. */
     val leaderboardChallengeId: Int? = null,
-    val leaderboardChallengeTitle: String = ""
+    val leaderboardChallengeTitle: String = "",
+    /** Phase 2B — global leaderboard overlay (tabbed Global / Friends / Winners). */
+    val showGlobalLeaderboard: Boolean = false
 ) : MviViewState
 
 sealed class MainIntent : MviIntent {
@@ -60,6 +62,10 @@ sealed class MainIntent : MviIntent {
     /** Open the monthly leaderboard overlay for a challenge. */
     data class OpenLeaderboard(val challengeId: Int, val challengeTitle: String) : MainIntent()
     data object CloseLeaderboard : MainIntent()
+
+    /** Phase 2B — open / close the global tabbed leaderboard. */
+    data object OpenGlobalLeaderboard : MainIntent()
+    data object CloseGlobalLeaderboard : MainIntent()
 }
 
 sealed class MainEvent : MviSingleEvent

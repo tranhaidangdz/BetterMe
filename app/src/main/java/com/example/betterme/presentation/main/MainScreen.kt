@@ -23,6 +23,7 @@ import com.example.betterme.presentation.challenge.badges.ChallengeBadgesScreen
 import com.example.betterme.presentation.challenge.completed.ChallengeCompletedScreen
 import com.example.betterme.presentation.challenge.detail.ChallengeDetailScreen
 import com.example.betterme.presentation.leaderboard.LeaderboardScreen
+import com.example.betterme.presentation.leaderboard.global.GlobalLeaderboardScreen
 import com.example.betterme.presentation.challenge.discover.ChallengeDiscoverScreen
 import com.example.betterme.presentation.challenge.group.ChallengeGroupScreen
 import com.example.betterme.presentation.challenge.overview.ChallengeOverviewScreen
@@ -118,6 +119,9 @@ fun MainScreen(
                 },
                 onOpenCompleted = {
                     viewModel.processIntent(MainIntent.OpenChallengeCompleted)
+                },
+                onOpenGlobalLeaderboard = {
+                    viewModel.processIntent(MainIntent.OpenGlobalLeaderboard)
                 }
             )
             MainTab.STATS -> StatisticsScreen(
@@ -325,6 +329,13 @@ fun MainScreen(
             )
         }
 
+        // Phase 2B — Global Leaderboard overlay (tabbed). Top-most.
+        if (state.showGlobalLeaderboard) {
+            GlobalLeaderboardScreen(
+                onBackClick = { viewModel.processIntent(MainIntent.CloseGlobalLeaderboard) }
+            )
+        }
+
         // Bottom Nav Bar — ẩn khi overlay đang mở
         val anyOverlay = state.categoryDetailId != null
             || state.habitDetailId != null
@@ -337,6 +348,7 @@ fun MainScreen(
             || state.showChallengeCompleted
             || state.challengeCelebrationId != null
             || state.leaderboardChallengeId != null
+            || state.showGlobalLeaderboard
         if (!anyOverlay) {
             BottomNavBar(
                 selectedTab = state.selectedTab,

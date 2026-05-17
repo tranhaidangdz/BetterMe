@@ -77,6 +77,8 @@ class MainViewModel : BaseMviViewModel<MainIntent, MainState, MainEvent>() {
             MainIntent.CloseLeaderboard -> updateState {
                 copy(leaderboardChallengeId = null, leaderboardChallengeTitle = "")
             }
+            MainIntent.OpenGlobalLeaderboard -> updateState { copy(showGlobalLeaderboard = true) }
+            MainIntent.CloseGlobalLeaderboard -> updateState { copy(showGlobalLeaderboard = false) }
         }
     }
 }

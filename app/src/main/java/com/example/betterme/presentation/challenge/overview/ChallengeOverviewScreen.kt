@@ -43,6 +43,7 @@ fun ChallengeOverviewScreen(
     onOpenAchievements: () -> Unit = {},
     onOpenUpcoming: () -> Unit = {},
     onOpenCompleted: () -> Unit = {},
+    onOpenGlobalLeaderboard: () -> Unit = {},
     viewModel: ChallengeOverviewViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
@@ -59,7 +60,12 @@ fun ChallengeOverviewScreen(
             contentPadding = PaddingValues(bottom = 140.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item { OverviewTopBar(onTrophyClick = onOpenAchievements) }
+            item {
+                OverviewTopBar(
+                    onTrophyClick = onOpenAchievements,
+                    onLeaderboardClick = onOpenGlobalLeaderboard
+                )
+            }
 
             item {
                 OverviewHeroCard(
@@ -160,14 +166,33 @@ fun ChallengeOverviewScreen(
 }
 
 @Composable
-private fun OverviewTopBar(onTrophyClick: () -> Unit) {
+private fun OverviewTopBar(
+    onTrophyClick: () -> Unit,
+    onLeaderboardClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(modifier = Modifier.size(40.dp))
+        // Leaderboard icon on the left so the layout stays balanced
+        // with the trophy on the right. Tapping opens the new tabbed
+        // global leaderboard surface (Phase 2B).
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .clickable { onLeaderboardClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_medal),
+                contentDescription = "Bảng xếp hạng",
+                tint = BetterMeColors.Primary.Primary,
+                modifier = Modifier.size(22.dp)
+            )
+        }
         Text(
             text = "Thử thách",
             style = BetterMeTypography.Title.Medium.Bold,
