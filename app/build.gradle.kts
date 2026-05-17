@@ -31,15 +31,6 @@ val cloudinaryUploadPreset: String = cloudinaryProps.getProperty("CLOUDINARY_UPL
 // "I added the key but it still 401s" failures.
 val openrouterApiKey: String = cloudinaryProps.getProperty("OPENROUTER_API_KEY", "").trim()
 
-// Verified-share Cloud Functions base URL. Defaults to the emulator
-// host so a debug build runs without further config — flip to your
-// production URL via local.properties:
-//   SHARE_FUNCTIONS_BASE_URL=https://us-central1-<project>.cloudfunctions.net/
-// The trailing slash is required (Retrofit appends path segments).
-val shareFunctionsBaseUrl: String = cloudinaryProps
-    .getProperty("SHARE_FUNCTIONS_BASE_URL", "http://10.0.2.2:5001/betterme/us-central1/")
-    .trim()
-
 android {
     namespace = "com.example.betterme"
     compileSdk = 36
@@ -56,7 +47,6 @@ android {
         buildConfigField("String", "CLOUDINARY_CLOUD_NAME", "\"$cloudinaryCloudName\"")
         buildConfigField("String", "CLOUDINARY_UPLOAD_PRESET", "\"$cloudinaryUploadPreset\"")
         buildConfigField("String", "OPENROUTER_API_KEY", "\"$openrouterApiKey\"")
-        buildConfigField("String", "SHARE_FUNCTIONS_BASE_URL", "\"$shareFunctionsBaseUrl\"")
     }
 
     buildTypes {

@@ -1,39 +1,57 @@
 package com.example.betterme.data.share
 
 import android.util.Log
-import com.example.betterme.BuildConfig
-import com.example.betterme.data.share.dto.CheckInDto
-import com.example.betterme.data.share.dto.CreateShareRequest
-import com.example.betterme.data.share.dto.ProfileDto
-import com.example.betterme.data.share.dto.SnapshotDto
-import com.example.betterme.data.share.dto.SummaryDto
 import com.example.betterme.domain.repository.ShareRepository
 import com.example.betterme.domain.share.ShareLink
-import com.example.betterme.domain.share.ShareType
 import com.example.betterme.domain.share.VerificationStatus
 import com.example.betterme.domain.share.VerifiedCheckIn
 import com.example.betterme.domain.share.VerifiedProfile
 import com.example.betterme.domain.share.VerifiedShare
 import com.example.betterme.domain.share.VerifiedSummary
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
 /**
- * Verifies-or-fails-loud: every read goes through the server, and
- * every parse failure / network blip surfaces as a typed
- * [VerificationStatus] so the UI never paints a partial snapshot.
+ * Firestore-direct implementation of the simple share system.
  *
- * Local Room data is NEVER used to hydrate the viewer — the whole
- * point of the feature is that the displayed numbers are
- * server-attested.
+ * Firestore layout:
+ *
+ *   /shared_progress/{userId}
+ *     {
+ *       userId, displayName, avatarUrl, publishedAt,
+ *       totalCheckIns, currentStreakDays, longestStreakDays,
+ *       completedChallenges, legendaryChallenges,
+ *       checkIns: [
+ *         { itemId, name, kind, date },
+ *         ...
+ *       ]
+ *     }
+ *
+ * One document per user. Each publish overwrites the previous
+ * snapshot atomically. One Firestore read per viewer open — cheap
+ * regardless of how many check-ins are in the array (1 MB doc limit
+ * comfortably handles ~5000 entries).
+ *
+ * No HMAC, no signature, no per-row proof hash. "Verified" means the
+ * data lives in Firestore.
+ *
+ * ### Recommended Firestore Security Rules
+ *
+ *     match /shared_progress/{userId} {
+ *       // Anyone can read — the URL itself is the access token.
+ *       allow read: if true;
+ *       // Only the owner can publish / overwrite their own snapshot.
+ *       allow write: if request.auth != null
+ *                  && request.auth.uid == userId;
+ *     }
  */
 class ShareRepositoryImpl(
-    private val api: ShareApi,
+    private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth
 ) : ShareRepository {
 
-    override suspend fun createShare(
-        type: ShareType,
+    override suspend fun publishMyProgress(
         displayName: String,
         avatarUrl: String?,
         currentStreakDays: Int,
@@ -42,107 +60,113 @@ class ShareRepositoryImpl(
         legendaryChallenges: Int,
         checkIns: List<ShareRepository.CheckInInput>
     ): ShareLink {
-        val token = currentIdToken()
-            ?: throw IllegalStateException("Vui lòng đăng nhập để tạo link chia sẻ.")
+        val userId = auth.currentUser?.uid
+            ?: throw IllegalStateException("Vui lòng đăng nhập để chia sẻ tiến độ.")
         if (checkIns.isEmpty()) {
             throw IllegalStateException("Chưa có check-in nào để chia sẻ.")
         }
 
-        val request = CreateShareRequest(
-            type = type.wireValue,
-            profile = ProfileDto(displayName = displayName, avatarUrl = avatarUrl),
-            summary = SummaryDto(
-                currentStreakDays = currentStreakDays,
-                longestStreakDays = longestStreakDays,
-                completedChallenges = completedChallenges,
-                legendaryChallenges = legendaryChallenges
-            ),
-            checkIns = checkIns.map {
-                CheckInDto(
-                    itemId = it.itemId,
-                    itemTitle = it.itemTitle,
-                    timestamp = it.timestamp,
-                    kind = it.kind.name,
-                    note = it.note
-                )
-            }
+        val publishedAt = System.currentTimeMillis()
+        // Recency-sorted + capped — keeps doc under the 1 MB limit
+        // even for users with thousands of check-ins, and surfaces the
+        // most relevant rows first when the viewer renders the timeline.
+        val safeCheckIns = checkIns
+            .sortedByDescending { it.date }
+            .take(MAX_CHECK_INS_PER_DOC)
+
+        val doc = mapOf(
+            FIELD_USER_ID to userId,
+            FIELD_DISPLAY_NAME to displayName,
+            FIELD_AVATAR_URL to avatarUrl,
+            FIELD_PUBLISHED_AT to publishedAt,
+            FIELD_TOTAL_CHECK_INS to safeCheckIns.size,
+            FIELD_CURRENT_STREAK to currentStreakDays,
+            FIELD_LONGEST_STREAK to longestStreakDays,
+            FIELD_COMPLETED_CHALLENGES to completedChallenges,
+            FIELD_LEGENDARY_CHALLENGES to legendaryChallenges,
+            FIELD_CHECK_INS to safeCheckIns.map { it.toMap() }
         )
 
-        val response = api.createShare("Bearer $token", request)
-        val webLink = buildWebLink(response.shareId)
+        firestore.collection(COLLECTION).document(userId).set(doc).await()
+
+        val deepLink = "betterme://share/$userId"
         val richMessage = buildRichMessage(
             displayName = displayName,
-            totalCheckIns = checkIns.size,
+            totalCheckIns = safeCheckIns.size,
             streakDays = currentStreakDays,
             legendaryChallenges = legendaryChallenges,
-            link = webLink
+            link = deepLink
         )
         return ShareLink(
-            shareId = response.shareId,
-            deepLink = response.deepLink,
-            webLink = webLink,
+            userId = userId,
+            deepLink = deepLink,
             richMessage = richMessage,
-            createdAt = response.createdAt
+            publishedAt = publishedAt
         )
     }
 
-    override suspend fun loadShare(shareId: String): ShareRepository.LoadResult {
+    override suspend fun loadByUserId(userId: String): ShareRepository.LoadResult {
+        if (userId.isBlank()) {
+            return ShareRepository.LoadResult(VerificationStatus.NOT_FOUND, null)
+        }
         return try {
-            val response = api.getShare(shareId)
-            val status = when (response.status.uppercase()) {
-                "VALID" -> VerificationStatus.VALID
-                "INVALID" -> VerificationStatus.INVALID
-                "NOT_FOUND" -> VerificationStatus.NOT_FOUND
-                else -> VerificationStatus.INVALID
-            }
-            if (status != VerificationStatus.VALID || response.snapshot == null) {
-                ShareRepository.LoadResult(status, null)
+            val snap = firestore.collection(COLLECTION).document(userId).get().await()
+            if (!snap.exists()) {
+                ShareRepository.LoadResult(VerificationStatus.NOT_FOUND, null)
             } else {
-                ShareRepository.LoadResult(
-                    status = VerificationStatus.VALID,
-                    share = response.snapshot.toDomain()
-                )
+                val parsed = snap.data?.toDomain()
+                if (parsed == null) {
+                    ShareRepository.LoadResult(VerificationStatus.NOT_FOUND, null)
+                } else {
+                    ShareRepository.LoadResult(VerificationStatus.VALID, parsed)
+                }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "loadShare failed for $shareId", e)
+            Log.w(TAG, "loadByUserId failed for $userId", e)
             ShareRepository.LoadResult(VerificationStatus.NETWORK, null)
         }
     }
 
-    override suspend fun verifyShare(shareId: String): VerificationStatus = try {
-        when (api.verifyShare(shareId).status.uppercase()) {
-            "VALID" -> VerificationStatus.VALID
-            "INVALID" -> VerificationStatus.INVALID
-            "NOT_FOUND" -> VerificationStatus.NOT_FOUND
-            else -> VerificationStatus.INVALID
+    // ─── Mapping helpers ───────────────────────────────────────────
+
+    private fun ShareRepository.CheckInInput.toMap(): Map<String, Any?> = mapOf(
+        FIELD_CHECK_IN_ITEM_ID to itemId,
+        FIELD_CHECK_IN_NAME to name,
+        FIELD_CHECK_IN_KIND to kind.name,
+        FIELD_CHECK_IN_DATE to date
+    )
+
+    private fun Map<String, Any?>.toDomain(): VerifiedShare? {
+        val userId = (this[FIELD_USER_ID] as? String) ?: return null
+        val displayName = (this[FIELD_DISPLAY_NAME] as? String) ?: "BetterMe User"
+        val avatarUrl = this[FIELD_AVATAR_URL] as? String
+        val publishedAt = (this[FIELD_PUBLISHED_AT] as? Number)?.toLong() ?: 0L
+        val checkInsRaw = this[FIELD_CHECK_INS] as? List<*> ?: emptyList<Any?>()
+        val checkIns = checkInsRaw.mapNotNull { rawRow ->
+            val row = rawRow as? Map<*, *> ?: return@mapNotNull null
+            val itemId = row[FIELD_CHECK_IN_ITEM_ID] as? String ?: return@mapNotNull null
+            val name = row[FIELD_CHECK_IN_NAME] as? String ?: return@mapNotNull null
+            val date = (row[FIELD_CHECK_IN_DATE] as? Number)?.toLong() ?: return@mapNotNull null
+            val kindStr = (row[FIELD_CHECK_IN_KIND] as? String)?.uppercase()
+            val kind = when (kindStr) {
+                "CHALLENGE" -> VerifiedCheckIn.Kind.CHALLENGE
+                else -> VerifiedCheckIn.Kind.HABIT
+            }
+            VerifiedCheckIn(itemId = itemId, name = name, kind = kind, date = date)
         }
-    } catch (e: Exception) {
-        Log.w(TAG, "verifyShare failed for $shareId", e)
-        VerificationStatus.NETWORK
-    }
-
-    // ─── Helpers ───────────────────────────────────────────────────
-
-    private suspend fun currentIdToken(): String? {
-        val user = auth.currentUser ?: return null
-        return try {
-            user.getIdToken(false).await().token
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to fetch Firebase ID token", e)
-            null
-        }
-    }
-
-    /**
-     * Build the user-facing HTTPS link. Today it points directly at
-     * the Cloud Functions URL with `?id=` query param — same URL the
-     * function serves browser HTML at. If Firebase Hosting rewrites
-     * are configured (`/share/<id>` → getShare), swap this method's
-     * base prefix to that pretty URL; nothing else changes.
-     */
-    private fun buildWebLink(shareId: String): String {
-        val base = BuildConfig.SHARE_FUNCTIONS_BASE_URL.removeSuffix("/")
-        return "$base/getShare?id=$shareId"
+        return VerifiedShare(
+            userId = userId,
+            profile = VerifiedProfile(displayName = displayName, avatarUrl = avatarUrl),
+            summary = VerifiedSummary(
+                totalCheckIns = (this[FIELD_TOTAL_CHECK_INS] as? Number)?.toInt() ?: checkIns.size,
+                currentStreakDays = (this[FIELD_CURRENT_STREAK] as? Number)?.toInt() ?: 0,
+                longestStreakDays = (this[FIELD_LONGEST_STREAK] as? Number)?.toInt() ?: 0,
+                completedChallenges = (this[FIELD_COMPLETED_CHALLENGES] as? Number)?.toInt() ?: 0,
+                legendaryChallenges = (this[FIELD_LEGENDARY_CHALLENGES] as? Number)?.toInt() ?: 0
+            ),
+            checkIns = checkIns,
+            publishedAt = publishedAt
+        )
     }
 
     /** Vietnamese rich-text the user posts to Messenger / Zalo / FB. */
@@ -162,51 +186,29 @@ class ShareRepositoryImpl(
             append("🏆 ").append(legendaryChallenges)
                 .append(" thử thách huyền thoại đã hoàn thành\n")
         }
-        append("\n✔ Xác minh tại: ").append(link)
-    }
-
-    // ─── Mappers ───────────────────────────────────────────────────
-
-    private fun SnapshotDto.toDomain(): VerifiedShare = VerifiedShare(
-        shareId = shareId,
-        userId = userId,
-        type = ShareType.fromWire(type) ?: ShareType.FULL_HISTORY,
-        profile = VerifiedProfile(
-            displayName = profile.displayName,
-            avatarUrl = profile.avatarUrl
-        ),
-        summary = VerifiedSummary(
-            totalCheckIns = summary.totalCheckIns,
-            uniqueItems = summary.uniqueItems,
-            earliestTimestamp = summary.earliestTimestamp,
-            latestTimestamp = summary.latestTimestamp,
-            currentStreakDays = summary.currentStreakDays,
-            longestStreakDays = summary.longestStreakDays,
-            completedChallenges = summary.completedChallenges,
-            legendaryChallenges = summary.legendaryChallenges
-        ),
-        checkIns = checkIns.mapNotNull { it.toDomain() },
-        createdAt = createdAt,
-        expiresAt = expiresAt
-    )
-
-    private fun CheckInDto.toDomain(): VerifiedCheckIn? {
-        if (itemId.isBlank() || itemTitle.isBlank() || timestamp <= 0L) return null
-        val kindEnum = when (kind.uppercase()) {
-            "CHALLENGE" -> VerifiedCheckIn.Kind.CHALLENGE
-            else -> VerifiedCheckIn.Kind.HABIT
-        }
-        return VerifiedCheckIn(
-            itemId = itemId,
-            itemTitle = itemTitle,
-            timestamp = timestamp,
-            kind = kindEnum,
-            note = note,
-            proofHash = proofHash.orEmpty()
-        )
+        append("\n👉 Xem chi tiết: ").append(link)
     }
 
     private companion object {
         const val TAG = "ShareRepo"
+        const val COLLECTION = "shared_progress"
+        const val MAX_CHECK_INS_PER_DOC = 500
+
+        // Field names — kept as constants so the publish + load paths
+        // can't drift on a typo.
+        const val FIELD_USER_ID = "userId"
+        const val FIELD_DISPLAY_NAME = "displayName"
+        const val FIELD_AVATAR_URL = "avatarUrl"
+        const val FIELD_PUBLISHED_AT = "publishedAt"
+        const val FIELD_TOTAL_CHECK_INS = "totalCheckIns"
+        const val FIELD_CURRENT_STREAK = "currentStreakDays"
+        const val FIELD_LONGEST_STREAK = "longestStreakDays"
+        const val FIELD_COMPLETED_CHALLENGES = "completedChallenges"
+        const val FIELD_LEGENDARY_CHALLENGES = "legendaryChallenges"
+        const val FIELD_CHECK_INS = "checkIns"
+        const val FIELD_CHECK_IN_ITEM_ID = "itemId"
+        const val FIELD_CHECK_IN_NAME = "name"
+        const val FIELD_CHECK_IN_KIND = "kind"
+        const val FIELD_CHECK_IN_DATE = "date"
     }
 }

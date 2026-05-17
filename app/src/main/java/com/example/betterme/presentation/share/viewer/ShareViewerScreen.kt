@@ -61,15 +61,15 @@ import java.util.Locale
  */
 @Composable
 fun ShareViewerScreen(
-    shareId: String,
+    userId: String,
     onBackClick: () -> Unit,
     viewModel: ShareViewerViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
     val context = LocalContext.current
 
-    LaunchedEffect(shareId) {
-        viewModel.processIntent(ShareViewerIntent.Load(shareId))
+    LaunchedEffect(userId) {
+        viewModel.processIntent(ShareViewerIntent.Load(userId))
     }
 
     LaunchedEffect(viewModel) {
@@ -98,11 +98,7 @@ fun ShareViewerScreen(
             )
             when (val ui = state.ui) {
                 ShareViewerUi.Loading -> LoadingState()
-                is ShareViewerUi.Verified -> VerifiedBody(
-                    share = ui.share,
-                    isReverifying = state.isReverifying,
-                    onReverify = { viewModel.processIntent(ShareViewerIntent.ReVerify) }
-                )
+                is ShareViewerUi.Verified -> VerifiedBody(share = ui.share)
                 is ShareViewerUi.Invalid -> InvalidState(reason = ui.reason)
             }
         }
@@ -122,15 +118,10 @@ private fun LoadingState() {
 @Composable
 private fun InvalidState(reason: VerificationStatus) {
     val (emoji, primary, secondary) = when (reason) {
-        VerificationStatus.INVALID -> Triple(
-            "❌",
-            "Dữ liệu đã bị thay đổi.",
-            "Snapshot này không còn khớp với chữ ký máy chủ — không đáng tin."
-        )
         VerificationStatus.NOT_FOUND -> Triple(
             "🔎",
-            "Link không tồn tại hoặc đã hết hạn.",
-            "Snapshot chia sẻ có hiệu lực trong 90 ngày kể từ khi tạo."
+            "Người này chưa chia sẻ tiến độ.",
+            "Yêu cầu họ mở BetterMe và bấm \"Chia sẻ tiến độ\" để xuất bản dữ liệu."
         )
         VerificationStatus.NETWORK -> Triple(
             "📡",
@@ -163,11 +154,7 @@ private fun InvalidState(reason: VerificationStatus) {
 }
 
 @Composable
-private fun VerifiedBody(
-    share: VerifiedShare,
-    isReverifying: Boolean,
-    onReverify: () -> Unit
-) {
+private fun VerifiedBody(share: VerifiedShare) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
@@ -175,7 +162,7 @@ private fun VerifiedBody(
         ),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item { VerifiedBadge(onReverify = onReverify, isReverifying = isReverifying) }
+        item { VerifiedBadge() }
         item { ProfileCard(share = share) }
         item { SummaryGrid(share = share) }
         item {
@@ -187,14 +174,14 @@ private fun VerifiedBody(
                 modifier = Modifier.padding(top = 6.dp)
             )
         }
-        items(share.checkIns, key = { "${it.itemId}-${it.timestamp}" }) { row ->
+        items(share.checkIns, key = { "${it.itemId}-${it.date}" }) { row ->
             CheckInRow(row = row)
         }
     }
 }
 
 @Composable
-private fun VerifiedBadge(onReverify: () -> Unit, isReverifying: Boolean) {
+private fun VerifiedBadge() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -209,26 +196,11 @@ private fun VerifiedBadge(onReverify: () -> Unit, isReverifying: Boolean) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "✔  Đã xác nhận bởi máy chủ BetterMe",
+            text = "✔  Dữ liệu trực tiếp từ Firebase",
             style = BetterMeTypography.Body.Small.Medium,
             color = BetterMeColors.Green,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(1f)
+            fontWeight = FontWeight.SemiBold
         )
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
-                .background(BetterMeColors.Green.copy(alpha = 0.18f))
-                .clickable(enabled = !isReverifying) { onReverify() }
-                .padding(horizontal = 10.dp, vertical = 4.dp)
-        ) {
-            Text(
-                text = if (isReverifying) "Đang kiểm tra…" else "Xác minh lại",
-                style = BetterMeTypography.Body.Small.Medium,
-                color = BetterMeColors.Green,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
     }
 }
 
@@ -271,7 +243,7 @@ private fun ProfileCard(share: VerifiedShare) {
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Snapshot: ${formatDate(share.createdAt)}",
+                text = "Xuất bản: ${formatDate(share.publishedAt)}",
                 style = BetterMeTypography.Body.Small.Medium,
                 color = BetterMeColors.Text.TextTertiary
             )
@@ -353,24 +325,17 @@ private fun CheckInRow(row: VerifiedCheckIn) {
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = row.itemTitle,
+                text = row.name,
                 style = BetterMeTypography.Body.Medium,
                 color = BetterMeColors.Text.TextPrimary,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1
             )
             Text(
-                text = formatDate(row.timestamp),
+                text = formatDate(row.date),
                 style = BetterMeTypography.Body.Small.Medium,
                 color = BetterMeColors.Text.TextTertiary
             )
-            if (row.proofHash.isNotBlank()) {
-                Text(
-                    text = "🔒 " + row.proofHash.take(8) + "…",
-                    style = BetterMeTypography.Body.Small.Medium,
-                    color = BetterMeColors.Text.TextTertiary
-                )
-            }
         }
     }
 }

@@ -8,11 +8,13 @@ import com.example.betterme.domain.share.VerifiedShare
 
 /**
  * State machine for the public viewer screen. Reached two ways:
- *   - Deep link `betterme://share/{shareId}` (most external traffic).
- *   - In-app preview right after the user creates a share.
+ *   - Deep link `betterme://share/{userId}`.
+ *   - In-app preview right after the user publishes their snapshot.
  *
- * The viewer's invariant: render NOTHING from local state. Every
- * field on screen comes from the server-verified [VerifiedShare].
+ * "Verified" here means the snapshot doc exists at
+ * `/shared_progress/{userId}` in Firestore. The viewer never renders
+ * local Room data — everything on screen comes from the Firestore
+ * round trip.
  */
 sealed class ShareViewerUi {
     data object Loading : ShareViewerUi()
@@ -22,14 +24,11 @@ sealed class ShareViewerUi {
 
 data class ShareViewerState(
     val ui: ShareViewerUi = ShareViewerUi.Loading,
-    val shareId: String = "",
-    val isReverifying: Boolean = false
+    val userId: String = ""
 ) : MviViewState
 
 sealed class ShareViewerIntent : MviIntent {
-    data class Load(val shareId: String) : ShareViewerIntent()
-    /** User tapped "Xác minh lại" — re-checks the signature without re-downloading the snapshot. */
-    data object ReVerify : ShareViewerIntent()
+    data class Load(val userId: String) : ShareViewerIntent()
 }
 
 sealed class ShareViewerEvent : MviSingleEvent {

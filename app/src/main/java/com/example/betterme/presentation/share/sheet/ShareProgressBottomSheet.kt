@@ -2,7 +2,6 @@ package com.example.betterme.presentation.share.sheet
 
 import android.content.Context
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,7 +31,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.betterme.domain.share.ShareType
 import com.example.betterme.presentation.share.utils.ShareIntentHelper
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTokens
@@ -41,24 +39,20 @@ import kotlinx.coroutines.flow.collectLatest
 import org.koin.androidx.compose.koinViewModel
 
 /**
- * Bottom sheet entry point for the verified-share flow. Three slices:
+ * Bottom sheet entry point for the simple verified share flow.
  *
- *   ✅ Toàn bộ tiến độ      → ShareType.FULL_HISTORY
- *   📚 Một thói quen        → ShareType.HABIT     (needs habitId)
- *   🏆 Một thử thách        → ShareType.CHALLENGE (needs userChallengeId)
+ * Layout collapses to three states:
+ *   1. Publishing — spinner + "Đang xuất bản tiến độ lên máy chủ..."
+ *   2. Ready      — deep link visible + "Chia sẻ lại" button
+ *   3. Error      — message + retry
  *
- * The HABIT and CHALLENGE options surface here only when the caller
- * passed [preselectedItemId] (i.e. opened the sheet from inside a
- * habit/challenge detail screen). On the top-level Stats entry point
- * only "Full history" is offered, since the system doesn't know
- * which habit/challenge the user means.
+ * Auto-fires Publish on first composition so the user effectively
+ * sees the spinner → ACTION_SEND chooser hand-off in one motion.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShareProgressBottomSheet(
     onDismiss: () -> Unit,
-    preselectedType: ShareType? = null,
-    preselectedItemId: String? = null,
     viewModel: ShareProgressViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
@@ -77,22 +71,17 @@ fun ShareProgressBottomSheet(
                         showToast(context, "Không tìm thấy ứng dụng chia sẻ phù hợp.")
                     }
                 }
-                is ShareProgressEvent.ShowMessage -> {
+                is ShareProgressEvent.ShowMessage ->
                     showToast(context, event.message)
-                }
             }
         }
     }
 
-    // Auto-fire when launched with a preselected type — habit/challenge
-    // detail screens pre-pick and just expect the share sheet to flash
-    // briefly before launching the chooser.
-    LaunchedEffect(preselectedType, preselectedItemId) {
-        if (preselectedType != null) {
-            viewModel.processIntent(
-                ShareProgressIntent.CreateFor(preselectedType, preselectedItemId)
-            )
-        }
+    // Auto-publish on first sheet open. Subsequent re-opens after the
+    // user dismissed publish again — they probably want a fresh
+    // snapshot reflecting any new check-ins.
+    LaunchedEffect(Unit) {
+        viewModel.processIntent(ShareProgressIntent.Publish)
     }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -109,20 +98,10 @@ fun ShareProgressBottomSheet(
         ) {
             Header(onClose = onDismiss)
             Spacer(Modifier.height(14.dp))
-
             when (val ui = state.ui) {
-                ShareProgressUi.Picker -> PickerBody(
-                    showHabitOption = preselectedType == ShareType.HABIT,
-                    showChallengeOption = preselectedType == ShareType.CHALLENGE,
-                    preselectedItemId = preselectedItemId,
-                    onPick = { type, itemId ->
-                        viewModel.processIntent(ShareProgressIntent.CreateFor(type, itemId))
-                    }
-                )
-                ShareProgressUi.Generating -> GeneratingBody()
+                ShareProgressUi.Idle, ShareProgressUi.Publishing -> PublishingBody()
                 is ShareProgressUi.Ready -> ReadyBody(
                     deepLink = ui.link.deepLink,
-                    webLink = ui.link.webLink,
                     onShareAgain = {
                         ShareIntentHelper.shareText(
                             context = context,
@@ -133,9 +112,7 @@ fun ShareProgressBottomSheet(
                 )
                 is ShareProgressUi.Error -> ErrorBody(
                     message = ui.message,
-                    onRetry = {
-                        viewModel.processIntent(ShareProgressIntent.Reset)
-                    }
+                    onRetry = { viewModel.processIntent(ShareProgressIntent.Publish) }
                 )
             }
             Spacer(Modifier.height(8.dp))
@@ -158,13 +135,13 @@ private fun Header(onClose: () -> Unit) {
         Spacer(Modifier.size(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Chia sẻ tiến độ đã xác minh",
+                text = "Chia sẻ tiến độ",
                 style = BetterMeTypography.Title.Medium.Bold,
                 color = BetterMeColors.Text.TextPrimary,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Người nhận chỉ thấy dữ liệu được xác nhận bởi máy chủ",
+                text = "Người nhận sẽ thấy dữ liệu trực tiếp từ Firebase",
                 style = BetterMeTypography.Body.Small.Medium,
                 color = BetterMeColors.Text.TextTertiary
             )
@@ -183,88 +160,7 @@ private fun Header(onClose: () -> Unit) {
 }
 
 @Composable
-private fun PickerBody(
-    showHabitOption: Boolean,
-    showChallengeOption: Boolean,
-    preselectedItemId: String?,
-    onPick: (ShareType, String?) -> Unit
-) {
-    Column {
-        PickerRow(
-            emoji = "✅",
-            title = "Toàn bộ tiến độ",
-            subtitle = "Tất cả check-in của thói quen + thử thách (tối đa 500 lượt mới nhất)",
-            onClick = { onPick(ShareType.FULL_HISTORY, null) }
-        )
-        if (showHabitOption) {
-            Spacer(Modifier.height(8.dp))
-            PickerRow(
-                emoji = "📚",
-                title = "Chỉ thói quen này",
-                subtitle = "Toàn bộ check-in của thói quen đang xem",
-                onClick = { onPick(ShareType.HABIT, preselectedItemId) }
-            )
-        }
-        if (showChallengeOption) {
-            Spacer(Modifier.height(8.dp))
-            PickerRow(
-                emoji = "🏆",
-                title = "Chỉ thử thách này",
-                subtitle = "Toàn bộ check-in của thử thách đang xem",
-                onClick = { onPick(ShareType.CHALLENGE, preselectedItemId) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun PickerRow(
-    emoji: String,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Body))
-            .background(BetterMeColors.BackGround.BackgroundSecondary)
-            .border(
-                width = 1.dp,
-                color = BetterMeColors.Border.BorderLight,
-                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Body)
-            )
-            .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(text = emoji, fontSize = 22.sp)
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = BetterMeTypography.Body.Medium,
-                color = BetterMeColors.Text.TextPrimary,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                style = BetterMeTypography.Body.Small.Medium,
-                color = BetterMeColors.Text.TextTertiary
-            )
-        }
-        Text(
-            text = "›",
-            color = BetterMeColors.Primary.Primary,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-private fun GeneratingBody() {
+private fun PublishingBody() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -278,7 +174,7 @@ private fun GeneratingBody() {
             strokeWidth = 2.6.dp
         )
         Text(
-            text = "Đang ký + lưu trữ snapshot trên máy chủ…",
+            text = "Đang xuất bản tiến độ lên Firebase…",
             style = BetterMeTypography.Body.Medium,
             color = BetterMeColors.Text.TextSecondary
         )
@@ -286,30 +182,18 @@ private fun GeneratingBody() {
 }
 
 @Composable
-private fun ReadyBody(
-    deepLink: String,
-    webLink: String,
-    onShareAgain: () -> Unit
-) {
+private fun ReadyBody(deepLink: String, onShareAgain: () -> Unit) {
     Column {
         Text(
-            text = "✅  Link đã sẵn sàng — đã được máy chủ ký xác nhận.",
+            text = "✅  Đã xuất bản — link sẵn sàng để chia sẻ.",
             style = BetterMeTypography.Body.Medium,
             color = BetterMeColors.Green,
             fontWeight = FontWeight.SemiBold
         )
         Spacer(Modifier.height(12.dp))
-        LinkBlock(label = "Link công khai", url = webLink)
-        Spacer(Modifier.height(8.dp))
-        LinkBlock(label = "Deep link (mở app)", url = deepLink)
+        LinkBlock(label = "Link chia sẻ", url = deepLink)
         Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            PrimaryButton(
-                label = "Chia sẻ lại",
-                onClick = onShareAgain,
-                modifier = Modifier.weight(1f)
-            )
-        }
+        PrimaryButton(label = "Chia sẻ lại", onClick = onShareAgain)
     }
 }
 

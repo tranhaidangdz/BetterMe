@@ -66,8 +66,6 @@ import com.example.betterme.data.leaderboard.LeaderboardSessionMemory
 import com.example.betterme.data.leaderboard.MotivationalEventEngine
 import com.example.betterme.data.leaderboard.RankSnapshotStore
 import com.example.betterme.data.repository.AiCacheRepositoryImpl
-import com.example.betterme.data.share.ShareApi
-import com.example.betterme.data.share.ShareApiClient
 import com.example.betterme.data.share.ShareRepositoryImpl
 import com.example.betterme.domain.ai.AiCacheRepository
 import com.example.betterme.domain.ai.AiHabitInsightRepository
@@ -299,11 +297,10 @@ val repositoryModule = module {
         )
     }
 
-    // Phase 4 — Verified Share stack. Retrofit instance points at
-    // BuildConfig.SHARE_FUNCTIONS_BASE_URL; Firebase Auth supplies
-    // the bearer token per call inside ShareRepositoryImpl.
-    single<ShareApi> { ShareApiClient.create() }
-    single<ShareRepository> { ShareRepositoryImpl(api = get(), auth = get()) }
+    // Phase 4 — simple verified share. Direct Firestore SDK, no
+    // Cloud Functions, no HMAC. Repo writes one doc per publish to
+    // /shared_progress/{userId}; viewer reads from the same path.
+    single<ShareRepository> { ShareRepositoryImpl(firestore = get(), auth = get()) }
 
     // Image upload repo: Cloudinary if configured, local-passthrough otherwise. Pick at
     // DI time so the rest of the app never has to branch on whether the cloud is set up.

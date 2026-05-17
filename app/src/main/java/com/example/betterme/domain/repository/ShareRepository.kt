@@ -1,30 +1,30 @@
 package com.example.betterme.domain.repository
 
 import com.example.betterme.domain.share.ShareLink
-import com.example.betterme.domain.share.ShareType
 import com.example.betterme.domain.share.VerificationStatus
 import com.example.betterme.domain.share.VerifiedCheckIn
 import com.example.betterme.domain.share.VerifiedShare
 
 /**
- * Domain contract for the Verified Shareable Check-in History feature.
+ * Domain contract for the simple Verified Share feature.
  *
- *  - [createShare] — POST `/createShare`. Caller has already gathered
- *    the snapshot inputs locally; the server signs + stores them and
- *    returns the share URLs. No local persistence — the server is the
- *    single source of truth.
+ * The implementation reads + writes Firestore directly at
+ * `/shared_progress/{userId}` — there is no signing layer, no Cloud
+ * Functions backend, no canonical-JSON HMAC. "Verified" means the
+ * data lives in Firestore (the server source of truth) and the
+ * viewer never falls back to local Room.
  *
- *  - [loadShare] — GET `/getShare`. Server re-validates HMAC before
- *    returning. Failures surface as [VerificationStatus] without ever
- *    exposing a partial payload to the UI.
+ *  - [publishMyProgress] — write a fresh snapshot of the current
+ *    user's habits + challenge check-ins to Firestore. Overwrites the
+ *    previous snapshot for that user atomically. Returns the deep
+ *    link + rich-share message the caller hands to ACTION_SEND.
  *
- *  - [verifyShare] — GET `/verifyShare`. Light status-only probe.
- *    Used by the viewer's "re-check" button.
+ *  - [loadByUserId] — fetch the snapshot doc for [userId]. Returns
+ *    [VerificationStatus.NOT_FOUND] when the user has never published.
  */
 interface ShareRepository {
 
-    suspend fun createShare(
-        type: ShareType,
+    suspend fun publishMyProgress(
         displayName: String,
         avatarUrl: String?,
         currentStreakDays: Int,
@@ -34,27 +34,20 @@ interface ShareRepository {
         checkIns: List<CheckInInput>
     ): ShareLink
 
-    suspend fun loadShare(shareId: String): LoadResult
+    suspend fun loadByUserId(userId: String): LoadResult
 
-    suspend fun verifyShare(shareId: String): VerificationStatus
-
-    /**
-     * Input row the client provides to [createShare] — the server adds
-     * a `proofHash` field server-side, so the client never produces
-     * one (it can't, without the server secret).
-     */
+    /** Input row for [publishMyProgress]. */
     data class CheckInInput(
         val itemId: String,
-        val itemTitle: String,
-        val timestamp: Long,
+        val name: String,
         val kind: VerifiedCheckIn.Kind,
-        val note: String? = null
+        val date: Long
     )
 
     /**
-     * Wraps the verification outcome + the snapshot when valid. The
-     * UI never sees a non-null [share] when the status isn't VALID,
-     * so it can render a single conditional on [status].
+     * Wraps the load outcome. [share] is non-null only when [status]
+     * is [VerificationStatus.VALID], so the UI can render a single
+     * conditional.
      */
     data class LoadResult(
         val status: VerificationStatus,

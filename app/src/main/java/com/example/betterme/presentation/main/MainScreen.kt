@@ -65,7 +65,7 @@ fun MainScreen(
                 is DeepLinkBus.Event.OpenHabitDetail ->
                     viewModel.processIntent(MainIntent.OpenHabitDetail(event.habitId))
                 is DeepLinkBus.Event.OpenShareViewer ->
-                    viewModel.processIntent(MainIntent.OpenShareViewer(event.shareId))
+                    viewModel.processIntent(MainIntent.OpenShareViewer(event.userId))
             }
         }
     }
@@ -344,9 +344,9 @@ fun MainScreen(
         }
 
         // Phase 4 — Verified Share viewer (deep link target + in-app preview).
-        state.shareViewerId?.let { shareId ->
+        state.shareViewerUserId?.let { userId ->
             ShareViewerScreen(
-                shareId = shareId,
+                userId = userId,
                 onBackClick = { viewModel.processIntent(MainIntent.CloseShareViewer) }
             )
         }
@@ -371,7 +371,7 @@ fun MainScreen(
             || state.challengeCelebrationId != null
             || state.leaderboardChallengeId != null
             || state.showGlobalLeaderboard
-            || state.shareViewerId != null
+            || state.shareViewerUserId != null
         if (!anyOverlay) {
             BottomNavBar(
                 selectedTab = state.selectedTab,

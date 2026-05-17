@@ -33,14 +33,14 @@ class MainActivity : ComponentActivity() {
     private fun handleIntent(intent: Intent?) {
         intent ?: return
 
-        // betterme://share/{shareId} — verified share deep link. Handle
+        // betterme://share/{userId} — verified share deep link. Handle
         // first so notification extras below don't mask it.
         if (intent.action == Intent.ACTION_VIEW) {
             val data = intent.data
             if (data?.scheme == "betterme" && data.host == "share") {
-                val shareId = data.pathSegments.firstOrNull().orEmpty()
-                if (shareId.isNotBlank()) {
-                    deepLinkBus.publish(DeepLinkBus.Event.OpenShareViewer(shareId))
+                val userId = data.pathSegments.firstOrNull().orEmpty()
+                if (userId.isNotBlank()) {
+                    deepLinkBus.publish(DeepLinkBus.Event.OpenShareViewer(userId))
                     intent.data = null
                     return
                 }

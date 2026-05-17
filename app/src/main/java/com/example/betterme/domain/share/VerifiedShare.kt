@@ -1,26 +1,26 @@
 package com.example.betterme.domain.share
 
 /**
- * Server-verified share snapshot. This is the ONLY shape the Android
- * viewer ever renders — never local Room data, never screenshots,
- * never AI-detected content. The server's HMAC over the snapshot's
- * canonical JSON is the integrity primitive; if that check fails, the
- * repository returns [VerificationStatus.INVALID] and the viewer
- * surfaces a red "Không hợp lệ" state instead.
+ * A user's published progress snapshot, loaded directly from
+ * Firestore via the viewer screen.
  *
- * Field shape mirrors what `getShare` returns. Keep the field names
- * matching the wire DTO so the Retrofit mapper stays a trivial
- * one-liner per field.
+ * "Verified" here is the simple student-level interpretation:
+ *   - The data lives in Firestore at `/shared_progress/{userId}`.
+ *   - The viewer reads it directly from there, never from the
+ *     viewing device's local Room database.
+ *   - If the doc exists, the snapshot is treated as authentic.
+ *
+ * No HMAC, no signature, no per-row proof hash. The single point of
+ * authority is "Firestore says so." That is enough for the share-
+ * progress use case without the operational complexity of a Cloud
+ * Functions backend.
  */
 data class VerifiedShare(
-    val shareId: String,
     val userId: String,
-    val type: ShareType,
     val profile: VerifiedProfile,
     val summary: VerifiedSummary,
     val checkIns: List<VerifiedCheckIn>,
-    val createdAt: Long,
-    val expiresAt: Long
+    val publishedAt: Long
 )
 
 data class VerifiedProfile(
@@ -29,16 +29,13 @@ data class VerifiedProfile(
 )
 
 /**
- * Aggregate stats the backend computed at share-creation time. These
- * are SERVER-DERIVED — the client-submitted payload's totals are
- * recomputed by the function to prevent the user from inflating the
- * numbers in the share message they post to Messenger.
+ * Aggregate counts the publisher computed at share time. Stored
+ * inline on the snapshot doc so the viewer doesn't need to re-derive
+ * anything on read — one Firestore round trip and the screen has
+ * everything it needs.
  */
 data class VerifiedSummary(
     val totalCheckIns: Int,
-    val uniqueItems: Int,
-    val earliestTimestamp: Long,
-    val latestTimestamp: Long,
     val currentStreakDays: Int,
     val longestStreakDays: Int,
     val completedChallenges: Int,
@@ -46,33 +43,25 @@ data class VerifiedSummary(
 )
 
 /**
- * One check-in row. [proofHash] is one-way derived from
- * `SHA256(userId + itemId + timestamp + serverSecret)` so the viewer
- * can render a per-row "✔ Verified" badge without re-contacting the
- * server. A client cannot forge a row because it doesn't have the
- * secret.
- *
- * The hash itself is informational on the client side; the actual
- * trust boundary is the top-level HMAC validated by the server before
- * the snapshot is returned at all.
+ * One row in the shared timeline. [kind] is HABIT or CHALLENGE so the
+ * viewer can render the right emoji + grouping. No proof hash, no
+ * signature — the entire snapshot's authority is "exists in Firestore".
  */
 data class VerifiedCheckIn(
     val itemId: String,
-    val itemTitle: String,
-    val timestamp: Long,
+    val name: String,
     val kind: Kind,
-    val note: String?,
-    val proofHash: String
+    val date: Long
 ) {
     enum class Kind { HABIT, CHALLENGE }
 }
 
 /**
- * Status returned by `getShare` / `verifyShare`.
+ * Status the viewer surfaces.
  *
- *  - [VALID]     — HMAC matched, snapshot is fresh, payload safe to render.
- *  - [INVALID]   — Firestore doc was tampered with externally; refuse.
- *  - [NOT_FOUND] — never existed or expired.
- *  - [NETWORK]   — couldn't reach the function (no payload to render).
+ *  - [VALID]     — Firestore returned a snapshot doc for this userId.
+ *  - [NOT_FOUND] — userId exists but has never published progress, or
+ *                  the doc was deleted.
+ *  - [NETWORK]   — couldn't reach Firestore (offline, etc.).
  */
-enum class VerificationStatus { VALID, INVALID, NOT_FOUND, NETWORK }
+enum class VerificationStatus { VALID, NOT_FOUND, NETWORK }

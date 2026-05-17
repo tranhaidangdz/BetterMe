@@ -1,22 +1,20 @@
 package com.example.betterme.domain.share
 
 /**
- * Output of [com.example.betterme.domain.usecase.share.CreateShareUseCase].
- * Carries the URLs the share UI hands to ACTION_SEND.
+ * Result handed back to the UI after publishing a progress snapshot
+ * to Firestore. The viewer screen reads the snapshot doc at
+ * `/shared_progress/{userId}` so the deep link only needs the userId.
  *
- *  - [deepLink]    — `betterme://share/{shareId}`. Opens the in-app
+ *  - [deepLink]    — `betterme://share/{userId}`. Opens the in-app
  *                    viewer when BetterMe is installed.
- *  - [webLink]     — public HTTPS URL (cloud-functions or hosting
- *                    rewrite) that opens the server-rendered HTML
- *                    page for users without the app.
- *  - [richMessage] — the formatted Vietnamese text the user posts:
- *                    "🔥 Đã hoàn thành 87 check-in / 💪 chuỗi 12 ngày /
- *                     🏆 3 thử thách huyền thoại / Xác minh tại: ...".
+ *  - [richMessage] — Vietnamese text the user posts to Messenger,
+ *                    Zalo, Facebook. Includes the totals + the deep
+ *                    link so anyone with BetterMe gets a one-tap
+ *                    verified view.
  */
 data class ShareLink(
-    val shareId: String,
+    val userId: String,
     val deepLink: String,
-    val webLink: String,
     val richMessage: String,
-    val createdAt: Long
+    val publishedAt: Long
 )
