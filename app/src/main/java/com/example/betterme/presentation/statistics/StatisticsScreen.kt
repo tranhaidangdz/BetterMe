@@ -25,13 +25,26 @@ import org.koin.androidx.compose.koinViewModel
 fun StatisticsScreen(
     onBackClick: () -> Unit = {},
     onHabitClick: (Int) -> Unit = {},
-    viewModel: StatisticsViewModel = koinViewModel()
+    viewModel: StatisticsViewModel = koinViewModel(),
+    lifestyleVm: com.example.betterme.presentation.statistics.lifestyle.LifestyleInsightViewModel =
+        koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
+    val lifestyleState by lifestyleVm.viewState.collectAsState()
     var showRangePicker by remember { mutableStateOf(false) }
+
+    // Auto-load the coach insight once per screen entry. The VM short-circuits
+    // while Loading and the use case reads from the 24h cache when fresh, so a
+    // tab toggle / back-and-forth doesn't fire repeat OpenRouter calls.
+    LaunchedEffect(Unit) {
+        lifestyleVm.processIntent(
+            com.example.betterme.presentation.statistics.lifestyle.LifestyleInsightIntent.Analyze()
+        )
+    }
 
     StatisticsContent(
         state = state,
+        lifestyleState = lifestyleState,
         onTabSelected = { tab ->
             // Tapping "Tùy chọn" in the tab row opens the picker instead of dropping
             // the user on an empty CUSTOM tab with no range set. Every other tab
@@ -45,7 +58,14 @@ fun StatisticsScreen(
         onResetCustomRange = {
             viewModel.processIntent(StatisticsIntent.SelectTab(StatisticsTab.WEEKLY))
         },
-        onHabitClick = onHabitClick
+        onHabitClick = onHabitClick,
+        onRefreshLifestyleInsight = {
+            lifestyleVm.processIntent(
+                com.example.betterme.presentation.statistics.lifestyle.LifestyleInsightIntent.Analyze(
+                    forceRefresh = true
+                )
+            )
+        }
     )
 
     if (showRangePicker) {
@@ -69,12 +89,15 @@ fun StatisticsScreen(
 @Composable
 fun StatisticsContent(
     state: StatisticsState,
+    lifestyleState: com.example.betterme.presentation.statistics.lifestyle.LifestyleInsightState =
+        com.example.betterme.presentation.statistics.lifestyle.LifestyleInsightState(),
     onTabSelected: (StatisticsTab) -> Unit = {},
     onToggleSection: (ExpandedSection) -> Unit = {},
     onBackClick: () -> Unit = {},
     onOpenRangePicker: () -> Unit = {},
     onResetCustomRange: () -> Unit = {},
-    onHabitClick: (Int) -> Unit = {}
+    onHabitClick: (Int) -> Unit = {},
+    onRefreshLifestyleInsight: () -> Unit = {}
 ) {
     var showContent by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { showContent = true }
@@ -131,6 +154,28 @@ fun StatisticsContent(
                         streaks = state.streakAnalytics,
                         insights = state.additionalInsights,
                         challengeStats = state.challengeStats
+                    )
+                }
+            }
+
+            // ===== AI LIFESTYLE COACH =====
+            // Long-term adaptive insight card from the Lifestyle Insight Engine.
+            // Reads 14 days of habit completion + detected patterns; renders an
+            // inline coach card with scores, trend, and 1-4 sustainable
+            // suggestions. Auto-loads on screen entry via the LaunchedEffect
+            // wired in StatisticsScreen — no user gesture required.
+            item(key = "lifestyle_insight") {
+                AnimatedVisibility(
+                    visible = showContent &&
+                        lifestyleState.ui !is com.example.betterme.presentation.statistics.lifestyle.LifestyleInsightUi.Idle,
+                    enter = fadeIn(tween(500, delayMillis = 100)) + slideInVertically(
+                        initialOffsetY = { it / 4 },
+                        animationSpec = tween(500, delayMillis = 100)
+                    )
+                ) {
+                    com.example.betterme.presentation.statistics.lifestyle.LifestyleInsightCard(
+                        state = lifestyleState,
+                        onRefresh = onRefreshLifestyleInsight
                     )
                 }
             }

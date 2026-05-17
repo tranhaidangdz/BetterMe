@@ -9,6 +9,12 @@ import com.example.betterme.domain.ai.AiHabitInsightRepository.AiResult
 import com.example.betterme.domain.ai.AiHabitInsightRepository.AiSuggestResult
 import com.example.betterme.domain.ai.ScheduleHabitInput
 import com.example.betterme.domain.ai.SuggestedHabit
+import com.example.betterme.domain.ai.lifestyle.AdaptiveSuggestion
+import com.example.betterme.domain.ai.lifestyle.EnergyPattern
+import com.example.betterme.domain.ai.lifestyle.HabitCompletionRecord
+import com.example.betterme.domain.ai.lifestyle.LifestyleInsight
+import com.example.betterme.domain.ai.lifestyle.OverallTrend
+import com.example.betterme.domain.ai.lifestyle.SuggestionType
 import com.example.betterme.domain.ai.onboarding.Difficulty
 import com.example.betterme.domain.ai.onboarding.HabitCategoryKey
 import com.example.betterme.domain.ai.onboarding.OnboardingProfile
@@ -681,6 +687,275 @@ class AiHabitInsightRepositoryImpl(
     )
 
     // ============================================================
+    // ADAPTIVE LIFESTYLE INSIGHT ENGINE
+    // ============================================================
+    override suspend fun analyzeLifestyle(
+        lifestyle: UserLifestyleProfile?,
+        history: List<HabitCompletionRecord>,
+        missedPatterns: List<String>,
+        activeHabitTitles: List<String>,
+        wellnessSignals: List<String>
+    ): LifestyleInsight {
+        val effectiveLifestyle = lifestyle ?: UserLifestyleProfile.Default
+        val messages = listOf(
+            ChatMessage(role = "system", content = LIFESTYLE_SYSTEM_PROMPT),
+            ChatMessage(
+                role = "user",
+                content = buildLifestyleUserPrompt(
+                    effectiveLifestyle,
+                    history,
+                    missedPatterns,
+                    activeHabitTitles,
+                    wellnessSignals
+                )
+            )
+        )
+
+        var lastFailure: String? = null
+        for ((index, model) in FALLBACK_MODELS.withIndex()) {
+            val attempt = tryLifestyleModel(model, messages)
+            attempt.onSuccess { return it }
+            lastFailure = attempt.exceptionOrNull()?.message
+            Log.w(TAG, "Lifestyle model[$index]=$model failed: $lastFailure")
+        }
+
+        Log.w(TAG, "All lifestyle models exhausted — serving canned insight")
+        return cannedLifestyleInsight(history)
+    }
+
+    private suspend fun tryLifestyleModel(
+        model: String,
+        messages: List<ChatMessage>
+    ): Result<LifestyleInsight> {
+        Log.d(TAG, "Using model=$model")
+        return try {
+            val response = api.chatCompletion(
+                ChatRequest(
+                    model = model,
+                    messages = messages,
+                    maxTokens = LIFESTYLE_MAX_TOKENS,
+                    temperature = TEMPERATURE
+                )
+            )
+            if (response.error != null) {
+                return Result.failure(
+                    IllegalStateException(response.error.message ?: "AI từ chối yêu cầu")
+                )
+            }
+            val content = response.choices.firstOrNull()?.message?.content?.trim()
+            if (content.isNullOrBlank()) {
+                return Result.failure(IllegalStateException("AI không trả lời"))
+            }
+            val cleaned = content
+                .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+            val parsed = parseLifestyleInsight(cleaned)
+                ?: return Result.failure(IllegalStateException("AI trả về dữ liệu sai định dạng"))
+            Result.success(parsed)
+        } catch (e: java.net.SocketTimeoutException) {
+            Result.failure(IllegalStateException("Mạng chậm (504)"))
+        } catch (e: HttpException) {
+            Result.failure(IllegalStateException(extractHttpErrorMessage(e)))
+        } catch (e: java.io.IOException) {
+            Result.failure(IllegalStateException("Không thể kết nối đến AI"))
+        } catch (e: Exception) {
+            Log.e(TAG, "Lifestyle request threw", e)
+            Result.failure(e)
+        }
+    }
+
+    private fun buildLifestyleUserPrompt(
+        lifestyle: UserLifestyleProfile,
+        history: List<HabitCompletionRecord>,
+        missedPatterns: List<String>,
+        activeHabitTitles: List<String>,
+        wellnessSignals: List<String>
+    ): String = buildString {
+        appendLine("User profile:")
+        appendLine("- Sleep: ${lifestyle.sleepStart} → ${lifestyle.sleepEnd}")
+        appendLine("- Work: ${lifestyle.workStart} → ${lifestyle.workEnd}")
+        appendLine("- Activity level: ${lifestyle.activityLevel}")
+        appendLine()
+
+        appendLine("Habit completion history (last 14 days):")
+        if (history.isEmpty()) {
+            appendLine("[]")
+        } else {
+            appendLine("[")
+            history.forEachIndexed { i, r ->
+                val comma = if (i < history.size - 1) "," else ""
+                appendLine(
+                    "  { \"title\": \"${r.title}\", \"completionRate\": ${r.completionRate}, " +
+                        "\"preferredTime\": \"${r.preferredTime}\", " +
+                        "\"difficulty\": \"${r.difficulty}\" }$comma"
+                )
+            }
+            appendLine("]")
+        }
+        appendLine()
+
+        appendLine("Missed patterns:")
+        appendLine(
+            if (missedPatterns.isEmpty()) "[]"
+            else missedPatterns.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
+        )
+        appendLine()
+
+        appendLine("Current active habits:")
+        appendLine(
+            if (activeHabitTitles.isEmpty()) "[]"
+            else activeHabitTitles.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
+        )
+        appendLine()
+
+        appendLine("Wellness signals:")
+        appendLine(
+            if (wellnessSignals.isEmpty()) "[]"
+            else wellnessSignals.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
+        )
+    }
+
+    private fun parseLifestyleInsight(raw: String): LifestyleInsight? {
+        return try {
+            val dto = jsonParser.decodeFromString(LifestyleInsightDto.serializer(), raw)
+            val parsedSuggestions = dto.adaptiveSuggestions.take(4).mapNotNull { s ->
+                val type = parseEnum<SuggestionType>(s.type) ?: return@mapNotNull null
+                if (s.title.isBlank()) return@mapNotNull null
+                AdaptiveSuggestion(
+                    type = type,
+                    title = s.title.trim(),
+                    reason = s.reason.trim(),
+                    suggestion = s.suggestion.trim()
+                )
+            }
+            // Empty arrays not allowed by the spec — drop the whole insight as
+            // malformed if the model returned zero usable suggestions, the
+            // canned fallback will produce a MAINTAIN_STABILITY row.
+            if (parsedSuggestions.isEmpty()) return null
+            LifestyleInsight(
+                overallTrend = parseEnum<OverallTrend>(dto.overallTrend) ?: OverallTrend.STABLE,
+                burnoutRisk = parseEnum<BurnoutRisk>(dto.burnoutRisk) ?: BurnoutRisk.LOW,
+                consistencyScore = dto.consistencyScore.coerceIn(0, 100),
+                energyPattern = parseEnum<EnergyPattern>(dto.energyPattern)
+                    ?: EnergyPattern.INCONSISTENT,
+                recoveryScore = dto.recoveryScore.coerceIn(0, 100),
+                primaryInsight = dto.primaryInsight.trim(),
+                coachingMessage = dto.coachingMessage.trim(),
+                adaptiveSuggestions = parsedSuggestions,
+                isCanned = false
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse lifestyle JSON: $raw", e)
+            null
+        }
+    }
+
+    /**
+     * Deterministic local insight served when every OpenRouter model fails.
+     * Reads the same 14-day history the prompt would have received and produces
+     * a calibrated baseline: average completion rate drives the consistency
+     * score; any habit ≥ 21:00 with sub-50 completion triggers an IMPROVE_SLEEP
+     * suggestion; otherwise the user gets a MAINTAIN_STABILITY pat on the
+     * back. Mirrors the prompt's coaching stance so offline and online
+     * insights stay tonally aligned.
+     */
+    private fun cannedLifestyleInsight(history: List<HabitCompletionRecord>): LifestyleInsight {
+        if (history.isEmpty()) {
+            return LifestyleInsight(
+                overallTrend = OverallTrend.STABLE,
+                burnoutRisk = BurnoutRisk.LOW,
+                consistencyScore = 70,
+                energyPattern = EnergyPattern.INCONSISTENT,
+                recoveryScore = 70,
+                primaryInsight = "Hãy bắt đầu với một vài thói quen nhẹ để mình có dữ liệu phân tích.",
+                coachingMessage = "Khi bạn check-in đều trong ít nhất 7 ngày, mình sẽ đưa ra gợi ý sát hơn với nhịp sống của bạn.",
+                adaptiveSuggestions = listOf(
+                    AdaptiveSuggestion(
+                        type = SuggestionType.IMPROVE_CONSISTENCY,
+                        title = "Bắt đầu với 2-3 thói quen nhỏ",
+                        reason = "Chưa có dữ liệu hành vi để phân tích.",
+                        suggestion = "Hãy chọn 2-3 thói quen ngắn và duy trì đều trong tuần đầu."
+                    )
+                ),
+                isCanned = true
+            )
+        }
+
+        val avgCompletion = history.map { it.completionRate }.average().toInt()
+        val lateLowPerformers = history.filter { r ->
+            val parts = r.preferredTime.split(":")
+            val hour = parts.firstOrNull()?.toIntOrNull() ?: -1
+            hour >= 21 && r.completionRate < 50
+        }
+        val trend = when {
+            avgCompletion >= 75 -> OverallTrend.IMPROVING
+            avgCompletion >= 50 -> OverallTrend.STABLE
+            else -> OverallTrend.DECLINING
+        }
+        val burnout = when {
+            avgCompletion < 40 -> BurnoutRisk.MODERATE
+            lateLowPerformers.size >= 2 -> BurnoutRisk.MODERATE
+            else -> BurnoutRisk.LOW
+        }
+
+        val suggestion = when {
+            lateLowPerformers.isNotEmpty() -> AdaptiveSuggestion(
+                type = SuggestionType.IMPROVE_SLEEP,
+                title = "Cân nhắc dời thói quen tối sớm hơn",
+                reason = "Bạn thường bỏ lỡ ${lateLowPerformers.size} thói quen sau 21:00.",
+                suggestion = "Hãy thử dời các thói quen này sớm hơn 1-2 tiếng để dễ duy trì."
+            )
+            avgCompletion < 50 -> AdaptiveSuggestion(
+                type = SuggestionType.SIMPLIFY_ROUTINE,
+                title = "Đơn giản hoá lịch trình",
+                reason = "Tỉ lệ hoàn thành trung bình $avgCompletion% — có thể bạn đang ôm hơi nhiều.",
+                suggestion = "Tạm giảm còn 3-4 thói quen ưu tiên và giữ đều trong 2 tuần."
+            )
+            else -> AdaptiveSuggestion(
+                type = SuggestionType.MAINTAIN_STABILITY,
+                title = "Tiếp tục giữ nhịp hiện tại",
+                reason = "Bạn đang duy trì khá đều ở mức $avgCompletion%.",
+                suggestion = "Giữ nguyên các thói quen — sự nhất quán đáng giá hơn tăng cường độ."
+            )
+        }
+
+        return LifestyleInsight(
+            overallTrend = trend,
+            burnoutRisk = burnout,
+            consistencyScore = avgCompletion,
+            energyPattern = EnergyPattern.INCONSISTENT,
+            recoveryScore = (avgCompletion + 10).coerceAtMost(95),
+            primaryInsight = when (trend) {
+                OverallTrend.IMPROVING -> "Bạn đang giữ nhịp tốt với mức hoàn thành trung bình $avgCompletion%."
+                OverallTrend.STABLE -> "Nhịp thói quen của bạn ổn định, có chỗ để cải thiện nhẹ."
+                OverallTrend.DECLINING -> "Tuần qua hơi gấp với bạn — hãy nhẹ nhàng với chính mình."
+            },
+            coachingMessage = "Sự nhất quán quan trọng hơn cường độ. Hãy tập trung vào những thói quen bạn đã làm tốt thay vì thêm mới ngay.",
+            adaptiveSuggestions = listOf(suggestion),
+            isCanned = true
+        )
+    }
+
+    @Serializable
+    private data class LifestyleInsightDto(
+        val overallTrend: String = "STABLE",
+        val burnoutRisk: String = "LOW",
+        val consistencyScore: Int = 0,
+        val energyPattern: String = "INCONSISTENT",
+        val recoveryScore: Int = 0,
+        val primaryInsight: String = "",
+        val coachingMessage: String = "",
+        val adaptiveSuggestions: List<AdaptiveSuggestionDto> = emptyList()
+    )
+
+    @Serializable
+    private data class AdaptiveSuggestionDto(
+        val type: String = "",
+        val title: String = "",
+        val reason: String = "",
+        val suggestion: String = ""
+    )
+
+    // ============================================================
     // RETRY POLICY
     // ============================================================
     /**
@@ -966,6 +1241,11 @@ class AiHabitInsightRepositoryImpl(
          *  + top-level fields ≈ 400. 500 leaves Vietnamese expansion headroom. */
         const val ONBOARDING_MAX_TOKENS = 500
 
+        /** Lifestyle insight: 4 suggestions × ~40 tokens + primaryInsight +
+         *  coachingMessage + enum/score top-level ≈ 250. 400 covers Vietnamese
+         *  expansion. */
+        const val LIFESTYLE_MAX_TOKENS = 400
+
         const val RETRY_DELAY_MS = 800L
 
         /** Strict "HH:mm" 24-hour validator used everywhere a schedule string
@@ -1139,6 +1419,102 @@ class AiHabitInsightRepositoryImpl(
                   "estimatedMinutes": 15,
                   "reminderTime": "07:30",
                   "motivation": "string"
+                }
+              ]
+            }
+        """.trimIndent()
+
+        /**
+         * Finalized system prompt for the Adaptive Lifestyle Insight Engine.
+         * Encodes the coaching philosophy + healthy baseline + strict JSON
+         * output rules + suggestion-type disambiguators. The runtime user
+         * prompt is built per-call by [buildLifestyleUserPrompt].
+         */
+        val LIFESTYLE_SYSTEM_PROMPT = """
+            You are BetterMe's long-term lifestyle coaching AI.
+
+            Your job is to analyze the user's real habit behavior over time and generate adaptive coaching insights that feel supportive, sustainable, and personalized.
+
+            You are NOT a productivity coach. You prioritize:
+            - sustainability
+            - recovery balance
+            - emotional stability
+            - gradual improvement
+            - consistency over intensity
+
+            Avoid:
+            - guilt-based language
+            - shame
+            - toxic productivity
+            - unrealistic routines
+            - extreme discipline framing
+
+            The response must feel warm, practical, emotionally intelligent, concise.
+
+            You must analyze: habit completion consistency, missed habit patterns, sleep rhythm, late-night behavior, streak pressure, burnout risk, energy rhythm, schedule overload, recovery balance.
+
+            If the user is struggling: reduce intensity, simplify routines, encourage recovery, recommend fewer habits.
+            If the user is highly consistent: reinforce stability, avoid over-optimization, suggest only small improvements.
+
+            OUTPUT RULES:
+            - Return STRICT JSON only. No markdown, no code fences, no text outside the JSON object.
+            - All strings inside the JSON (primaryInsight, coachingMessage, adaptiveSuggestions.title / .reason / .suggestion) must be written in Vietnamese.
+            - primaryInsight ≤ 1 sentence; coachingMessage ≤ 2 sentences; each adaptiveSuggestions field ≤ 1 sentence.
+            - adaptiveSuggestions: 1–4 items. Never return an empty array.
+            - If the user is fully stable and no adjustment is needed, return exactly one suggestion of type MAINTAIN_STABILITY.
+
+            ENUMS (must match exactly):
+            - overallTrend:   IMPROVING | STABLE | DECLINING
+            - burnoutRisk:    LOW | MODERATE | HIGH
+            - energyPattern:  MORNING_PEAK | AFTERNOON_PEAK | EVENING_PEAK | INCONSISTENT
+            - adaptiveSuggestions.type:
+                REDUCE_INTENSITY     (lower the difficulty of existing habits)
+                SIMPLIFY_ROUTINE     (cut the total habit count)
+                IMPROVE_SLEEP        (prioritize sleep stabilization)
+                REDUCE_OVERLOAD      (spread habits across more time windows)
+                ADD_RECOVERY         (insert restorative habits / breaks)
+                IMPROVE_CONSISTENCY  (smaller, more frequent commitment)
+                MAINTAIN_STABILITY   ("keep going, you're doing fine")
+
+            SCORING:
+            - consistencyScore: integer 0–100, based on completion rate and skipped-habit frequency.
+            - recoveryScore:    integer 0–100, based on sleep stability, late-night load, and recovery balance.
+            - burnoutRisk HIGH when: many HARD habits, repeated late-night habits, declining completion, poor recovery rhythm.
+
+            ADAPTIVE COACHING RULES:
+            - User frequently misses evening habits → recommend lighter nights; don't add more evening tasks.
+            - User misses HARD habits repeatedly → reduce intensity before adding motivation advice.
+            - Sleep inconsistent → prioritize sleep stabilization first.
+            - User already performs well → avoid excessive optimization suggestions.
+            - Never recommend sleeping under 7h, extreme wake-up routines, or stacking many HARD habits together.
+
+            HEALTHY BASELINE (use only when user data is incomplete):
+            - Sleep 23:00 → 07:00, target 8h
+            - Work 08:30 → 17:30
+            - Avoid HARD habits after 21:00
+            - Morning 07-11 high energy; afternoon 13-17 moderate; 21+ reduced.
+
+            FALLBACK:
+            - Insufficient data → still return valid JSON, overallTrend = STABLE, burnoutRisk = LOW, supportive generic coaching.
+            - Fewer than 3 tracked habits → avoid strong behavioral claims; recommend gradual routine building.
+            - Sparse / inconsistent completion data → prioritize recovery and routine stability suggestions.
+            - Never return empty arrays or null fields. Always return fully valid JSON.
+
+            JSON SCHEMA:
+            {
+              "overallTrend": "STABLE",
+              "burnoutRisk": "LOW",
+              "consistencyScore": 82,
+              "energyPattern": "MORNING_PEAK",
+              "recoveryScore": 74,
+              "primaryInsight": "string",
+              "coachingMessage": "string",
+              "adaptiveSuggestions": [
+                {
+                  "type": "MAINTAIN_STABILITY",
+                  "title": "string",
+                  "reason": "string",
+                  "suggestion": "string"
                 }
               ]
             }

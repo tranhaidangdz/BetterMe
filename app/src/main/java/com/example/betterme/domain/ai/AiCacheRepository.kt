@@ -47,6 +47,11 @@ interface AiCacheRepository {
          *  the user finalizes their habit selection. */
         const val TYPE_ONBOARDING = "ONBOARDING"
 
+        /** Adaptive Lifestyle Insight Engine. Cached on the same 24h cadence
+         *  as schedule/onboarding — long-term coaching insights change slowly
+         *  and a daily refresh is the right rhythm. */
+        const val TYPE_LIFESTYLE_INSIGHT = "LIFESTYLE_INSIGHT"
+
         /** Default TTL — 12 hours. */
         const val TTL_MS_DEFAULT = 12L * 60L * 60L * 1000L
 

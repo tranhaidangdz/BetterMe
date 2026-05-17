@@ -1,5 +1,7 @@
 package com.example.betterme.domain.ai
 
+import com.example.betterme.domain.ai.lifestyle.HabitCompletionRecord
+import com.example.betterme.domain.ai.lifestyle.LifestyleInsight
 import com.example.betterme.domain.ai.onboarding.OnboardingProfile
 import com.example.betterme.domain.ai.onboarding.OnboardingSuggestion
 import com.example.betterme.domain.ai.schedule.ScheduleAnalysis
@@ -103,6 +105,30 @@ interface AiHabitInsightRepository {
         profile: OnboardingProfile,
         lifestyle: UserLifestyleProfile?
     ): OnboardingSuggestion
+
+    /**
+     * Long-term adaptive coaching. Reads a 14-day rollup of habit completion +
+     * detected behavioral patterns and returns gentle, sustainable adjustments.
+     * Always returns a [LifestyleInsight] — when every OpenRouter model fails,
+     * the repo serves a deterministic local "stable baseline" insight flagged
+     * `isCanned = true`.
+     *
+     * @param lifestyle             sleep / work / meal anchors; null → use Default.
+     * @param history               per-habit completion rollup, last 14 days.
+     * @param missedPatterns        detected behavioral patterns (e.g. "late-night habits",
+     *                              "weekend inconsistency"). Empty when no patterns.
+     * @param activeHabitTitles     just the active habit titles, for the prompt's
+     *                              "Current active habits" section.
+     * @param wellnessSignals       optional signals like "sleep-debt". Empty until
+     *                              BetterMe tracks mood/sleep explicitly.
+     */
+    suspend fun analyzeLifestyle(
+        lifestyle: UserLifestyleProfile?,
+        history: List<HabitCompletionRecord>,
+        missedPatterns: List<String>,
+        activeHabitTitles: List<String>,
+        wellnessSignals: List<String>
+    ): LifestyleInsight
 }
 
 /**
