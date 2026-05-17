@@ -52,6 +52,11 @@ interface AiCacheRepository {
          *  and a daily refresh is the right rhythm. */
         const val TYPE_LIFESTYLE_INSIGHT = "LIFESTYLE_INSIGHT"
 
+        /** AI Habit Creation Assistant — pre-save advisory check that surfaces
+         *  duplicates, time conflicts, overload risk before insertHabit().
+         *  Cached so re-trying the same form within the day doesn't burn quota. */
+        const val TYPE_HABIT_CREATION_ANALYSIS = "HABIT_CREATION_ANALYSIS"
+
         /** Default TTL — 12 hours. */
         const val TTL_MS_DEFAULT = 12L * 60L * 60L * 1000L
 

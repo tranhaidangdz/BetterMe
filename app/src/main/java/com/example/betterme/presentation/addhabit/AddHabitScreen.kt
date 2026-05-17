@@ -26,6 +26,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.betterme.R
+import com.example.betterme.presentation.addhabit.aicreation.HabitCreationAssistantBottomSheet
+import com.example.betterme.presentation.addhabit.aicreation.HabitCreationAssistantEvent
+import com.example.betterme.presentation.addhabit.aicreation.HabitCreationAssistantIntent
+import com.example.betterme.presentation.addhabit.aicreation.HabitCreationAssistantViewModel
 import com.example.betterme.presentation.addhabit.components.CategoryChipRow
 import com.example.betterme.presentation.addhabit.components.HabitPreviewCard
 import com.example.betterme.presentation.addhabit.components.SectionCard
@@ -57,9 +61,11 @@ import java.util.Locale
 fun AddHabitScreen(
     onBackClick: () -> Unit = {},
     onHabitAdded: () -> Unit = {},
-    viewModel: AddHabitViewModel = koinViewModel()
+    viewModel: AddHabitViewModel = koinViewModel(),
+    assistantVm: HabitCreationAssistantViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
+    val assistantState by assistantVm.viewState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Picker visibility flags — transient UI state, screen-local.
@@ -83,6 +89,20 @@ fun AddHabitScreen(
                     onBackClick()
                 }
                 is AddHabitEvent.ShowError -> snackbarHostState.showSnackbar(event.message)
+            }
+        }
+    }
+
+    // Bridge from the assistant VM back to the AddHabit submit pipeline.
+    // The sheet's "Vẫn tạo" button fires ConfirmedSave; we forward to the
+    // existing AddHabitIntent.Submit. Form state is unchanged — the assistant
+    // never mutates AddHabitState directly.
+    LaunchedEffect(Unit) {
+        assistantVm.singleEvent.collect { event ->
+            when (event) {
+                HabitCreationAssistantEvent.ConfirmedSave -> {
+                    viewModel.processIntent(AddHabitIntent.Submit)
+                }
             }
         }
     }
@@ -372,15 +392,35 @@ fun AddHabitScreen(
             }
 
             // ===== Sticky CTA =====
+            // Save first triggers the AI Creation Assistant for a quick pre-save
+            // review. The assistant emits ConfirmedSave on "Vẫn tạo" — handled
+            // by the LaunchedEffect above which dispatches the real Submit.
+            // The assistant never blocks: an Error state still surfaces "Vẫn
+            // tạo" so the user always reaches the original submit path.
             StickyCta(
                 accent = accent,
                 enabled = canSubmit,
                 isLoading = state.isLoading,
-                onClick = { viewModel.processIntent(AddHabitIntent.Submit) },
+                onClick = {
+                    assistantVm.processIntent(
+                        HabitCreationAssistantIntent.Analyze(
+                            title = state.title.trim(),
+                            categoryId = state.selectedCategoryId,
+                            reminderTime = state.reminderTime
+                        )
+                    )
+                },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(20.dp)
+            )
+
+            // AI Creation Assistant bottom sheet — modal, mounted at screen
+            // scope so it overlays the form and any open pickers cleanly.
+            HabitCreationAssistantBottomSheet(
+                state = assistantState,
+                onIntent = assistantVm::processIntent
             )
         }
     }

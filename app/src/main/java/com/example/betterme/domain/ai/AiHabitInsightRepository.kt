@@ -1,5 +1,7 @@
 package com.example.betterme.domain.ai
 
+import com.example.betterme.domain.ai.habitcreation.HabitCreationAnalysis
+import com.example.betterme.domain.ai.habitcreation.HabitCreationInput
 import com.example.betterme.domain.ai.lifestyle.HabitCompletionRecord
 import com.example.betterme.domain.ai.lifestyle.LifestyleInsight
 import com.example.betterme.domain.ai.onboarding.OnboardingProfile
@@ -129,6 +131,20 @@ interface AiHabitInsightRepository {
         activeHabitTitles: List<String>,
         wellnessSignals: List<String>
     ): LifestyleInsight
+
+    /**
+     * Pre-save advisory check fired when the user taps Save on the Add Habit
+     * form. Compares the new habit against the user's existing routine and
+     * returns warnings + sustainable alternatives. The result is **purely
+     * advisory** — the UI always proceeds to save on "Vẫn tạo" regardless of
+     * the analysis content; the assistant never blocks creation.
+     *
+     * Always returns a [HabitCreationAnalysis]. When every OpenRouter model
+     * in the fallback chain fails, the repo runs a deterministic rule-based
+     * local analysis (overlap, late-night, overload, duplicate title) and
+     * flags `isCanned = true`.
+     */
+    suspend fun analyzeHabitCreation(input: HabitCreationInput): HabitCreationAnalysis
 }
 
 /**

@@ -59,6 +59,7 @@ import com.example.betterme.data.ai.OpenRouterNetwork
 import com.example.betterme.data.repository.AiCacheRepositoryImpl
 import com.example.betterme.domain.ai.AiCacheRepository
 import com.example.betterme.domain.ai.AiHabitInsightRepository
+import com.example.betterme.domain.usecase.ai.AnalyzeHabitCreationUseCase
 import com.example.betterme.domain.usecase.ai.AnalyzeLifestyleUseCase
 import com.example.betterme.domain.usecase.ai.AnalyzeScheduleUseCase
 import com.example.betterme.domain.usecase.ai.ApplyScheduleSuggestionsUseCase
@@ -79,6 +80,7 @@ import com.example.betterme.presentation.onboarding.OnboardingViewModel
 import com.example.betterme.presentation.signin.SignInViewModel
 import com.example.betterme.presentation.main.MainViewModel
 import com.example.betterme.presentation.home.HomeViewModel
+import com.example.betterme.presentation.addhabit.aicreation.HabitCreationAssistantViewModel
 import com.example.betterme.presentation.dailyhabits.DailyHabitsViewModel
 import com.example.betterme.presentation.dailyhabits.schedule.ScheduleAnalysisViewModel
 import com.example.betterme.presentation.onboarding.ai.OnboardingAiViewModel
@@ -274,6 +276,9 @@ val useCaseModule = module {
     // Adaptive Lifestyle Insight — order: dataStore, habitRepo, habitLogRepo,
     // aiRepo, cache
     factory { AnalyzeLifestyleUseCase(get(), get(), get(), get(), get()) }
+    // Habit Creation Assistant — order: dataStore, habitRepo, habitLogRepo,
+    // categoryRepo, aiRepo, cache
+    factory { AnalyzeHabitCreationUseCase(get(), get(), get(), get(), get(), get()) }
 }
 
 val viewModelModule = module {
@@ -288,6 +293,7 @@ val viewModelModule = module {
     viewModelOf(::ScheduleAnalysisViewModel)
     viewModelOf(::OnboardingAiViewModel)
     viewModelOf(::LifestyleInsightViewModel)
+    viewModelOf(::HabitCreationAssistantViewModel)
     viewModelOf(::AddHabitViewModel)
     viewModelOf(::CategoryDetailViewModel)
     viewModelOf(::HabitDetailViewModel)

@@ -9,6 +9,13 @@ import com.example.betterme.domain.ai.AiHabitInsightRepository.AiResult
 import com.example.betterme.domain.ai.AiHabitInsightRepository.AiSuggestResult
 import com.example.betterme.domain.ai.ScheduleHabitInput
 import com.example.betterme.domain.ai.SuggestedHabit
+import com.example.betterme.domain.ai.habitcreation.CreationRiskLevel
+import com.example.betterme.domain.ai.habitcreation.CreationSuggestionType
+import com.example.betterme.domain.ai.habitcreation.HabitCreationAnalysis
+import com.example.betterme.domain.ai.habitcreation.HabitCreationInput
+import com.example.betterme.domain.ai.habitcreation.HabitCreationSuggestion
+import com.example.betterme.domain.ai.habitcreation.HabitCreationWarning
+import com.example.betterme.domain.ai.habitcreation.WarningType
 import com.example.betterme.domain.ai.lifestyle.AdaptiveSuggestion
 import com.example.betterme.domain.ai.lifestyle.EnergyPattern
 import com.example.betterme.domain.ai.lifestyle.HabitCompletionRecord
@@ -956,6 +963,263 @@ class AiHabitInsightRepositoryImpl(
     )
 
     // ============================================================
+    // HABIT CREATION ASSISTANT
+    // ============================================================
+    override suspend fun analyzeHabitCreation(input: HabitCreationInput): HabitCreationAnalysis {
+        val messages = listOf(
+            ChatMessage(role = "system", content = HABIT_CREATION_SYSTEM_PROMPT),
+            ChatMessage(role = "user", content = buildHabitCreationUserPrompt(input))
+        )
+
+        var lastFailure: String? = null
+        for ((index, model) in FALLBACK_MODELS.withIndex()) {
+            val attempt = tryHabitCreationModel(model, messages)
+            attempt.onSuccess { return it }
+            lastFailure = attempt.exceptionOrNull()?.message
+            Log.w(TAG, "HabitCreation model[$index]=$model failed: $lastFailure")
+        }
+
+        Log.w(TAG, "All habit-creation models exhausted — serving canned analysis")
+        return cannedHabitCreationAnalysis(input)
+    }
+
+    private suspend fun tryHabitCreationModel(
+        model: String,
+        messages: List<ChatMessage>
+    ): Result<HabitCreationAnalysis> {
+        Log.d(TAG, "Using model=$model")
+        return try {
+            val response = api.chatCompletion(
+                ChatRequest(
+                    model = model,
+                    messages = messages,
+                    maxTokens = HABIT_CREATION_MAX_TOKENS,
+                    temperature = TEMPERATURE
+                )
+            )
+            if (response.error != null) {
+                return Result.failure(
+                    IllegalStateException(response.error.message ?: "AI từ chối yêu cầu")
+                )
+            }
+            val content = response.choices.firstOrNull()?.message?.content?.trim()
+            if (content.isNullOrBlank()) {
+                return Result.failure(IllegalStateException("AI không trả lời"))
+            }
+            val cleaned = content
+                .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+            val parsed = parseHabitCreationAnalysis(cleaned)
+                ?: return Result.failure(IllegalStateException("AI trả về dữ liệu sai định dạng"))
+            Result.success(parsed)
+        } catch (e: java.net.SocketTimeoutException) {
+            Result.failure(IllegalStateException("Mạng chậm (504)"))
+        } catch (e: HttpException) {
+            Result.failure(IllegalStateException(extractHttpErrorMessage(e)))
+        } catch (e: java.io.IOException) {
+            Result.failure(IllegalStateException("Không thể kết nối đến AI"))
+        } catch (e: Exception) {
+            Log.e(TAG, "HabitCreation request threw", e)
+            Result.failure(e)
+        }
+    }
+
+    private fun buildHabitCreationUserPrompt(input: HabitCreationInput): String = buildString {
+        appendLine("New habit:")
+        appendLine("- title: \"${input.newHabit.title}\"")
+        if (input.newHabit.categoryName.isNotBlank())
+            appendLine("- category: \"${input.newHabit.categoryName}\"")
+        if (input.newHabit.reminderTime.isNotBlank())
+            appendLine("- reminderTime: ${input.newHabit.reminderTime}")
+        appendLine("- duration: ${input.newHabit.durationMinutes} min")
+        appendLine("- difficulty: ${input.newHabit.difficulty}")
+        appendLine("- frequency: ${input.newHabit.frequency}")
+        appendLine()
+
+        appendLine("Active habits (${input.activeHabits.size}):")
+        if (input.activeHabits.isEmpty()) appendLine("[]")
+        else input.activeHabits.forEach { h ->
+            appendLine(
+                "- \"${h.title}\" — ${h.categoryName}, ${h.reminderTime.ifBlank { "no reminder" }}, " +
+                    "${h.difficulty}, ${h.durationMinutes} min, ${h.frequency}"
+            )
+        }
+        appendLine()
+
+        if (input.recentCompletion.isNotEmpty()) {
+            appendLine("Recent 14-day completion:")
+            input.recentCompletion.forEach { r ->
+                appendLine("- \"${r.title}\": ${r.completionRate}%")
+            }
+            appendLine()
+        }
+
+        if (input.completedHabitTitles.isNotEmpty()) {
+            appendLine("Previously completed (journey done):")
+            appendLine(input.completedHabitTitles.joinToString(", ") { "\"$it\"" })
+            appendLine()
+        }
+        if (input.archivedHabitTitles.isNotEmpty()) {
+            appendLine("Archived / abandoned:")
+            appendLine(input.archivedHabitTitles.joinToString(", ") { "\"$it\"" })
+            appendLine()
+        }
+
+        appendLine("Lifestyle:")
+        appendLine("- Sleep: ${input.lifestyle.sleepStart} → ${input.lifestyle.sleepEnd}")
+        appendLine("- Work: ${input.lifestyle.workStart} → ${input.lifestyle.workEnd}")
+    }
+
+    private fun parseHabitCreationAnalysis(raw: String): HabitCreationAnalysis? {
+        return try {
+            val dto = jsonParser.decodeFromString(HabitCreationDto.serializer(), raw)
+            val warnings = dto.warnings.take(3).mapNotNull { w ->
+                val type = parseEnum<WarningType>(w.type) ?: return@mapNotNull null
+                if (w.message.isBlank()) return@mapNotNull null
+                HabitCreationWarning(type = type, message = w.message.trim())
+            }
+            val suggestions = dto.suggestions.take(3).mapNotNull { s ->
+                val type = parseEnum<CreationSuggestionType>(s.type) ?: return@mapNotNull null
+                if (s.message.isBlank()) return@mapNotNull null
+                HabitCreationSuggestion(type = type, message = s.message.trim())
+            }
+            HabitCreationAnalysis(
+                shouldWarn = dto.shouldWarn,
+                overallRisk = parseEnum<CreationRiskLevel>(dto.overallRisk)
+                    ?: CreationRiskLevel.LOW,
+                warnings = warnings,
+                suggestions = suggestions,
+                encouragement = dto.encouragement.trim(),
+                isCanned = false
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse habit-creation JSON: $raw", e)
+            null
+        }
+    }
+
+    /**
+     * Rule-based local analysis served when every OpenRouter model fails.
+     * Detects four conditions against the actual form input + user's existing
+     * habits — same boundaries the system prompt uses, so the offline result
+     * stays tonally aligned with what online would produce.
+     *
+     *   1. TIME_CONFLICT  — existing reminder within 15 min of the new one.
+     *   2. SLEEP_CONFLICT — new reminder at or after [HealthyDefaults.HARD_HABIT_LATEST_HOUR].
+     *   3. TOO_MANY_HABITS — user already has ≥ 8 active habits.
+     *   4. DUPLICATE_INTENT — substring match of the new title against any existing.
+     *
+     * Encouragement and risk level are calibrated to the strongest warning
+     * detected; if nothing fires we still produce a supportive "go for it"
+     * line with an empty warning list so the UI surfaces nothing alarming.
+     */
+    private fun cannedHabitCreationAnalysis(input: HabitCreationInput): HabitCreationAnalysis {
+        val warnings = mutableListOf<HabitCreationWarning>()
+        val suggestions = mutableListOf<HabitCreationSuggestion>()
+
+        val newMinutes = parseHhMm(input.newHabit.reminderTime)
+        // (1) Time conflict — pairwise check against active habits.
+        if (newMinutes != null) {
+            val collision = input.activeHabits.firstOrNull { h ->
+                val existing = parseHhMm(h.reminderTime) ?: return@firstOrNull false
+                kotlin.math.abs(existing - newMinutes) <= 15
+            }
+            if (collision != null) {
+                warnings += HabitCreationWarning(
+                    WarningType.TIME_CONFLICT,
+                    "Giờ nhắc mới sát với thói quen \"${collision.title}\" (${collision.reminderTime})."
+                )
+                suggestions += HabitCreationSuggestion(
+                    CreationSuggestionType.CHANGE_TIME,
+                    "Bạn có thể dời sang một khung khác cách ít nhất 15-30 phút để dễ duy trì cả hai."
+                )
+            }
+        }
+
+        // (2) Sleep conflict — late-night reminder.
+        if (newMinutes != null && newMinutes >= HealthyDefaults.HARD_HABIT_LATEST_HOUR * 60) {
+            warnings += HabitCreationWarning(
+                WarningType.SLEEP_CONFLICT,
+                "Thói quen này khá muộn (sau ${HealthyDefaults.HARD_HABIT_LATEST_HOUR}:00) — có thể ảnh hưởng nhịp ngủ."
+            )
+            suggestions += HabitCreationSuggestion(
+                CreationSuggestionType.CHANGE_TIME,
+                "Hãy thử dời sớm hơn 1-2 tiếng để dễ phục hồi và ngủ ngon hơn."
+            )
+        }
+
+        // (3) Too many habits.
+        if (input.activeHabits.size >= 8) {
+            warnings += HabitCreationWarning(
+                WarningType.TOO_MANY_HABITS,
+                "Bạn đang theo dõi ${input.activeHabits.size} thói quen — khá nhiều cho một ngày."
+            )
+            suggestions += HabitCreationSuggestion(
+                CreationSuggestionType.START_SMALLER,
+                "Cân nhắc tạm dừng 1-2 thói quen ít ưu tiên trước khi thêm cái mới."
+            )
+        }
+
+        // (4) Duplicate intent — fuzzy title overlap.
+        val newTitle = input.newHabit.title.trim().lowercase()
+        if (newTitle.length >= 3) {
+            val similar = input.activeHabits.firstOrNull { h ->
+                val existing = h.title.trim().lowercase()
+                existing.contains(newTitle) || newTitle.contains(existing)
+            }
+            if (similar != null) {
+                warnings += HabitCreationWarning(
+                    WarningType.DUPLICATE_INTENT,
+                    "Bạn đã có một thói quen khá giống: \"${similar.title}\"."
+                )
+                suggestions += HabitCreationSuggestion(
+                    CreationSuggestionType.REPLACE_EXISTING,
+                    "Có thể nâng cấp thói quen hiện tại sẽ bền vững hơn là tạo thêm một thói quen mới."
+                )
+            }
+        }
+
+        val risk = when {
+            warnings.any { it.type == WarningType.SLEEP_CONFLICT } -> CreationRiskLevel.MODERATE
+            warnings.size >= 2 -> CreationRiskLevel.MODERATE
+            warnings.isEmpty() -> CreationRiskLevel.LOW
+            else -> CreationRiskLevel.LOW
+        }
+        val encouragement = when {
+            warnings.isEmpty() -> "Một thói quen nhẹ nhàng nữa — chúc bạn duy trì đều đặn."
+            else -> "Bắt đầu nhẹ sẽ giúp bạn duy trì lâu dài hơn."
+        }
+        return HabitCreationAnalysis(
+            shouldWarn = warnings.isNotEmpty(),
+            overallRisk = risk,
+            warnings = warnings.take(3),
+            suggestions = suggestions.take(3),
+            encouragement = encouragement,
+            isCanned = true
+        )
+    }
+
+    @Serializable
+    private data class HabitCreationDto(
+        val shouldWarn: Boolean = false,
+        val overallRisk: String = "LOW",
+        val warnings: List<HabitCreationWarningDto> = emptyList(),
+        val suggestions: List<HabitCreationSuggestionDto> = emptyList(),
+        val encouragement: String = ""
+    )
+
+    @Serializable
+    private data class HabitCreationWarningDto(
+        val type: String = "",
+        val message: String = ""
+    )
+
+    @Serializable
+    private data class HabitCreationSuggestionDto(
+        val type: String = "",
+        val message: String = ""
+    )
+
+    // ============================================================
     // RETRY POLICY
     // ============================================================
     /**
@@ -1246,6 +1510,10 @@ class AiHabitInsightRepositoryImpl(
          *  expansion. */
         const val LIFESTYLE_MAX_TOKENS = 400
 
+        /** Habit-creation analysis: 3 warnings + 3 suggestions × ~30 tokens
+         *  each + encouragement + risk/shouldWarn ≈ 220. 300 leaves room. */
+        const val HABIT_CREATION_MAX_TOKENS = 300
+
         const val RETRY_DELAY_MS = 800L
 
         /** Strict "HH:mm" 24-hour validator used everywhere a schedule string
@@ -1518,6 +1786,90 @@ class AiHabitInsightRepositoryImpl(
                 }
               ]
             }
+        """.trimIndent()
+
+        /**
+         * Finalized system prompt for the AI Habit Creation Assistant. The
+         * assistant is ADVISORY — every output must respect that the user
+         * has the final word and will always be allowed to create the habit.
+         * Kept as one constant so the runtime user prompt (built per-call by
+         * [buildHabitCreationUserPrompt]) only carries the new habit and
+         * current routine.
+         */
+        val HABIT_CREATION_SYSTEM_PROMPT = """
+            You are BetterMe's supportive habit creation coach.
+
+            The user is about to save a new habit. Your job is to compare it against their
+            existing routine and surface gentle, sustainable adjustments BEFORE the habit
+            is saved. You are ADVISORY ONLY — the user always retains the final choice
+            and will be allowed to create the habit regardless of what you return.
+
+            COACHING PHILOSOPHY:
+            - Consistency over intensity.
+            - Sustainable progress, not toxic productivity.
+            - Never use guilt-based language. Never shame the user.
+            - Recommend smaller steps when needed. Encourage long-term retention.
+            - You are a supportive coach, not a strict validator.
+
+            ANALYZE the new habit for these issues:
+            - TIME_CONFLICT     — overlaps or is too close to an existing reminder (< 15 min gap)
+            - DUPLICATE_INTENT  — semantically similar to a habit the user already has
+            - OVERLOAD_RISK     — too many HARD habits, too much daily duration
+            - SLEEP_CONFLICT    — lands at or after 21:00, or inside the sleep window
+            - TOO_MANY_HABITS   — total active habit count is already ≥ 8
+            - REDUNDANT_CATEGORY — same category already well-covered
+            - TOO_INTENSE       — difficulty / duration not realistic for the user's load
+            - TOO_FREQUENT      — frequency unsustainable for the user's current pattern
+
+            SUGGESTION types you can return:
+            - MERGE_EXISTING     — combine the new habit into one already on the list
+            - REPLACE_EXISTING   — upgrade an existing habit instead of adding a new one
+            - REDUCE_INTENSITY   — lower the difficulty of the new habit
+            - REDUCE_FREQUENCY   — schedule less often than originally planned
+            - CHANGE_TIME        — pick a different reminder time
+            - START_SMALLER      — begin with a shorter duration / easier version
+            - TRY_ALTERNATIVE    — try a related but more sustainable habit
+
+            HEALTHY BASELINE:
+            - Sleep 23:00 → 07:00, target 8h.
+            - Work 08:30 → 17:30.
+            - Avoid HARD habits after 21:00 and within 2h before sleep.
+            - Leave 15-30 min between difficult habits. Max 3 habits in a 90-min window.
+            - Beginner users start with EASY or MEDIUM, not HARD.
+
+            OUTPUT RULES:
+            - Return STRICT JSON only. No markdown, no code fences, no text outside the JSON.
+            - All strings (warnings.message, suggestions.message, encouragement) in Vietnamese.
+            - No emojis. No guilt-based language. No toxic productivity advice.
+            - encouragement ≤ 1 sentence.
+            - Each warning.message ≤ 2 sentences. Each suggestion.message ≤ 2 sentences.
+            - At most 3 warnings. At most 3 suggestions.
+            - shouldWarn = true only when warnings is non-empty; false otherwise.
+
+            ENUMS (must match exactly):
+            - overallRisk: LOW | MODERATE | HIGH
+            - warnings.type: TIME_CONFLICT | DUPLICATE_INTENT | OVERLOAD_RISK | SLEEP_CONFLICT
+                           | TOO_MANY_HABITS | REDUNDANT_CATEGORY | TOO_INTENSE | TOO_FREQUENT
+            - suggestions.type: MERGE_EXISTING | REPLACE_EXISTING | REDUCE_INTENSITY
+                              | REDUCE_FREQUENCY | CHANGE_TIME | START_SMALLER | TRY_ALTERNATIVE
+
+            JSON SCHEMA:
+            {
+              "shouldWarn": true,
+              "overallRisk": "MODERATE",
+              "warnings": [
+                { "type": "DUPLICATE_INTENT", "message": "string" }
+              ],
+              "suggestions": [
+                { "type": "REPLACE_EXISTING", "message": "string" }
+              ],
+              "encouragement": "string"
+            }
+
+            FALLBACK:
+            - When the user's input is sparse (few existing habits, no completion history),
+              still return valid JSON, set shouldWarn = false, overallRisk = LOW,
+              warnings = [], and emit one supportive encouragement line.
         """.trimIndent()
     }
 }
