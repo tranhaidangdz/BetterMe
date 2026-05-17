@@ -2,24 +2,31 @@ package com.example.betterme.presentation.dailyhabits
 
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.betterme.R
 import com.example.betterme.presentation.components.view.BetterMeTopBar
@@ -28,16 +35,23 @@ import com.example.betterme.presentation.dailyhabits.components.FilterTabs
 import com.example.betterme.presentation.dailyhabits.components.HabitCard
 import com.example.betterme.presentation.dailyhabits.components.TasksEmptyState
 import com.example.betterme.presentation.dailyhabits.components.TasksHeroCard
+import com.example.betterme.presentation.dailyhabits.schedule.ScheduleAnalysisBottomSheet
+import com.example.betterme.presentation.dailyhabits.schedule.ScheduleAnalysisIntent
+import com.example.betterme.presentation.dailyhabits.schedule.ScheduleAnalysisViewModel
 import com.example.betterme.presentation.theme.BetterMeColors
+import com.example.betterme.presentation.theme.BetterMeTokens
+import com.example.betterme.presentation.theme.BetterMeTypography
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun DailyHabitsScreen(
     onBackClick: () -> Unit = {},
     onHabitClick: (Int) -> Unit = {},
-    viewModel: DailyHabitsViewModel = koinViewModel()
+    viewModel: DailyHabitsViewModel = koinViewModel(),
+    scheduleViewModel: ScheduleAnalysisViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
+    val scheduleState by scheduleViewModel.viewState.collectAsState()
 
     // Event-driven cross-midnight refresh. Fires once each time the screen
     // (re-)enters composition — including when the user toggles back to the
@@ -53,7 +67,18 @@ fun DailyHabitsScreen(
         state = state,
         onIntent = viewModel::processIntent,
         onBackClick = onBackClick,
-        onHabitClick = onHabitClick
+        onHabitClick = onHabitClick,
+        onAnalyzeSchedule = {
+            scheduleViewModel.processIntent(ScheduleAnalysisIntent.Analyze())
+        }
+    )
+
+    // Bottom-sheet renders only when scheduleState.ui != Idle. Living here at
+    // screen scope (not inside DailyHabitsContent) keeps it above the LazyColumn
+    // and lets it overlay the date strip + hero correctly.
+    ScheduleAnalysisBottomSheet(
+        state = scheduleState,
+        onIntent = scheduleViewModel::processIntent
     )
 }
 
@@ -62,7 +87,8 @@ fun DailyHabitsContent(
     state: DailyHabitsState,
     onIntent: (DailyHabitsIntent) -> Unit,
     onBackClick: () -> Unit = {},
-    onHabitClick: (Int) -> Unit = {}
+    onHabitClick: (Int) -> Unit = {},
+    onAnalyzeSchedule: () -> Unit = {}
 ) {
     // Hero counters derive from the unfiltered list for the selected date so the
     // ring stays anchored to "today's plan" rather than reflecting whichever
@@ -112,6 +138,13 @@ fun DailyHabitsContent(
                     isToday = isSelectedDateToday,
                     dayOffset = dayOffset
                 )
+            }
+
+            // AI Schedule Conflict Analyzer entry point. Sits as a thin pill just
+            // under the hero so it's discoverable without competing with the ring
+            // visually. Tapping opens the bottom sheet mounted at screen scope.
+            item(key = "analyze_schedule_pill") {
+                AnalyzeSchedulePill(onClick = onAnalyzeSchedule)
             }
 
             item(key = "date_selector") {
@@ -171,5 +204,42 @@ fun DailyHabitsContent(
                 )
             }
         }
+    }
+}
+
+/**
+ * Tap-to-analyze entry point for the Schedule Conflict Analyzer. Kept as a
+ * thin pill (not a hero CTA) so it offers the feature without dominating the
+ * Tasks screen visually.
+ */
+@Composable
+private fun AnalyzeSchedulePill(onClick: () -> Unit) {
+    val accent = BetterMeColors.Primary.Primary
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
+            .background(accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft))
+            .border(
+                width = 1.dp,
+                color = accent.copy(alpha = BetterMeTokens.AccentAlpha.Medium),
+                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Pill)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "🧠  Phân tích lịch trình",
+            style = BetterMeTypography.Body.Medium,
+            color = accent,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = "›",
+            style = BetterMeTypography.Title.Small.Bold,
+            color = accent
+        )
     }
 }

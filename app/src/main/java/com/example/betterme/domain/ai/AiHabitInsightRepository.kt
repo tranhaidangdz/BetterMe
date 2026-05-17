@@ -1,5 +1,8 @@
 package com.example.betterme.domain.ai
 
+import com.example.betterme.domain.ai.schedule.ScheduleAnalysis
+import com.example.betterme.domain.ai.schedule.UserLifestyleProfile
+
 /**
  * Single point of contact between the rest of the app and the AI provider.
  *
@@ -63,7 +66,42 @@ interface AiHabitInsightRepository {
         ) : AiSuggestResult()
         data class Failure(val message: String) : AiSuggestResult()
     }
+
+    /**
+     * Analyzes a habit schedule for overlaps, overload, sleep balance, transition
+     * realism, and burnout risk. Always returns a [ScheduleAnalysis] — when every
+     * model in the fallback chain fails, a handwritten local analysis is served
+     * with `isCanned = true` so the UI never has to handle a hard error path.
+     *
+     * @param profile sleep / wake / work-hours context. Pass null to use [UserLifestyleProfile.Default].
+     * @param habits  domain-side input shape (see [ScheduleHabitInput]); the use
+     *                case translates from [com.example.betterme.data.local.room.entities.HabitEntity].
+     */
+    suspend fun analyzeSchedule(
+        profile: UserLifestyleProfile?,
+        habits: List<ScheduleHabitInput>
+    ): ScheduleAnalysis
 }
+
+/**
+ * Per-habit input row the schedule analyzer expects in its runtime user prompt.
+ *
+ * BetterMe's [com.example.betterme.data.local.room.entities.HabitEntity] doesn't
+ * yet store [difficulty], [priority] or [estimatedMinutes]; the use case fills
+ * defaults until those fields are surfaced through the Add Habit form. Keeping
+ * the input shape rich now means the prompt is future-proof without churn here.
+ */
+data class ScheduleHabitInput(
+    val id: Int,
+    val title: String,
+    /** "HH:mm" 24-hour. Habits without a reminder are filtered out by the use case. */
+    val reminderTime: String,
+    /** EASY | MEDIUM | HARD. */
+    val difficulty: String,
+    /** LOW | MEDIUM | HIGH. */
+    val priority: String,
+    val estimatedMinutes: Int
+)
 
 /**
  * One AI-generated habit suggestion. All fields are user-visible — the AI is

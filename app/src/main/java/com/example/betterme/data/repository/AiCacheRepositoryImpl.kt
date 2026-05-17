@@ -9,10 +9,10 @@ class AiCacheRepositoryImpl(
     private val dao: AiCacheDao
 ) : AiCacheRepository {
 
-    override suspend fun getFresh(categoryId: Int, type: String): String? {
+    override suspend fun getFresh(categoryId: Int, type: String, ttlMs: Long): String? {
         val row = dao.get(categoryId, type) ?: return null
         val age = System.currentTimeMillis() - row.createdAt
-        return if (age in 0..AiCacheRepository.TTL_MS) row.content else null
+        return if (age in 0..ttlMs) row.content else null
     }
 
     override suspend fun getAny(categoryId: Int, type: String): CachedEntry? {

@@ -15,12 +15,13 @@ interface AiCacheRepository {
 
     /**
      * Returns the cached content if a fresh row exists, else null. Freshness is
-     * defined by [TTL_MS] from the row's `createdAt`.
+     * defined by [ttlMs] from the row's `createdAt`. Callers that don't need
+     * a custom TTL keep using the default [TTL_MS_DEFAULT] (12h).
      *
-     * Returns the *raw* string — REVIEW rows are plain text; SUGGESTIONS rows are
-     * JSON the caller must decode.
+     * Returns the *raw* string — REVIEW rows are plain text; SUGGESTIONS and
+     * SCHEDULE_ANALYSIS rows are JSON the caller must decode.
      */
-    suspend fun getFresh(categoryId: Int, type: String): String?
+    suspend fun getFresh(categoryId: Int, type: String, ttlMs: Long = TTL_MS_DEFAULT): String?
 
     /** Returns the row (fresh or stale) — useful for offline fallback UI. */
     suspend fun getAny(categoryId: Int, type: String): CachedEntry?
@@ -37,8 +38,18 @@ interface AiCacheRepository {
     companion object {
         const val TYPE_REVIEW = "REVIEW"
         const val TYPE_SUGGESTIONS = "SUGGESTIONS"
-        /** 12 hours — long enough that a single user session doesn't re-hit the model
-         *  for the same screen, short enough that stale stats don't haunt the UI. */
-        const val TTL_MS = 12L * 60L * 60L * 1000L
+        /** Schedule conflict analyzer results. Cached longer because the user's
+         *  schedule doesn't change every hour. */
+        const val TYPE_SCHEDULE_ANALYSIS = "SCHEDULE_ANALYSIS"
+
+        /** Default TTL — 12 hours. */
+        const val TTL_MS_DEFAULT = 12L * 60L * 60L * 1000L
+
+        /** Schedule analyzer TTL — 24 hours. The user's schedule is stable enough
+         *  to amortize one analysis per day. */
+        const val TTL_MS_SCHEDULE = 24L * 60L * 60L * 1000L
+
+        /** @deprecated use [TTL_MS_DEFAULT]. Kept for binary compatibility. */
+        const val TTL_MS = TTL_MS_DEFAULT
     }
 }

@@ -59,6 +59,8 @@ import com.example.betterme.data.ai.OpenRouterNetwork
 import com.example.betterme.data.repository.AiCacheRepositoryImpl
 import com.example.betterme.domain.ai.AiCacheRepository
 import com.example.betterme.domain.ai.AiHabitInsightRepository
+import com.example.betterme.domain.usecase.ai.AnalyzeScheduleUseCase
+import com.example.betterme.domain.usecase.ai.ApplyScheduleSuggestionsUseCase
 import com.example.betterme.domain.usecase.ai.GenerateHabitGroupReviewUseCase
 import com.example.betterme.domain.usecase.ai.SuggestHabitsForCategoryUseCase
 import com.example.betterme.domain.usecase.user.GetUserUseCase
@@ -76,6 +78,7 @@ import com.example.betterme.presentation.signin.SignInViewModel
 import com.example.betterme.presentation.main.MainViewModel
 import com.example.betterme.presentation.home.HomeViewModel
 import com.example.betterme.presentation.dailyhabits.DailyHabitsViewModel
+import com.example.betterme.presentation.dailyhabits.schedule.ScheduleAnalysisViewModel
 import com.example.betterme.presentation.addhabit.AddHabitViewModel
 import com.example.betterme.presentation.categorydetail.CategoryDetailViewModel
 import com.example.betterme.presentation.habitdetail.HabitDetailViewModel
@@ -256,6 +259,9 @@ val useCaseModule = module {
     // AI use cases — last `get()` is the AiCacheRepository.
     factory { GenerateHabitGroupReviewUseCase(get(), get(), get(), get(), get()) }
     factory { SuggestHabitsForCategoryUseCase(get(), get(), get(), get()) }
+    // Schedule Conflict Analyzer
+    factory { AnalyzeScheduleUseCase(get(), get(), get(), get()) }
+    factory { ApplyScheduleSuggestionsUseCase(get(), get(), get()) }
 }
 
 val viewModelModule = module {
@@ -267,6 +273,7 @@ val viewModelModule = module {
     viewModelOf(::MainViewModel)
     viewModelOf(::HomeViewModel)
     viewModelOf(::DailyHabitsViewModel)
+    viewModelOf(::ScheduleAnalysisViewModel)
     viewModelOf(::AddHabitViewModel)
     viewModelOf(::CategoryDetailViewModel)
     viewModelOf(::HabitDetailViewModel)

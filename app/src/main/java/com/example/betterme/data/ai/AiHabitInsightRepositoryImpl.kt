@@ -7,7 +7,15 @@ import com.example.betterme.domain.ai.AiCoachPersonality
 import com.example.betterme.domain.ai.AiHabitInsightRepository
 import com.example.betterme.domain.ai.AiHabitInsightRepository.AiResult
 import com.example.betterme.domain.ai.AiHabitInsightRepository.AiSuggestResult
+import com.example.betterme.domain.ai.ScheduleHabitInput
 import com.example.betterme.domain.ai.SuggestedHabit
+import com.example.betterme.domain.ai.schedule.BurnoutRisk
+import com.example.betterme.domain.ai.schedule.ConflictType
+import com.example.betterme.domain.ai.schedule.EnergyLevel
+import com.example.betterme.domain.ai.schedule.OptimizedHabitTime
+import com.example.betterme.domain.ai.schedule.ScheduleAnalysis
+import com.example.betterme.domain.ai.schedule.ScheduleConflict
+import com.example.betterme.domain.ai.schedule.UserLifestyleProfile
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -108,6 +116,255 @@ class AiHabitInsightRepositoryImpl(
         Log.w(TAG, "All suggest models exhausted — serving canned suggestions")
         return AiSuggestResult.Success(suggestions = cannedSuggestions(), isCanned = true)
     }
+
+    // ============================================================
+    // SCHEDULE CONFLICT ANALYZER
+    // ============================================================
+    override suspend fun analyzeSchedule(
+        profile: UserLifestyleProfile?,
+        habits: List<ScheduleHabitInput>
+    ): ScheduleAnalysis {
+        val withReminders = habits.filter { it.reminderTime.matches(HHMM_REGEX) }
+        if (withReminders.size < 2) {
+            // Match the prompt's empty-data contract. No model call needed.
+            return emptyDataAnalysis()
+        }
+
+        val effectiveProfile = profile ?: UserLifestyleProfile.Default
+        val systemPrompt = SCHEDULE_SYSTEM_PROMPT
+        val userPrompt = buildScheduleUserPrompt(withReminders, effectiveProfile)
+        val messages = listOf(
+            ChatMessage(role = "system", content = systemPrompt),
+            ChatMessage(role = "user", content = userPrompt)
+        )
+
+        var lastFailure: String? = null
+        for ((index, model) in FALLBACK_MODELS.withIndex()) {
+            // No retryOnTransient wrapper here: the existing `isTransientFailure`
+            // signature is tied to AiResult/AiSuggestResult sealed types and would
+            // be a no-op on Result<ScheduleAnalysis>. The 4-model chain itself
+            // already provides redundancy for transient 429/5xx — when one model
+            // throttles, the next probably has fresh quota.
+            val attempt = tryScheduleModel(model, messages)
+            attempt.onSuccess { return it }
+            lastFailure = attempt.exceptionOrNull()?.message
+            Log.w(TAG, "Schedule model[$index]=$model failed: $lastFailure")
+        }
+
+        Log.w(TAG, "All schedule models exhausted — serving canned analysis")
+        return cannedScheduleAnalysis(withReminders)
+    }
+
+    private suspend fun tryScheduleModel(
+        model: String,
+        messages: List<ChatMessage>
+    ): Result<ScheduleAnalysis> {
+        Log.d(TAG, "Using model=$model")
+        return try {
+            val response = api.chatCompletion(
+                ChatRequest(
+                    model = model,
+                    messages = messages,
+                    // 300 tokens fits the bounded output: 3 conflicts × ~30 tokens
+                    // + 5 optimizations × ~10 tokens + summary + positiveFeedback +
+                    // top-level enums + scores. Headroom for occasional Vietnamese
+                    // multi-byte expansion.
+                    maxTokens = SCHEDULE_MAX_TOKENS,
+                    temperature = TEMPERATURE
+                )
+            )
+            if (response.error != null) {
+                return Result.failure(
+                    IllegalStateException(response.error.message ?: "AI từ chối yêu cầu")
+                )
+            }
+            val content = response.choices.firstOrNull()?.message?.content?.trim()
+            if (content.isNullOrBlank()) {
+                return Result.failure(IllegalStateException("AI không trả lời"))
+            }
+            val cleaned = content
+                .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+            val parsed = parseScheduleAnalysis(cleaned)
+                ?: return Result.failure(IllegalStateException("AI trả về dữ liệu sai định dạng"))
+            Result.success(parsed)
+        } catch (e: java.net.SocketTimeoutException) {
+            Result.failure(IllegalStateException("Mạng chậm (504)"))
+        } catch (e: HttpException) {
+            // Reuse the existing HTTP error mapper for friendly Vietnamese reasons.
+            // Wrapped as IllegalStateException so the retry path sees it as a
+            // transient signal when the code is 429/5xx and a fatal signal otherwise.
+            Result.failure(IllegalStateException(extractHttpErrorMessage(e)))
+        } catch (e: java.io.IOException) {
+            Result.failure(IllegalStateException("Không thể kết nối đến AI"))
+        } catch (e: Exception) {
+            Log.e(TAG, "Schedule request threw", e)
+            Result.failure(e)
+        }
+    }
+
+    private fun buildScheduleUserPrompt(
+        habits: List<ScheduleHabitInput>,
+        profile: UserLifestyleProfile
+    ): String = buildString {
+        appendLine("Habits:")
+        habits.forEach { h ->
+            appendLine(
+                "- \"${h.title}\" — ${h.reminderTime}, ${h.difficulty} difficulty, " +
+                    "${h.priority} priority, ${h.estimatedMinutes} min"
+            )
+        }
+        appendLine()
+        appendLine("Sleep: ${profile.sleepStart} → ${profile.sleepEnd}")
+        appendLine("Work: ${profile.workStart} → ${profile.workEnd}")
+    }
+
+    private fun parseScheduleAnalysis(raw: String): ScheduleAnalysis? {
+        return try {
+            val dto = jsonParser.decodeFromString(ScheduleAnalysisDto.serializer(), raw)
+            ScheduleAnalysis(
+                hasConflict = dto.hasConflict,
+                scheduleScore = dto.scheduleScore.coerceIn(0, 100),
+                energyLevel = parseEnum<EnergyLevel>(dto.energyLevel) ?: EnergyLevel.MODERATE,
+                burnoutRisk = parseEnum<BurnoutRisk>(dto.burnoutRisk) ?: BurnoutRisk.LOW,
+                summary = dto.summary.trim(),
+                positiveFeedback = dto.positiveFeedback.trim(),
+                conflicts = dto.conflicts.take(3).mapNotNull { c ->
+                    val parsedType = parseEnum<ConflictType>(c.type) ?: return@mapNotNull null
+                    if (c.habitA.isBlank()) return@mapNotNull null
+                    ScheduleConflict(
+                        type = parsedType,
+                        habitA = c.habitA.trim(),
+                        habitB = c.habitB?.trim()?.takeIf { it.isNotEmpty() },
+                        issue = c.issue.trim(),
+                        suggestion = c.suggestion.trim()
+                    )
+                },
+                optimizedSchedule = dto.optimizedSchedule.take(5).mapNotNull { o ->
+                    if (o.habit.isBlank()) return@mapNotNull null
+                    if (!o.suggestedTime.matches(HHMM_REGEX)) return@mapNotNull null
+                    OptimizedHabitTime(habit = o.habit.trim(), suggestedTime = o.suggestedTime)
+                },
+                isCanned = false
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse schedule JSON: $raw", e)
+            null
+        }
+    }
+
+    /**
+     * Enum-safe parser. Returns null instead of throwing so the caller can fall
+     * back to a sensible default instead of dropping the whole analysis when
+     * the model returns a value outside the pinned enum.
+     */
+    private inline fun <reified E : Enum<E>> parseEnum(raw: String?): E? {
+        val cleaned = raw?.trim()?.uppercase() ?: return null
+        return runCatching { enumValueOf<E>(cleaned) }.getOrNull()
+    }
+
+    /**
+     * Empty-data response served when the user has fewer than 2 habits with
+     * reminder times. Matches the prompt's contract so the UI doesn't need
+     * a separate "no data" branch.
+     */
+    private fun emptyDataAnalysis(): ScheduleAnalysis = ScheduleAnalysis(
+        hasConflict = false,
+        scheduleScore = 100,
+        energyLevel = EnergyLevel.MODERATE,
+        burnoutRisk = BurnoutRisk.LOW,
+        summary = "Chưa đủ dữ liệu để phân tích",
+        positiveFeedback = "",
+        conflicts = emptyList(),
+        optimizedSchedule = emptyList(),
+        isCanned = false
+    )
+
+    /**
+     * Local deterministic fallback when every OpenRouter model fails. Detects only
+     * the simplest case (two reminders within 15 minutes) — a real analysis would
+     * be a much bigger rule engine. Returning *some* meaningful insight is
+     * preferable to a blank error card: the user sees the most obvious overlap
+     * and a generic positive line.
+     */
+    private fun cannedScheduleAnalysis(habits: List<ScheduleHabitInput>): ScheduleAnalysis {
+        // Pairwise scan for reminders within 15 minutes of each other.
+        val sorted = habits
+            .mapNotNull { h -> h.toMinutesOrNull()?.let { h to it } }
+            .sortedBy { it.second }
+        val overlap = sorted.zipWithNext { a, b ->
+            if (b.second - a.second <= 15) Triple(a.first.title, b.first.title, a.first.reminderTime to b.first.reminderTime)
+            else null
+        }.firstOrNull { it != null }
+
+        return if (overlap != null) {
+            ScheduleAnalysis(
+                hasConflict = true,
+                scheduleScore = 70,
+                energyLevel = EnergyLevel.MODERATE,
+                burnoutRisk = BurnoutRisk.LOW,
+                summary = "Lịch trình của bạn nhìn chung ổn, có một khoảng chuyển tiếp khá gấp.",
+                positiveFeedback = "Bạn đang duy trì lịch trình đều đặn — đó là điểm cộng quan trọng.",
+                conflicts = listOf(
+                    ScheduleConflict(
+                        type = ConflictType.TRANSITION,
+                        habitA = overlap.first,
+                        habitB = overlap.second,
+                        issue = "Hai thói quen này sát nhau, có thể tạo cảm giác vội vàng.",
+                        suggestion = "Hãy cân nhắc dời một trong hai sang muộn hơn ~15 phút."
+                    )
+                ),
+                optimizedSchedule = emptyList(),
+                isCanned = true
+            )
+        } else {
+            ScheduleAnalysis(
+                hasConflict = false,
+                scheduleScore = 85,
+                energyLevel = EnergyLevel.MODERATE,
+                burnoutRisk = BurnoutRisk.LOW,
+                summary = "Lịch trình của bạn nhìn chung khá cân đối.",
+                positiveFeedback = "Bạn đang duy trì lịch trình đều đặn — đó là điểm cộng quan trọng.",
+                conflicts = emptyList(),
+                optimizedSchedule = emptyList(),
+                isCanned = true
+            )
+        }
+    }
+
+    private fun ScheduleHabitInput.toMinutesOrNull(): Int? {
+        val parts = reminderTime.split(":")
+        if (parts.size != 2) return null
+        val h = parts[0].toIntOrNull() ?: return null
+        val m = parts[1].toIntOrNull() ?: return null
+        return h * 60 + m
+    }
+
+    @Serializable
+    private data class ScheduleAnalysisDto(
+        val hasConflict: Boolean = false,
+        val scheduleScore: Int = 0,
+        val energyLevel: String = "MODERATE",
+        val burnoutRisk: String = "LOW",
+        val summary: String = "",
+        val positiveFeedback: String = "",
+        val conflicts: List<ScheduleConflictDto> = emptyList(),
+        val optimizedSchedule: List<OptimizedHabitTimeDto> = emptyList()
+    )
+
+    @Serializable
+    private data class ScheduleConflictDto(
+        val type: String = "",
+        val habitA: String = "",
+        val habitB: String? = null,
+        val issue: String = "",
+        val suggestion: String = ""
+    )
+
+    @Serializable
+    private data class OptimizedHabitTimeDto(
+        val habit: String = "",
+        val suggestedTime: String = ""
+    )
 
     // ============================================================
     // RETRY POLICY
@@ -387,6 +644,92 @@ class AiHabitInsightRepositoryImpl(
         const val MAX_TOKENS = 120
         const val TEMPERATURE = 0.6
 
+        /** Schedule analyzer needs more headroom: 3 conflicts + 5 optimizations +
+         *  summary + positiveFeedback + enum/scores. 300 covers Vietnamese text. */
+        const val SCHEDULE_MAX_TOKENS = 300
+
         const val RETRY_DELAY_MS = 800L
+
+        /** Strict "HH:mm" 24-hour validator used everywhere a schedule string
+         *  enters the pipeline (input filtering AND parsing the model's output). */
+        val HHMM_REGEX = Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
+
+        /**
+         * Finalized system prompt for the schedule analyzer. Mirrors the
+         * production spec we converged on after several refinement rounds.
+         * Kept as a single constant so future tweaks happen in one place.
+         */
+        val SCHEDULE_SYSTEM_PROMPT = """
+            You are an intelligent AI habit coach inside a self-improvement app called BetterMe.
+
+            Your task is to analyze the user's daily habit schedule and detect:
+            - overlapping or overly close habit times
+            - unrealistic durations
+            - overloaded time blocks
+            - insufficient recovery time
+            - unhealthy sleep schedules
+            - difficult tasks scheduled too late at night
+            - burnout-prone routines
+            - unrealistic transitions between activities
+
+            STYLE:
+            - Supportive, encouraging, and realistic.
+            - Never sound robotic, judgmental, negative, or overly strict.
+            - Do not force the user to change habits.
+            - Give gentle and sustainable suggestions.
+            - Prioritize long-term consistency over extreme optimization.
+            - Do not provide medical advice.
+
+            ANALYSIS RULES:
+            - HIGH priority habits should be preserved more carefully than LOW priority ones.
+            - HARD habits consume more energy than EASY ones.
+            - Multiple HARD habits scheduled close together raise burnoutRisk.
+
+            BURNOUT RISK RULES:
+            - HIGH: 2+ HARD habits within 90 min, OR sleep duration under 6h.
+            - MODERATE: 1 HARD + 3+ habits inside a 3-hour window, OR HARD after 21:00.
+            - LOW: otherwise.
+
+            SCHEDULE SCORE RULES:
+            - Start from 100. Subtract: 10/OVERLAP, 15/OVERLOAD, 20/POOR_SLEEP, 10/LATE_NIGHT, 5/TRANSITION. Min 0.
+
+            OUTPUT RULES:
+            - Return STRICT JSON ONLY. No markdown, no ```json block, no text outside the object.
+            - All strings in Vietnamese.
+            - summary / issue / suggestion / positiveFeedback are each ≤ 1 sentence.
+            - At most 3 conflicts. At most 5 optimizedSchedule items.
+            - suggestedTime uses HH:mm 24-hour.
+            - If a conflict isn't about two specific habits, set habitB = null.
+            - optimizedSchedule contains ONLY habits that truly need rescheduling.
+            - If fewer than 2 habits have reminder times: hasConflict=false,
+              summary="Chưa đủ dữ liệu để phân tích", conflicts=[], optimizedSchedule=[].
+
+            ENUMS (exact uppercase):
+            - energyLevel: LOW | MODERATE | HIGH
+            - burnoutRisk: LOW | MODERATE | HIGH
+            - conflict type: OVERLAP | OVERLOAD | POOR_SLEEP | LATE_NIGHT | TRANSITION
+
+            JSON SCHEMA:
+            {
+              "hasConflict": true,
+              "scheduleScore": 78,
+              "energyLevel": "MODERATE",
+              "burnoutRisk": "LOW",
+              "summary": "Lịch trình buổi sáng hơi dày nhưng vẫn duy trì được.",
+              "positiveFeedback": "Giờ ngủ của bạn khá ổn định.",
+              "conflicts": [
+                {
+                  "type": "OVERLAP",
+                  "habitA": "Morning Workout",
+                  "habitB": "Reading",
+                  "issue": "Hai thói quen quá sát nhau.",
+                  "suggestion": "Dời Reading sang 07:30 cho thoải mái."
+                }
+              ],
+              "optimizedSchedule": [
+                { "habit": "Reading", "suggestedTime": "07:30" }
+              ]
+            }
+        """.trimIndent()
     }
 }
