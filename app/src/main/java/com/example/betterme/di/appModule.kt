@@ -66,11 +66,15 @@ import com.example.betterme.data.leaderboard.LeaderboardSessionMemory
 import com.example.betterme.data.leaderboard.MotivationalEventEngine
 import com.example.betterme.data.leaderboard.RankSnapshotStore
 import com.example.betterme.data.repository.AiCacheRepositoryImpl
+import com.example.betterme.data.share.ShareApi
+import com.example.betterme.data.share.ShareApiClient
+import com.example.betterme.data.share.ShareRepositoryImpl
 import com.example.betterme.domain.ai.AiCacheRepository
 import com.example.betterme.domain.ai.AiHabitInsightRepository
 import com.example.betterme.domain.ai.AiHomeSessionMemory
 import com.example.betterme.domain.repository.ChallengeLeaderboardRepository
 import com.example.betterme.domain.repository.GlobalLeaderboardRepository
+import com.example.betterme.domain.repository.ShareRepository
 import com.example.betterme.domain.usecase.ai.AnalyzeHabitCreationUseCase
 import com.example.betterme.domain.usecase.ai.AnalyzeHabitProgressionUseCase
 import com.example.betterme.domain.usecase.ai.AnalyzeHabitRecoveryUseCase
@@ -84,6 +88,8 @@ import com.example.betterme.domain.usecase.leaderboard.GetLeaderboardProfileUseC
 import com.example.betterme.domain.usecase.leaderboard.GetMonthlyWinnersUseCase
 import com.example.betterme.domain.usecase.leaderboard.SyncGlobalLeaderboardUseCase
 import com.example.betterme.domain.usecase.leaderboard.SyncMyChallengeScoreUseCase
+import com.example.betterme.domain.usecase.share.CreateShareUseCase
+import com.example.betterme.domain.usecase.share.LoadSharedSnapshotUseCase
 import com.example.betterme.domain.usecase.ai.ApplyScheduleSuggestionsUseCase
 import com.example.betterme.domain.usecase.ai.GenerateHabitGroupReviewUseCase
 import com.example.betterme.domain.usecase.ai.SuggestHabitsForCategoryUseCase
@@ -107,6 +113,8 @@ import com.example.betterme.presentation.home.progression.HabitProgressionAssist
 import com.example.betterme.presentation.home.recovery.HabitRecoveryAssistantViewModel
 import com.example.betterme.presentation.leaderboard.LeaderboardViewModel
 import com.example.betterme.presentation.leaderboard.global.GlobalLeaderboardViewModel
+import com.example.betterme.presentation.share.sheet.ShareProgressViewModel
+import com.example.betterme.presentation.share.viewer.ShareViewerViewModel
 import com.example.betterme.presentation.dailyhabits.DailyHabitsViewModel
 import com.example.betterme.presentation.dailyhabits.schedule.ScheduleAnalysisViewModel
 import com.example.betterme.presentation.onboarding.ai.OnboardingAiViewModel
@@ -291,6 +299,12 @@ val repositoryModule = module {
         )
     }
 
+    // Phase 4 — Verified Share stack. Retrofit instance points at
+    // BuildConfig.SHARE_FUNCTIONS_BASE_URL; Firebase Auth supplies
+    // the bearer token per call inside ShareRepositoryImpl.
+    single<ShareApi> { ShareApiClient.create() }
+    single<ShareRepository> { ShareRepositoryImpl(api = get(), auth = get()) }
+
     // Image upload repo: Cloudinary if configured, local-passthrough otherwise. Pick at
     // DI time so the rest of the app never has to branch on whether the cloud is set up.
     single<ImageUploadRepository> {
@@ -375,6 +389,12 @@ val useCaseModule = module {
     // SyncGlobalLeaderboard — order: dataStore, habitRepo, habitLogRepo,
     // userChallengeRepo, challengeLogRepo, globalLeaderboardRepository.
     factory { SyncGlobalLeaderboardUseCase(get(), get(), get(), get(), get(), get()) }
+
+    // Phase 4 — Verified Share use cases.
+    // CreateShareUseCase order: dataStore, habitRepo, habitLogRepo,
+    // userChallengeRepo, challengeLogRepo, shareRepository.
+    factory { CreateShareUseCase(get(), get(), get(), get(), get(), get()) }
+    factory { LoadSharedSnapshotUseCase(get()) }
 }
 
 val viewModelModule = module {
@@ -394,6 +414,8 @@ val viewModelModule = module {
     viewModelOf(::HabitProgressionAssistantViewModel)
     viewModelOf(::LeaderboardViewModel)
     viewModelOf(::GlobalLeaderboardViewModel)
+    viewModelOf(::ShareProgressViewModel)
+    viewModelOf(::ShareViewerViewModel)
     viewModelOf(::AddHabitViewModel)
     viewModelOf(::CategoryDetailViewModel)
     viewModelOf(::HabitDetailViewModel)

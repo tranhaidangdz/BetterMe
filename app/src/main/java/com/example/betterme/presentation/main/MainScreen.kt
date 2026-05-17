@@ -24,6 +24,8 @@ import com.example.betterme.presentation.challenge.completed.ChallengeCompletedS
 import com.example.betterme.presentation.challenge.detail.ChallengeDetailScreen
 import com.example.betterme.presentation.leaderboard.LeaderboardScreen
 import com.example.betterme.presentation.leaderboard.global.GlobalLeaderboardScreen
+import com.example.betterme.presentation.share.sheet.ShareProgressBottomSheet
+import com.example.betterme.presentation.share.viewer.ShareViewerScreen
 import com.example.betterme.presentation.challenge.discover.ChallengeDiscoverScreen
 import com.example.betterme.presentation.challenge.group.ChallengeGroupScreen
 import com.example.betterme.presentation.challenge.overview.ChallengeOverviewScreen
@@ -62,6 +64,8 @@ fun MainScreen(
                     )
                 is DeepLinkBus.Event.OpenHabitDetail ->
                     viewModel.processIntent(MainIntent.OpenHabitDetail(event.habitId))
+                is DeepLinkBus.Event.OpenShareViewer ->
+                    viewModel.processIntent(MainIntent.OpenShareViewer(event.shareId))
             }
         }
     }
@@ -132,6 +136,9 @@ fun MainScreen(
                 // full historical check-in calendar + log list.
                 onHabitClick = { habitId ->
                     viewModel.processIntent(MainIntent.OpenHabitDetail(habitId))
+                },
+                onOpenShare = {
+                    viewModel.processIntent(MainIntent.OpenShareProgressSheet)
                 }
             )
         }
@@ -329,10 +336,25 @@ fun MainScreen(
             )
         }
 
-        // Phase 2B — Global Leaderboard overlay (tabbed). Top-most.
+        // Phase 2B — Global Leaderboard overlay (tabbed).
         if (state.showGlobalLeaderboard) {
             GlobalLeaderboardScreen(
                 onBackClick = { viewModel.processIntent(MainIntent.CloseGlobalLeaderboard) }
+            )
+        }
+
+        // Phase 4 — Verified Share viewer (deep link target + in-app preview).
+        state.shareViewerId?.let { shareId ->
+            ShareViewerScreen(
+                shareId = shareId,
+                onBackClick = { viewModel.processIntent(MainIntent.CloseShareViewer) }
+            )
+        }
+
+        // Phase 4 — Share Progress bottom sheet (entry point from Statistics).
+        if (state.showShareProgressSheet) {
+            ShareProgressBottomSheet(
+                onDismiss = { viewModel.processIntent(MainIntent.CloseShareProgressSheet) }
             )
         }
 
@@ -349,6 +371,7 @@ fun MainScreen(
             || state.challengeCelebrationId != null
             || state.leaderboardChallengeId != null
             || state.showGlobalLeaderboard
+            || state.shareViewerId != null
         if (!anyOverlay) {
             BottomNavBar(
                 selectedTab = state.selectedTab,

@@ -19,6 +19,9 @@ class DeepLinkBus {
         data class OpenChallengePreview(val challengeId: Int) : Event()
         /** Notification tap → open Habit Detail for the given habitId. */
         data class OpenHabitDetail(val habitId: Int) : Event()
+        /** External deep link `betterme://share/{shareId}` — opens the
+         *  verified share viewer overlay. */
+        data class OpenShareViewer(val shareId: String) : Event()
     }
 
     private val _events = MutableSharedFlow<Event>(extraBufferCapacity = 4)

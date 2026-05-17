@@ -32,6 +32,21 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         intent ?: return
+
+        // betterme://share/{shareId} — verified share deep link. Handle
+        // first so notification extras below don't mask it.
+        if (intent.action == Intent.ACTION_VIEW) {
+            val data = intent.data
+            if (data?.scheme == "betterme" && data.host == "share") {
+                val shareId = data.pathSegments.firstOrNull().orEmpty()
+                if (shareId.isNotBlank()) {
+                    deepLinkBus.publish(DeepLinkBus.Event.OpenShareViewer(shareId))
+                    intent.data = null
+                    return
+                }
+            }
+        }
+
         val userChallengeId = intent.getIntExtra(
             ChallengeReminderWorker.EXTRA_OPEN_USER_CHALLENGE_ID, -1
         )

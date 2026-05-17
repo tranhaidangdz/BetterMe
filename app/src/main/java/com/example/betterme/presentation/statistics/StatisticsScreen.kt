@@ -25,6 +25,7 @@ import org.koin.androidx.compose.koinViewModel
 fun StatisticsScreen(
     onBackClick: () -> Unit = {},
     onHabitClick: (Int) -> Unit = {},
+    onOpenShare: () -> Unit = {},
     viewModel: StatisticsViewModel = koinViewModel(),
     lifestyleVm: com.example.betterme.presentation.statistics.lifestyle.LifestyleInsightViewModel =
         koinViewModel()
@@ -65,7 +66,8 @@ fun StatisticsScreen(
                     forceRefresh = true
                 )
             )
-        }
+        },
+        onShareClick = onOpenShare
     )
 
     if (showRangePicker) {
@@ -97,7 +99,8 @@ fun StatisticsContent(
     onOpenRangePicker: () -> Unit = {},
     onResetCustomRange: () -> Unit = {},
     onHabitClick: (Int) -> Unit = {},
-    onRefreshLifestyleInsight: () -> Unit = {}
+    onRefreshLifestyleInsight: () -> Unit = {},
+    onShareClick: () -> Unit = {}
 ) {
     var showContent by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { showContent = true }
@@ -119,7 +122,8 @@ fun StatisticsContent(
                 StatisticsHeader(
                     selectedTab = state.selectedTab,
                     onTabSelected = onTabSelected,
-                    onBackClick = onBackClick
+                    onBackClick = onBackClick,
+                    onShareClick = onShareClick
                 )
             }
 

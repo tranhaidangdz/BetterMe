@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -26,6 +27,7 @@ fun StatisticsHeader(
     selectedTab: StatisticsTab,
     onTabSelected: (StatisticsTab) -> Unit,
     onBackClick: () -> Unit,
+    onShareClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -50,8 +52,16 @@ fun StatisticsHeader(
                 color = BetterMeColors.Text.TextPrimary
             )
             Spacer(modifier = Modifier.weight(1f))
-            // Placeholder for symmetry
-            Spacer(modifier = Modifier.size(48.dp))
+            // Phase 4 — opens the Verified Share bottom sheet so the user
+            // can publish a server-signed snapshot. 48.dp footprint keeps
+            // the header symmetric against the back button on the left.
+            IconButton(onClick = onShareClick) {
+                Icon(
+                    imageVector = Icons.Filled.Share,
+                    contentDescription = "Chia sẻ tiến độ",
+                    tint = BetterMeColors.Primary.Primary
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))

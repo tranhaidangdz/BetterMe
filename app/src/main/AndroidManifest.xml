@@ -39,6 +39,17 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Verified-share deep link: betterme://share/{shareId}.
+                 MainActivity reads the Intent's data URI on launch and
+                 forwards to MainIntent.OpenShareViewer when the host
+                 is "share". BROWSABLE so external apps (Messenger,
+                 Zalo, Facebook) can open it. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="betterme" android:host="share" />
+            </intent-filter>
         </activity>
 
         <provider

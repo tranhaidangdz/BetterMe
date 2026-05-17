@@ -26,7 +26,11 @@ data class MainState(
     val leaderboardChallengeId: Int? = null,
     val leaderboardChallengeTitle: String = "",
     /** Phase 2B — global leaderboard overlay (tabbed Global / Friends / Winners). */
-    val showGlobalLeaderboard: Boolean = false
+    val showGlobalLeaderboard: Boolean = false,
+    /** Phase 4 — server-verified share viewer. Non-null shareId opens the overlay. */
+    val shareViewerId: String? = null,
+    /** Phase 4 — bottom sheet for creating a new verified share. */
+    val showShareProgressSheet: Boolean = false
 ) : MviViewState
 
 sealed class MainIntent : MviIntent {
@@ -66,6 +70,12 @@ sealed class MainIntent : MviIntent {
     /** Phase 2B — open / close the global tabbed leaderboard. */
     data object OpenGlobalLeaderboard : MainIntent()
     data object CloseGlobalLeaderboard : MainIntent()
+
+    /** Phase 4 — verified share viewer + creator sheet. */
+    data class OpenShareViewer(val shareId: String) : MainIntent()
+    data object CloseShareViewer : MainIntent()
+    data object OpenShareProgressSheet : MainIntent()
+    data object CloseShareProgressSheet : MainIntent()
 }
 
 sealed class MainEvent : MviSingleEvent

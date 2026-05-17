@@ -79,6 +79,10 @@ class MainViewModel : BaseMviViewModel<MainIntent, MainState, MainEvent>() {
             }
             MainIntent.OpenGlobalLeaderboard -> updateState { copy(showGlobalLeaderboard = true) }
             MainIntent.CloseGlobalLeaderboard -> updateState { copy(showGlobalLeaderboard = false) }
+            is MainIntent.OpenShareViewer -> updateState { copy(shareViewerId = intent.shareId) }
+            MainIntent.CloseShareViewer -> updateState { copy(shareViewerId = null) }
+            MainIntent.OpenShareProgressSheet -> updateState { copy(showShareProgressSheet = true) }
+            MainIntent.CloseShareProgressSheet -> updateState { copy(showShareProgressSheet = false) }
         }
     }
 }
