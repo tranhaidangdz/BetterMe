@@ -24,6 +24,7 @@ import com.example.betterme.presentation.challenge.completed.ChallengeCompletedS
 import com.example.betterme.presentation.challenge.detail.ChallengeDetailScreen
 import com.example.betterme.presentation.leaderboard.LeaderboardScreen
 import com.example.betterme.presentation.leaderboard.global.GlobalLeaderboardScreen
+import com.example.betterme.presentation.share.profile.PublicProfileScreen
 import com.example.betterme.presentation.share.sheet.ShareProgressBottomSheet
 import com.example.betterme.presentation.share.viewer.ShareViewerScreen
 import com.example.betterme.presentation.challenge.discover.ChallengeDiscoverScreen
@@ -66,6 +67,8 @@ fun MainScreen(
                     viewModel.processIntent(MainIntent.OpenHabitDetail(event.habitId))
                 is DeepLinkBus.Event.OpenShareViewer ->
                     viewModel.processIntent(MainIntent.OpenShareViewer(event.userId))
+                is DeepLinkBus.Event.OpenPublicProfile ->
+                    viewModel.processIntent(MainIntent.OpenPublicProfile(event.userId))
             }
         }
     }
@@ -358,6 +361,14 @@ fun MainScreen(
             )
         }
 
+        // Phase 4b — Public profile overlay (deep link betterme://profile/{userId}).
+        state.publicProfileUserId?.let { userId ->
+            PublicProfileScreen(
+                userId = userId,
+                onBackClick = { viewModel.processIntent(MainIntent.ClosePublicProfile) }
+            )
+        }
+
         // Bottom Nav Bar — ẩn khi overlay đang mở
         val anyOverlay = state.categoryDetailId != null
             || state.habitDetailId != null
@@ -372,6 +383,7 @@ fun MainScreen(
             || state.leaderboardChallengeId != null
             || state.showGlobalLeaderboard
             || state.shareViewerUserId != null
+            || state.publicProfileUserId != null
         if (!anyOverlay) {
             BottomNavBar(
                 selectedTab = state.selectedTab,

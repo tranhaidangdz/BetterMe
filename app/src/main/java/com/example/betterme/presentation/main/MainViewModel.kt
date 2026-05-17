@@ -83,6 +83,8 @@ class MainViewModel : BaseMviViewModel<MainIntent, MainState, MainEvent>() {
             MainIntent.CloseShareViewer -> updateState { copy(shareViewerUserId = null) }
             MainIntent.OpenShareProgressSheet -> updateState { copy(showShareProgressSheet = true) }
             MainIntent.CloseShareProgressSheet -> updateState { copy(showShareProgressSheet = false) }
+            is MainIntent.OpenPublicProfile -> updateState { copy(publicProfileUserId = intent.userId) }
+            MainIntent.ClosePublicProfile -> updateState { copy(publicProfileUserId = null) }
         }
     }
 }

@@ -30,7 +30,9 @@ data class MainState(
     /** Phase 4 — verified share viewer. Non-null userId opens the overlay. */
     val shareViewerUserId: String? = null,
     /** Phase 4 — bottom sheet for publishing a new verified share. */
-    val showShareProgressSheet: Boolean = false
+    val showShareProgressSheet: Boolean = false,
+    /** Phase 4b — public profile screen. Non-null userId opens the overlay. */
+    val publicProfileUserId: String? = null
 ) : MviViewState
 
 sealed class MainIntent : MviIntent {
@@ -76,6 +78,10 @@ sealed class MainIntent : MviIntent {
     data object CloseShareViewer : MainIntent()
     data object OpenShareProgressSheet : MainIntent()
     data object CloseShareProgressSheet : MainIntent()
+
+    /** Phase 4b — public profile screen overlay. */
+    data class OpenPublicProfile(val userId: String) : MainIntent()
+    data object ClosePublicProfile : MainIntent()
 }
 
 sealed class MainEvent : MviSingleEvent

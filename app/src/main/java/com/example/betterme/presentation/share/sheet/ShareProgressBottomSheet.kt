@@ -31,6 +31,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.betterme.domain.share.VerifiedShare
+import com.example.betterme.presentation.share.utils.ShareCardRenderer
 import com.example.betterme.presentation.share.utils.ShareIntentHelper
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTokens
@@ -102,11 +104,22 @@ fun ShareProgressBottomSheet(
                 ShareProgressUi.Idle, ShareProgressUi.Publishing -> PublishingBody()
                 is ShareProgressUi.Ready -> ReadyBody(
                     deepLink = ui.link.deepLink,
+                    snapshot = ui.share,
                     onShareAgain = {
                         ShareIntentHelper.shareText(
                             context = context,
                             subject = "Tiến độ BetterMe của tôi",
                             text = ui.link.richMessage
+                        )
+                    },
+                    onShareImage = {
+                        val snapshot = ui.share ?: return@ReadyBody
+                        val uri = ShareCardRenderer(context).renderToUri(snapshot)
+                        ShareIntentHelper.shareImage(
+                            context = context,
+                            imageUri = uri,
+                            subject = "Tiến độ BetterMe của tôi",
+                            caption = ui.link.richMessage
                         )
                     }
                 )
@@ -182,7 +195,12 @@ private fun PublishingBody() {
 }
 
 @Composable
-private fun ReadyBody(deepLink: String, onShareAgain: () -> Unit) {
+private fun ReadyBody(
+    deepLink: String,
+    snapshot: VerifiedShare?,
+    onShareAgain: () -> Unit,
+    onShareImage: () -> Unit
+) {
     Column {
         Text(
             text = "✅  Đã xuất bản — link sẵn sàng để chia sẻ.",
@@ -193,7 +211,44 @@ private fun ReadyBody(deepLink: String, onShareAgain: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         LinkBlock(label = "Link chia sẻ", url = deepLink)
         Spacer(Modifier.height(14.dp))
-        PrimaryButton(label = "Chia sẻ lại", onClick = onShareAgain)
+        PrimaryButton(label = "Chia sẻ link", onClick = onShareAgain)
+        // Image-share button stays disabled until the snapshot
+        // re-read completes (one extra Firestore round trip after
+        // publish — see ShareProgressViewModel).
+        Spacer(Modifier.height(8.dp))
+        SecondaryButton(
+            label = if (snapshot != null) "📸  Chia sẻ hình ảnh"
+            else "Đang chuẩn bị hình ảnh…",
+            enabled = snapshot != null,
+            onClick = onShareImage
+        )
+    }
+}
+
+@Composable
+private fun SecondaryButton(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val accent = BetterMeColors.Primary.Primary
+    val alpha = if (enabled) 1f else 0.45f
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
+            .background(accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft * alpha))
+            .clickable(enabled = enabled) { onClick() }
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = BetterMeTypography.Body.Medium,
+            color = accent.copy(alpha = alpha),
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 

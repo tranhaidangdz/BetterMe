@@ -22,6 +22,9 @@ class DeepLinkBus {
         /** External deep link `betterme://share/{userId}` — opens the
          *  verified share viewer overlay. */
         data class OpenShareViewer(val userId: String) : Event()
+        /** External deep link `betterme://profile/{userId}` — opens
+         *  the public profile overlay (same data, profile layout). */
+        data class OpenPublicProfile(val userId: String) : Event()
     }
 
     private val _events = MutableSharedFlow<Event>(extraBufferCapacity = 4)

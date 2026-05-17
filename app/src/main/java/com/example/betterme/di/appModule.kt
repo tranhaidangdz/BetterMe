@@ -111,6 +111,7 @@ import com.example.betterme.presentation.home.progression.HabitProgressionAssist
 import com.example.betterme.presentation.home.recovery.HabitRecoveryAssistantViewModel
 import com.example.betterme.presentation.leaderboard.LeaderboardViewModel
 import com.example.betterme.presentation.leaderboard.global.GlobalLeaderboardViewModel
+import com.example.betterme.presentation.share.profile.PublicProfileViewModel
 import com.example.betterme.presentation.share.sheet.ShareProgressViewModel
 import com.example.betterme.presentation.share.viewer.ShareViewerViewModel
 import com.example.betterme.presentation.dailyhabits.DailyHabitsViewModel
@@ -413,6 +414,7 @@ val viewModelModule = module {
     viewModelOf(::GlobalLeaderboardViewModel)
     viewModelOf(::ShareProgressViewModel)
     viewModelOf(::ShareViewerViewModel)
+    viewModelOf(::PublicProfileViewModel)
     viewModelOf(::AddHabitViewModel)
     viewModelOf(::CategoryDetailViewModel)
     viewModelOf(::HabitDetailViewModel)

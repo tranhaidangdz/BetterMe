@@ -33,16 +33,26 @@ class MainActivity : ComponentActivity() {
     private fun handleIntent(intent: Intent?) {
         intent ?: return
 
-        // betterme://share/{userId} — verified share deep link. Handle
-        // first so notification extras below don't mask it.
+        // betterme://share/{userId} OR betterme://profile/{userId} —
+        // both forward into Main overlays. Handle first so notification
+        // extras below don't mask them.
         if (intent.action == Intent.ACTION_VIEW) {
             val data = intent.data
-            if (data?.scheme == "betterme" && data.host == "share") {
+            if (data?.scheme == "betterme") {
                 val userId = data.pathSegments.firstOrNull().orEmpty()
                 if (userId.isNotBlank()) {
-                    deepLinkBus.publish(DeepLinkBus.Event.OpenShareViewer(userId))
-                    intent.data = null
-                    return
+                    when (data.host) {
+                        "share" -> {
+                            deepLinkBus.publish(DeepLinkBus.Event.OpenShareViewer(userId))
+                            intent.data = null
+                            return
+                        }
+                        "profile" -> {
+                            deepLinkBus.publish(DeepLinkBus.Event.OpenPublicProfile(userId))
+                            intent.data = null
+                            return
+                        }
+                    }
                 }
             }
         }

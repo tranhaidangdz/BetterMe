@@ -1,11 +1,10 @@
-package com.example.betterme.presentation.share.viewer
+package com.example.betterme.presentation.share.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,8 +26,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,51 +40,36 @@ import com.example.betterme.presentation.components.view.BetterMeTopBar
 import com.example.betterme.presentation.share.components.ShareCheckInRow
 import com.example.betterme.presentation.share.components.ShareSummaryGrid
 import com.example.betterme.presentation.share.components.VerifiedFirebaseBadge
+import com.example.betterme.presentation.share.components.VerifiedFirebaseBadgeCompact
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTokens
 import com.example.betterme.presentation.theme.BetterMeTypography
-import kotlinx.coroutines.flow.collectLatest
 import org.koin.androidx.compose.koinViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
- * Public viewer that opens on `betterme://share/{userId}` deep links
- * or in-app preview. Renders only data returned by the Firestore
- * snapshot at `/shared_progress/{userId}` — never falls back to local
- * Room.
+ * Public profile surface — entered via `betterme://profile/{userId}`
+ * or in-app navigation. Renders the same Firestore snapshot the share
+ * viewer uses but with a Strava/Duolingo-style profile layout:
  *
- * Visual hierarchy (top → bottom):
- *  1. [VerifiedFirebaseBadge] — Strava/Duolingo-style verified pill.
- *  2. Profile card — avatar + display name + publish timestamp.
- *  3. [ShareSummaryGrid] — 4-stat row.
- *  4. Check-in timeline.
+ *   1. Hero card        — large avatar, display name, compact
+ *                          verified chip beside the name.
+ *   2. Verified badge   — full-width "Đã xác minh bởi Firebase" pill.
+ *   3. Stat grid        — 4 cells (Check-in / Streak / Best / Trophies).
+ *   4. Recent timeline  — last 30 check-ins as a peek list.
  *
- * Reusable components live in `presentation/share/components/` so the
- * Public Profile screen shares the same building blocks.
+ * Reuses [VerifiedFirebaseBadge], [ShareSummaryGrid], [ShareCheckInRow]
+ * so the visual language matches the share viewer exactly.
  */
 @Composable
-fun ShareViewerScreen(
+fun PublicProfileScreen(
     userId: String,
     onBackClick: () -> Unit,
-    viewModel: ShareViewerViewModel = koinViewModel()
+    viewModel: PublicProfileViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
-    val context = LocalContext.current
 
     LaunchedEffect(userId) {
-        viewModel.processIntent(ShareViewerIntent.Load(userId))
-    }
-
-    LaunchedEffect(viewModel) {
-        viewModel.singleEvent.collectLatest { event ->
-            when (event) {
-                is ShareViewerEvent.ShowMessage ->
-                    android.widget.Toast.makeText(context, event.message, android.widget.Toast.LENGTH_SHORT)
-                        .show()
-            }
-        }
+        viewModel.processIntent(PublicProfileIntent.Load(userId))
     }
 
     Scaffold(
@@ -98,13 +83,13 @@ fun ShareViewerScreen(
         ) {
             BetterMeTopBar(
                 leadingIconRes = R.drawable.ic_arrow_left,
-                title = "Tiến độ đã xác minh",
+                title = "Hồ sơ công khai",
                 onLeadingClick = onBackClick
             )
             when (val ui = state.ui) {
-                ShareViewerUi.Loading -> LoadingState()
-                is ShareViewerUi.Verified -> VerifiedBody(share = ui.share)
-                is ShareViewerUi.Invalid -> InvalidState(reason = ui.reason)
+                PublicProfileUi.Loading -> LoadingState()
+                is PublicProfileUi.Loaded -> ProfileBody(share = ui.share)
+                is PublicProfileUi.Missing -> MissingState(reason = ui.reason)
             }
         }
     }
@@ -121,17 +106,17 @@ private fun LoadingState() {
 }
 
 @Composable
-private fun InvalidState(reason: VerificationStatus) {
+private fun MissingState(reason: VerificationStatus) {
     val (emoji, primary, secondary) = when (reason) {
         VerificationStatus.NOT_FOUND -> Triple(
             "🔎",
             "Người này chưa chia sẻ tiến độ.",
-            "Yêu cầu họ mở BetterMe và bấm \"Chia sẻ tiến độ\" để xuất bản dữ liệu."
+            "Yêu cầu họ mở BetterMe và bấm \"Chia sẻ tiến độ\" để xuất bản hồ sơ."
         )
         VerificationStatus.NETWORK -> Triple(
             "📡",
-            "Không kết nối được với máy chủ.",
-            "Hãy kiểm tra mạng và thử mở lại link."
+            "Không kết nối được với Firebase.",
+            "Hãy kiểm tra mạng và thử lại."
         )
         VerificationStatus.VALID -> Triple("✔", "OK", "")
     }
@@ -159,78 +144,110 @@ private fun InvalidState(reason: VerificationStatus) {
 }
 
 @Composable
-private fun VerifiedBody(share: VerifiedShare) {
+private fun ProfileBody(share: VerifiedShare) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp
+            start = 16.dp, end = 16.dp, top = 12.dp, bottom = 32.dp
         ),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        item { HeroCard(share = share) }
         item { VerifiedFirebaseBadge() }
-        item { ProfileCard(share = share) }
         item { ShareSummaryGrid(share = share) }
         item {
             Text(
-                text = "Lịch sử check-in (${share.checkIns.size})",
+                text = "Hoạt động gần đây",
                 style = BetterMeTypography.Title.Small.Bold,
                 color = BetterMeColors.Text.TextPrimary,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 6.dp)
             )
         }
-        items(share.checkIns, key = { "${it.itemId}-${it.date}" }) { row ->
+        // Cap the timeline at 30 rows so the profile feels like a
+        // glanceable surface — the full timeline lives on the share
+        // viewer, accessible via the share link.
+        items(share.checkIns.take(30), key = { "${it.itemId}-${it.date}" }) { row ->
             ShareCheckInRow(row = row)
+        }
+        if (share.checkIns.size > 30) {
+            item {
+                Text(
+                    text = "… và ${share.checkIns.size - 30} check-in khác",
+                    style = BetterMeTypography.Body.Small.Medium,
+                    color = BetterMeColors.Text.TextTertiary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp)
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun ProfileCard(share: VerifiedShare) {
-    Row(
+private fun HeroCard(share: VerifiedShare) {
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Body))
-            .background(Color.White)
+            .shadow(
+                elevation = BetterMeTokens.CardElevation.Body,
+                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Hero),
+                ambientColor = BetterMeTokens.NeutralShadow.Ambient,
+                spotColor = BetterMeTokens.NeutralShadow.Spot
+            )
+            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Hero))
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color.White, BetterMeColors.Primary.Primary.copy(alpha = 0.06f))
+                )
+            )
             .border(
                 width = 1.dp,
-                color = BetterMeColors.Border.BorderLight,
-                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Body)
+                color = BetterMeColors.Primary.Primary.copy(alpha = BetterMeTokens.AccentAlpha.Soft),
+                shape = RoundedCornerShape(BetterMeTokens.CardRadius.Hero)
             )
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(20.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(54.dp)
-                .clip(CircleShape)
-                .background(BetterMeColors.Gray.Gray3),
-            contentAlignment = Alignment.Center
-        ) {
-            share.profile.avatarUrl?.let {
-                AsyncImage(
-                    model = it,
-                    contentDescription = share.profile.displayName,
-                    modifier = Modifier.size(54.dp).clip(CircleShape)
-                )
-            } ?: Text(text = "👤", fontSize = 28.sp)
-        }
-        Column(modifier = Modifier.weight(1f)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .size(96.dp)
+                    .clip(CircleShape)
+                    .background(BetterMeColors.Primary.Primary.copy(alpha = 0.12f))
+                    .border(
+                        width = 2.dp,
+                        color = BetterMeColors.Primary.Primary.copy(alpha = 0.30f),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (share.profile.avatarUrl != null) {
+                    AsyncImage(
+                        model = share.profile.avatarUrl,
+                        contentDescription = share.profile.displayName,
+                        modifier = Modifier.size(96.dp).clip(CircleShape)
+                    )
+                } else {
+                    Text(
+                        text = share.profile.displayName.firstOrNull()
+                            ?.uppercaseChar()?.toString() ?: "👤",
+                        style = BetterMeTypography.Title.Medium.Bold,
+                        color = BetterMeColors.Primary.Primary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 40.sp
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
             Text(
                 text = share.profile.displayName,
-                style = BetterMeTypography.Title.Small.Bold,
+                style = BetterMeTypography.Title.Medium.Bold,
                 color = BetterMeColors.Text.TextPrimary,
                 fontWeight = FontWeight.Bold
             )
-            Text(
-                text = "Xuất bản: ${formatDate(share.publishedAt)}",
-                style = BetterMeTypography.Body.Small.Medium,
-                color = BetterMeColors.Text.TextTertiary
-            )
+            Spacer(Modifier.height(6.dp))
+            VerifiedFirebaseBadgeCompact()
         }
     }
 }
-
-private val dateFmt = SimpleDateFormat("dd/MM/yyyy", Locale("vi"))
-private fun formatDate(ms: Long): String = dateFmt.format(Date(ms))
