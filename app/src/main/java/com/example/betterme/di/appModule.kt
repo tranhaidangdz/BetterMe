@@ -60,6 +60,7 @@ import com.example.betterme.data.repository.AiCacheRepositoryImpl
 import com.example.betterme.domain.ai.AiCacheRepository
 import com.example.betterme.domain.ai.AiHabitInsightRepository
 import com.example.betterme.domain.usecase.ai.AnalyzeHabitCreationUseCase
+import com.example.betterme.domain.usecase.ai.AnalyzeHabitProgressionUseCase
 import com.example.betterme.domain.usecase.ai.AnalyzeHabitRecoveryUseCase
 import com.example.betterme.domain.usecase.ai.AnalyzeLifestyleUseCase
 import com.example.betterme.domain.usecase.ai.AnalyzeScheduleUseCase
@@ -82,6 +83,7 @@ import com.example.betterme.presentation.signin.SignInViewModel
 import com.example.betterme.presentation.main.MainViewModel
 import com.example.betterme.presentation.home.HomeViewModel
 import com.example.betterme.presentation.addhabit.aicreation.HabitCreationAssistantViewModel
+import com.example.betterme.presentation.home.progression.HabitProgressionAssistantViewModel
 import com.example.betterme.presentation.home.recovery.HabitRecoveryAssistantViewModel
 import com.example.betterme.presentation.dailyhabits.DailyHabitsViewModel
 import com.example.betterme.presentation.dailyhabits.schedule.ScheduleAnalysisViewModel
@@ -284,6 +286,9 @@ val useCaseModule = module {
     // Adaptive Habit Recovery — order: dataStore, habitRepo, habitLogRepo,
     // aiRepo, cache, scheduleHabitReminder
     factory { AnalyzeHabitRecoveryUseCase(get(), get(), get(), get(), get(), get()) }
+    // Smart Habit Progression — order: dataStore, habitRepo, habitLogRepo,
+    // aiRepo, cache
+    factory { AnalyzeHabitProgressionUseCase(get(), get(), get(), get(), get()) }
 }
 
 val viewModelModule = module {
@@ -300,6 +305,7 @@ val viewModelModule = module {
     viewModelOf(::LifestyleInsightViewModel)
     viewModelOf(::HabitCreationAssistantViewModel)
     viewModelOf(::HabitRecoveryAssistantViewModel)
+    viewModelOf(::HabitProgressionAssistantViewModel)
     viewModelOf(::AddHabitViewModel)
     viewModelOf(::CategoryDetailViewModel)
     viewModelOf(::HabitDetailViewModel)

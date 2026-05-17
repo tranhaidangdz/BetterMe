@@ -4,6 +4,8 @@ import com.example.betterme.domain.ai.habitcreation.HabitCreationAnalysis
 import com.example.betterme.domain.ai.habitcreation.HabitCreationInput
 import com.example.betterme.domain.ai.lifestyle.HabitCompletionRecord
 import com.example.betterme.domain.ai.lifestyle.LifestyleInsight
+import com.example.betterme.domain.ai.progression.HabitProgressionAnalysis
+import com.example.betterme.domain.ai.progression.HabitProgressionInput
 import com.example.betterme.domain.ai.recovery.HabitRecoveryAnalysis
 import com.example.betterme.domain.ai.recovery.HabitRecoveryInput
 import com.example.betterme.domain.ai.onboarding.OnboardingProfile
@@ -160,6 +162,21 @@ interface AiHabitInsightRepository {
      * `isCanned = true`.
      */
     suspend fun analyzeHabitRecovery(input: HabitRecoveryInput): HabitRecoveryAnalysis
+
+    /**
+     * Smart progression coaching — the upbeat mirror of [analyzeHabitRecovery].
+     * Called ONLY after deterministic gates pass (every habit ≥ 60%, ≥1 at
+     * ≥ 85%, no recovery triggers, activeHabitCount ≤ 8, hardHabitCount ≤ 1).
+     *
+     * Always returns a [HabitProgressionAnalysis]. When every model in the
+     * fallback chain fails, the repo derives a deterministic local plan from
+     * the same vibrant stats the prompt would have consumed and flags
+     * `isCanned = true`. The use case must NOT cache canned content.
+     *
+     * The system prompt strictly forbids: aggressive jumps, sleep reduction,
+     * adding HARD habits, 4 AM routines, marathon-style upgrades.
+     */
+    suspend fun analyzeHabitProgression(input: HabitProgressionInput): HabitProgressionAnalysis
 }
 
 /**

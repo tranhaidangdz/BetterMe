@@ -37,6 +37,11 @@ import com.example.betterme.presentation.home.components.NotificationBell
 import com.example.betterme.presentation.home.components.NotificationCenterScreen
 import com.example.betterme.presentation.home.model.CantMiss
 import com.example.betterme.presentation.home.model.HomeProgress
+import com.example.betterme.presentation.home.progression.HabitProgressionAssistantCard
+import com.example.betterme.presentation.home.progression.HabitProgressionAssistantViewModel
+import com.example.betterme.presentation.home.progression.HabitProgressionIntent
+import com.example.betterme.presentation.home.progression.HabitProgressionState
+import com.example.betterme.presentation.home.progression.HabitProgressionUi
 import com.example.betterme.presentation.home.recovery.HabitRecoveryAssistantCard
 import com.example.betterme.presentation.home.recovery.HabitRecoveryAssistantViewModel
 import com.example.betterme.presentation.home.recovery.HabitRecoveryEvent
@@ -58,10 +63,12 @@ fun HomeScreen(
     onViewProgress: () -> Unit = {},
     onLogoutSuccess: () -> Unit = {},
     viewModel: HomeViewModel = koinViewModel(),
-    recoveryViewModel: HabitRecoveryAssistantViewModel = koinViewModel()
+    recoveryViewModel: HabitRecoveryAssistantViewModel = koinViewModel(),
+    progressionViewModel: HabitProgressionAssistantViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
     val recoveryState by recoveryViewModel.viewState.collectAsState()
+    val progressionState by progressionViewModel.viewState.collectAsState()
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
@@ -88,6 +95,13 @@ fun HomeScreen(
         recoveryViewModel.processIntent(HabitRecoveryIntent.Analyze())
     }
 
+    // Auto-load progression on Home entry too. The use case's gates ensure
+    // Recovery and Progression are mutually exclusive — only one card
+    // resolves to Success at a time.
+    LaunchedEffect(Unit) {
+        progressionViewModel.processIntent(HabitProgressionIntent.Analyze())
+    }
+
     LaunchedEffect(recoveryViewModel) {
         recoveryViewModel.singleEvent.collectLatest { event ->
             val msg = when (event) {
@@ -101,6 +115,7 @@ fun HomeScreen(
     HomeContent(
         state = state,
         recoveryState = recoveryState,
+        progressionState = progressionState,
         onCategoryClick = onCategoryClick,
         onHabitClick = onHabitClick,
         onViewProgress = onViewProgress,
@@ -126,6 +141,12 @@ fun HomeScreen(
         onRecoveryDismiss = { recoveryViewModel.processIntent(HabitRecoveryIntent.Dismiss) },
         onRecoveryApply = { idx, action ->
             recoveryViewModel.processIntent(HabitRecoveryIntent.ApplyAction(idx, action))
+        },
+        onProgressionRefresh = {
+            progressionViewModel.processIntent(HabitProgressionIntent.Analyze(forceRefresh = true))
+        },
+        onProgressionDismiss = {
+            progressionViewModel.processIntent(HabitProgressionIntent.Dismiss)
         }
     )
 }
@@ -134,6 +155,7 @@ fun HomeScreen(
 fun HomeContent(
     state: HomeState,
     recoveryState: HabitRecoveryState = HabitRecoveryState(),
+    progressionState: HabitProgressionState = HabitProgressionState(),
     onCategoryClick: (Int, String, String) -> Unit = { _, _, _ -> },
     onHabitClick: (Int) -> Unit = {},
     onViewProgress: () -> Unit = {},
@@ -149,7 +171,9 @@ fun HomeContent(
     onChallengeNotificationClick: (Int?, Int?) -> Unit = { _, _ -> },
     onRecoveryRefresh: () -> Unit = {},
     onRecoveryDismiss: () -> Unit = {},
-    onRecoveryApply: (Int, com.example.betterme.domain.ai.recovery.HabitRecoveryAction) -> Unit = { _, _ -> }
+    onRecoveryApply: (Int, com.example.betterme.domain.ai.recovery.HabitRecoveryAction) -> Unit = { _, _ -> },
+    onProgressionRefresh: () -> Unit = {},
+    onProgressionDismiss: () -> Unit = {}
 ) {
     val colors = BetterMeColors.ListColors.list
 
@@ -249,6 +273,19 @@ fun HomeContent(
                     onRefresh = onRecoveryRefresh,
                     onDismiss = onRecoveryDismiss,
                     onApply = onRecoveryApply
+                )
+            }
+        }
+
+        // ===== PROGRESSION ASSISTANT (mounts only when thriving) =====
+        // Mutually exclusive with Recovery via the use case's gates — both
+        // cards will not show Success at the same time.
+        if (progressionState.ui !is HabitProgressionUi.Idle && progressionState.ui !is HabitProgressionUi.Hidden) {
+            item(key = "progression_assistant") {
+                HabitProgressionAssistantCard(
+                    state = progressionState,
+                    onRefresh = onProgressionRefresh,
+                    onDismiss = onProgressionDismiss
                 )
             }
         }

@@ -62,6 +62,11 @@ interface AiCacheRepository {
          *  Cached on the same 24h cadence; struggle signals shift slowly. */
         const val TYPE_HABIT_RECOVERY = "HABIT_RECOVERY"
 
+        /** Smart Habit Progression Engine — gentle level-up suggestions for
+         *  thriving users (≥85% completion, no recovery triggers). Cached on
+         *  the same 24h cadence; progression readiness changes slowly. */
+        const val TYPE_HABIT_PROGRESSION = "HABIT_PROGRESSION"
+
         /** Default TTL — 12 hours. */
         const val TTL_MS_DEFAULT = 12L * 60L * 60L * 1000L
 

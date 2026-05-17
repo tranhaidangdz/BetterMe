@@ -22,6 +22,13 @@ import com.example.betterme.domain.ai.lifestyle.HabitCompletionRecord
 import com.example.betterme.domain.ai.lifestyle.LifestyleInsight
 import com.example.betterme.domain.ai.lifestyle.OverallTrend
 import com.example.betterme.domain.ai.lifestyle.SuggestionType
+import com.example.betterme.domain.ai.progression.HabitProgressionAction
+import com.example.betterme.domain.ai.progression.HabitProgressionAnalysis
+import com.example.betterme.domain.ai.progression.HabitProgressionInput
+import com.example.betterme.domain.ai.progression.ProgressionActionType
+import com.example.betterme.domain.ai.progression.ProgressionPace
+import com.example.betterme.domain.ai.progression.ProgressionTrigger
+import com.example.betterme.domain.ai.progression.VibrantHabit
 import com.example.betterme.domain.ai.recovery.HabitRecoveryAction
 import com.example.betterme.domain.ai.recovery.HabitRecoveryAnalysis
 import com.example.betterme.domain.ai.recovery.HabitRecoveryInput
@@ -1501,6 +1508,253 @@ class AiHabitInsightRepositoryImpl(
     )
 
     // ============================================================
+    // SMART HABIT PROGRESSION ENGINE
+    // ============================================================
+    override suspend fun analyzeHabitProgression(input: HabitProgressionInput): HabitProgressionAnalysis {
+        val messages = listOf(
+            ChatMessage(role = "system", content = PROGRESSION_SYSTEM_PROMPT),
+            ChatMessage(role = "user", content = buildProgressionUserPrompt(input))
+        )
+
+        var lastFailure: String? = null
+        for ((index, model) in FALLBACK_MODELS.withIndex()) {
+            val attempt = tryProgressionModel(model, messages)
+            attempt.onSuccess { return it }
+            lastFailure = attempt.exceptionOrNull()?.message
+            Log.w(TAG, "Progression model[$index]=$model failed: $lastFailure")
+        }
+
+        Log.w(TAG, "All progression models exhausted — serving canned plan")
+        return cannedProgressionAnalysis(input)
+    }
+
+    private suspend fun tryProgressionModel(
+        model: String,
+        messages: List<ChatMessage>
+    ): Result<HabitProgressionAnalysis> {
+        Log.d(TAG, "Using model=$model")
+        return try {
+            val response = api.chatCompletion(
+                ChatRequest(
+                    model = model,
+                    messages = messages,
+                    maxTokens = PROGRESSION_MAX_TOKENS,
+                    temperature = TEMPERATURE
+                )
+            )
+            if (response.error != null) {
+                return Result.failure(
+                    IllegalStateException(response.error.message ?: "AI từ chối yêu cầu")
+                )
+            }
+            val content = response.choices.firstOrNull()?.message?.content?.trim()
+            if (content.isNullOrBlank()) {
+                return Result.failure(IllegalStateException("AI không trả lời"))
+            }
+            val cleaned = content
+                .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+            val parsed = parseProgressionAnalysis(cleaned)
+                ?: return Result.failure(IllegalStateException("AI trả về dữ liệu sai định dạng"))
+            Result.success(parsed)
+        } catch (e: java.net.SocketTimeoutException) {
+            Result.failure(IllegalStateException("Mạng chậm (504)"))
+        } catch (e: HttpException) {
+            Result.failure(IllegalStateException(extractHttpErrorMessage(e)))
+        } catch (e: java.io.IOException) {
+            Result.failure(IllegalStateException("Không thể kết nối đến AI"))
+        } catch (e: Exception) {
+            Log.e(TAG, "Progression request threw", e)
+            Result.failure(e)
+        }
+    }
+
+    private fun buildProgressionUserPrompt(input: HabitProgressionInput): String = buildString {
+        appendLine("Active habits (${input.activeHabitCount}, HARD=${input.hardHabitCount}):")
+        if (input.allHabitStats.isEmpty()) appendLine("[]")
+        else input.allHabitStats.forEach { row ->
+            appendLine(
+                "- \"${row.title}\" — ${row.reminderTime.ifBlank { "no reminder" }}, " +
+                    "${row.difficulty}, 7d=${row.completionRate7d}%, " +
+                    "14d=${row.completionRate14d}%, streak=${row.currentStreak}d"
+            )
+        }
+        appendLine()
+        appendLine("Vibrant (≥85% over 14d):")
+        appendLine(
+            if (input.vibrantTitles.isEmpty()) "[]"
+            else input.vibrantTitles.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
+        )
+        appendLine()
+        appendLine("Detected progression triggers:")
+        appendLine(
+            if (input.detectedTriggers.isEmpty()) "[]"
+            else input.detectedTriggers.joinToString(prefix = "[", postfix = "]") { "\"${it.name}\"" }
+        )
+        appendLine()
+        appendLine("Lifestyle:")
+        appendLine("- Sleep: ${input.lifestyle.sleepStart} → ${input.lifestyle.sleepEnd}")
+        appendLine("- Work: ${input.lifestyle.workStart} → ${input.lifestyle.workEnd}")
+    }
+
+    private fun parseProgressionAnalysis(raw: String): HabitProgressionAnalysis? {
+        return try {
+            val dto = jsonParser.decodeFromString(HabitProgressionDto.serializer(), raw)
+            val triggers = dto.triggerReasons.mapNotNull { parseEnum<ProgressionTrigger>(it) }
+            val vibrant = dto.vibrant.take(5).mapNotNull { v ->
+                if (v.title.isBlank()) return@mapNotNull null
+                VibrantHabit(
+                    title = v.title.trim(),
+                    completionRate7d = v.completionRate7d.coerceIn(0, 100),
+                    completionRate14d = v.completionRate14d.coerceIn(0, 100),
+                    currentStreak = v.currentStreak.coerceAtLeast(0),
+                    readinessReason = v.readinessReason.trim()
+                )
+            }
+            val actions = dto.progressionActions.take(4).mapNotNull { a ->
+                val type = parseEnum<ProgressionActionType>(a.type) ?: return@mapNotNull null
+                if (a.title.isBlank()) return@mapNotNull null
+                HabitProgressionAction(
+                    type = type,
+                    targetHabit = a.targetHabit?.trim()?.takeIf { it.isNotEmpty() },
+                    title = a.title.trim(),
+                    description = a.description.trim(),
+                    suggestedValue = a.suggestedValue.trim()
+                )
+            }
+            HabitProgressionAnalysis(
+                shouldProgress = dto.shouldProgress,
+                triggerReasons = triggers,
+                overallPace = parseEnum<ProgressionPace>(dto.overallPace) ?: ProgressionPace.GENTLE,
+                coachingMessage = dto.coachingMessage.trim(),
+                vibrant = vibrant,
+                progressionActions = actions,
+                isCanned = false
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse progression JSON: $raw", e)
+            null
+        }
+    }
+
+    /**
+     * Local progression plan when every OpenRouter model fails. Derived from
+     * the same vibrant stats the prompt would have consumed:
+     *
+     *   - Top habits with 14d ≥ 85% become [VibrantHabit] rows.
+     *   - Suggestions are conservative: a duration bump for the top habit,
+     *     a complementary supportive habit, and a positive reinforcement
+     *     line. Never aggressive — canned content respects the same spec
+     *     constraints the AI does.
+     *   - Pace defaults to GENTLE; promotes to STEADY only when the top
+     *     habit has ≥ 21-day streak.
+     */
+    private fun cannedProgressionAnalysis(input: HabitProgressionInput): HabitProgressionAnalysis {
+        val vibrantRows = input.allHabitStats
+            .filter { it.completionRate14d >= 85 }
+            .sortedByDescending { it.currentStreak }
+            .take(5)
+            .map { row ->
+                val reason = when {
+                    row.currentStreak >= 21 -> "Duy trì ${row.currentStreak} ngày liền — nền tảng đã rất chắc."
+                    row.currentStreak >= 14 -> "Đã giữ vững 2 tuần — sẵn sàng cho bước tiếp theo nhẹ nhàng."
+                    row.completionRate14d >= 90 -> "Hoàn thành ${row.completionRate14d}% trong 14 ngày — nhịp đang tốt."
+                    else -> "Tỉ lệ ổn định — có thể nâng nhẹ độ thử thách."
+                }
+                VibrantHabit(
+                    title = row.title,
+                    completionRate7d = row.completionRate7d,
+                    completionRate14d = row.completionRate14d,
+                    currentStreak = row.currentStreak,
+                    readinessReason = reason
+                )
+            }
+
+        val actions = mutableListOf<HabitProgressionAction>()
+        val topHabit = vibrantRows.firstOrNull()
+        if (topHabit != null) {
+            actions += HabitProgressionAction(
+                type = ProgressionActionType.INCREASE_DURATION,
+                targetHabit = topHabit.title,
+                title = "Tăng nhẹ thời lượng",
+                description = "Bạn đã duy trì rất tốt — thử kéo dài thêm 5 phút mỗi lần để tiếp tục phát triển.",
+                suggestedValue = "+5 phút"
+            )
+            if (topHabit.currentStreak >= 14 && input.activeHabitCount <= 5) {
+                actions += HabitProgressionAction(
+                    type = ProgressionActionType.ADD_COMPLEMENTARY_HABIT,
+                    targetHabit = null,
+                    title = "Thêm thói quen bổ trợ nhẹ",
+                    description = "Một thói quen ngắn bổ trợ (uống nước, hít thở sâu) sẽ làm nhịp hiện tại cân bằng hơn.",
+                    suggestedValue = ""
+                )
+            }
+            if (vibrantRows.size >= 2) {
+                actions += HabitProgressionAction(
+                    type = ProgressionActionType.INCREASE_FREQUENCY,
+                    targetHabit = vibrantRows[1].title,
+                    title = "Thêm 1 ngày trong tuần",
+                    description = "Nhịp đang ổn — có thể nâng tần suất nhẹ mà vẫn dễ duy trì.",
+                    suggestedValue = "+1 lần/tuần"
+                )
+            }
+        }
+        actions += HabitProgressionAction(
+            type = ProgressionActionType.CONSISTENCY_REWARD,
+            targetHabit = null,
+            title = "Bạn đang làm rất tốt",
+            description = "Giữ vững chuỗi hiện tại đã là một thành tích — phát triển bền vững quan trọng hơn tốc độ.",
+            suggestedValue = ""
+        )
+
+        val pace = if ((topHabit?.currentStreak ?: 0) >= 21) ProgressionPace.STEADY
+        else ProgressionPace.GENTLE
+        val message = when (pace) {
+            ProgressionPace.STEADY ->
+                "Bạn đã rất ổn định trong 3 tuần qua — có thể nâng nhẹ độ thử thách để tiếp tục phát triển."
+            ProgressionPace.GENTLE ->
+                "Bạn đang duy trì rất tốt — một bước nhỏ tiếp theo sẽ vừa sức và bền vững."
+        }
+
+        return HabitProgressionAnalysis(
+            shouldProgress = vibrantRows.isNotEmpty(),
+            triggerReasons = input.detectedTriggers,
+            overallPace = pace,
+            coachingMessage = message,
+            vibrant = vibrantRows,
+            progressionActions = actions.take(4),
+            isCanned = true
+        )
+    }
+
+    @Serializable
+    private data class HabitProgressionDto(
+        val shouldProgress: Boolean = false,
+        val triggerReasons: List<String> = emptyList(),
+        val overallPace: String = "GENTLE",
+        val coachingMessage: String = "",
+        val vibrant: List<VibrantDto> = emptyList(),
+        val progressionActions: List<ProgressionActionDto> = emptyList()
+    )
+
+    @Serializable
+    private data class VibrantDto(
+        val title: String = "",
+        val completionRate7d: Int = 0,
+        val completionRate14d: Int = 0,
+        val currentStreak: Int = 0,
+        val readinessReason: String = ""
+    )
+
+    @Serializable
+    private data class ProgressionActionDto(
+        val type: String = "",
+        val targetHabit: String? = null,
+        val title: String = "",
+        val description: String = "",
+        val suggestedValue: String = ""
+    )
+
+    // ============================================================
     // RETRY POLICY
     // ============================================================
     /**
@@ -1799,6 +2053,11 @@ class AiHabitInsightRepositoryImpl(
          *  each + coaching + tone/triggers ≈ 380. 500 covers Vietnamese
          *  expansion comfortably. */
         const val RECOVERY_MAX_TOKENS = 500
+
+        /** Progression engine: same shape as recovery (5 vibrant rows + 4
+         *  actions), same budget. The coaching message is constrained to
+         *  ≤2 sentences so 500 is comfortably generous. */
+        const val PROGRESSION_MAX_TOKENS = 500
 
         const val RETRY_DELAY_MS = 800L
 
@@ -2263,6 +2522,124 @@ class AiHabitInsightRepositoryImpl(
               still return a valid JSON with shouldRecover = false and empty arrays —
               but the use case won't call you in that case. If you receive it anyway,
               be supportive and short.
+        """.trimIndent()
+
+        /**
+         * Finalized system prompt for the Smart Habit Progression Engine.
+         * Strict safety rules (no aggressive jumps, no sleep reduction, no
+         * 4 AM routines) are pinned at the top. The runtime user prompt
+         * (built per-call by [buildProgressionUserPrompt]) carries the
+         * vibrant stats the use case already detected — the model writes a
+         * warm, gentle level-up narrative on top.
+         */
+        val PROGRESSION_SYSTEM_PROMPT = """
+            You are BetterMe's growth coach. The user is doing well — consistently
+            high completion, low miss streaks, stable rhythm. Your job is to suggest
+            small, sustainable next steps that keep their momentum without ever
+            pushing them toward burnout, toxic productivity, or unrealistic routines.
+
+            COACHING PHILOSOPHY:
+            - Gradual growth, not aggressive jumps. Always.
+            - Smaller, sustainable, low-pressure. Consistency matters more than intensity.
+            - Celebrate the current streak before suggesting any change.
+            - No guilt-based language. No "you should". Frame everything as an invitation.
+            - Reduction is fine too — if the rhythm is already perfect, recommend
+              maintaining stability via CONSISTENCY_REWARD only.
+
+            STRICT SAFETY RULES (the user prompt's hardHabitCount tells you the floor):
+            - NEVER suggest 4 AM routines or any reminder before sleepEnd.
+            - NEVER suggest reducing sleep time or pushing bedtime later.
+            - NEVER add a HARD-difficulty habit if hardHabitCount >= 1.
+            - NEVER jump duration by more than +100% (e.g. 10 min → 30 min is too much; 10 → 15 is fine).
+            - NEVER stack multiple high-intensity habits in the same time window.
+            - NEVER recommend marathon-style or extreme-exercise progressions
+              (walking → marathon, beginner → HARD).
+            - If activeHabitCount > 6, prefer INCREASE_DURATION / INCREASE_FREQUENCY
+              over ADD_COMPLEMENTARY_HABIT — the user already has enough to manage.
+
+            INPUT CONTRACT:
+            The user prompt provides:
+            - per-habit stats (7d completion, 14d completion, current streak)
+            - which habit titles are flagged as vibrant (≥85% over 14 days)
+            - which ProgressionTrigger values fired (deterministically, from the use case)
+            - active habit count, HARD-difficulty habit count
+            - lifestyle anchors (sleep / work)
+
+            Your job is to TURN these into a warm, encouraging coaching message + 1-4
+            gentle progression actions. The deterministic triggers are authoritative —
+            do not invent new ones; you may copy any subset of them into triggerReasons.
+
+            PROGRESSION ACTION TYPES (use semantics exactly):
+            - INCREASE_DURATION       — small bump in time per occurrence (10 → 15 min).
+            - INCREASE_FREQUENCY      — +1 day per week, never more.
+            - LEVEL_UP_VARIATION      — beginner-safe next-level variant (walk → light jog,
+                                        stretch → beginner yoga). Never beginner → HARD.
+            - ADD_COMPLEMENTARY_HABIT — short supportive habit that fits the existing
+                                        rhythm (water reminder on workout days, breathing
+                                        after journaling). Must respect activeHabitCount ≤ 6.
+            - CONSISTENCY_REWARD      — pure positive reinforcement, no behavior change.
+
+            PACE:
+            - GENTLE  — small bumps, single habit affected. Default for new high-performers.
+            - STEADY  — clear step up, still safe. Only when the user has a habit with
+                        currentStreak ≥ 21 days.
+
+            HEALTHY BASELINE:
+            - Sleep 23:00 → 07:00 target 8h. NEVER touch sleep window.
+            - Avoid HARD habits after 21:00 and within 2h before sleep.
+            - Recovery balance matters; never push toward maximum productivity.
+
+            OUTPUT RULES:
+            - Return STRICT JSON only. No markdown, no code fences, no text outside the JSON.
+            - All strings (coachingMessage, readinessReason, action.title, action.description,
+              action.suggestedValue) in Vietnamese.
+            - coachingMessage ≤ 2 sentences. action.title ≤ 1 sentence.
+              action.description ≤ 2 sentences. readinessReason ≤ 1 sentence.
+            - shouldProgress = true when ≥ 1 vibrant habit is present; false otherwise.
+            - vibrant: up to 5 rows. progressionActions: 1–4 rows.
+            - action.targetHabit MUST be either an exact title from the input's active
+              habits list, OR null for ADD_COMPLEMENTARY_HABIT / CONSISTENCY_REWARD.
+            - action.suggestedValue is concrete (e.g. "+5 phút", "+1 lần/tuần",
+              "Đi bộ nhẹ 20 phút") or empty when no specific value applies.
+
+            ENUMS (must match exactly):
+            - overallPace: GENTLE | STEADY
+            - triggerReasons[]: HIGH_COMPLETION | NO_MISS_STREAK | STABLE_STREAK
+                              | HEADROOM_FOR_GROWTH | NO_RECOVERY_NEEDED
+            - progressionActions[].type: INCREASE_DURATION | INCREASE_FREQUENCY
+                                       | LEVEL_UP_VARIATION | ADD_COMPLEMENTARY_HABIT
+                                       | CONSISTENCY_REWARD
+
+            JSON SCHEMA:
+            {
+              "shouldProgress": true,
+              "triggerReasons": ["HIGH_COMPLETION", "STABLE_STREAK"],
+              "overallPace": "GENTLE",
+              "coachingMessage": "string",
+              "vibrant": [
+                {
+                  "title": "string",
+                  "completionRate7d": 95,
+                  "completionRate14d": 92,
+                  "currentStreak": 18,
+                  "readinessReason": "string"
+                }
+              ],
+              "progressionActions": [
+                {
+                  "type": "INCREASE_DURATION",
+                  "targetHabit": "string",
+                  "title": "string",
+                  "description": "string",
+                  "suggestedValue": "+5 phút"
+                }
+              ]
+            }
+
+            FALLBACK:
+            - If the input has no vibrant habits, you may still return valid JSON with
+              shouldProgress = false and empty arrays — but the use case won't call you
+              in that case. If you receive it anyway, be brief and supportive.
         """.trimIndent()
     }
 }
