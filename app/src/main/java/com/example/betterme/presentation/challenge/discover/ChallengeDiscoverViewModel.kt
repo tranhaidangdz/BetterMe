@@ -86,18 +86,27 @@ class ChallengeDiscoverViewModel(
                     .take(10)
                     .map { it.toNewUi() }
 
-                // Phase 3 — grouped-by-difficulty showcase. Surfaces the
-                // top-N most-popular challenge in each tier so the user
-                // can browse the ladder at a glance. Sorted by
-                // participant_count desc as a proxy for credibility +
-                // social proof. Up to 6 per tier so a tier's section
-                // header stays readable on small phones.
+                // Phase 3 — grouped-by-difficulty showcase.
+                //
+                // The whole tier is exposed here. No top-N cap, no
+                // participant-count ranking, no popularity filter —
+                // the section header's count must match
+                // `groupedList[difficulty].size` exactly, and the list
+                // itself must be complete (production catalog today:
+                // 24 EASY / 37 MEDIUM / 31 HARD / 31 LEGENDARY).
+                //
+                // Sort key is `sort_order` then `created_at` so the
+                // ordering is stable + tier-neutral. Both are present
+                // on every seeded row.
+                //
+                // LazyColumn handles lazy row inflation, so rendering
+                // ~120 rows under one screen stays cheap even when the
+                // user scrolls all four tiers.
                 val activeChallenges = challenges.filter { (it.start_date ?: 0L) <= now }
                 val grouped = Difficulty.entries.associateWith { tier ->
                     activeChallenges
                         .filter { Difficulty.fromRaw(it.difficulty) == tier }
-                        .sortedByDescending { it.participant_count }
-                        .take(6)
+                        .sortedWith(compareBy({ it.sort_order }, { it.created_at }))
                         .map { it.toNewUi() }
                 }.filterValues { it.isNotEmpty() }
 
