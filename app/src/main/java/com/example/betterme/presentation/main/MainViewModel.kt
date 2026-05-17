@@ -68,6 +68,15 @@ class MainViewModel : BaseMviViewModel<MainIntent, MainState, MainEvent>() {
             MainIntent.CloseChallengeCompleted -> updateState { copy(showChallengeCompleted = false) }
             is MainIntent.ShowChallengeCelebration -> updateState { copy(challengeCelebrationId = intent.userChallengeId) }
             MainIntent.DismissChallengeCelebration -> updateState { copy(challengeCelebrationId = null) }
+            is MainIntent.OpenLeaderboard -> updateState {
+                copy(
+                    leaderboardChallengeId = intent.challengeId,
+                    leaderboardChallengeTitle = intent.challengeTitle
+                )
+            }
+            MainIntent.CloseLeaderboard -> updateState {
+                copy(leaderboardChallengeId = null, leaderboardChallengeTitle = "")
+            }
         }
     }
 }

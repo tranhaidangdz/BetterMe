@@ -56,15 +56,23 @@ import com.example.betterme.domain.usecase.habit.ScheduleHabitReminderUseCase
 import com.example.betterme.data.ai.AiHabitInsightRepositoryImpl
 import com.example.betterme.data.ai.OpenRouterApi
 import com.example.betterme.data.ai.OpenRouterNetwork
+import com.example.betterme.data.leaderboard.ChallengeLeaderboardRepositoryImpl
+import com.example.betterme.data.leaderboard.FirebaseChallengeLeaderboardDataSource
+import com.example.betterme.data.leaderboard.HybridCompetitorSeeder
+import com.example.betterme.data.leaderboard.LeaderboardSessionMemory
 import com.example.betterme.data.repository.AiCacheRepositoryImpl
 import com.example.betterme.domain.ai.AiCacheRepository
 import com.example.betterme.domain.ai.AiHabitInsightRepository
 import com.example.betterme.domain.ai.AiHomeSessionMemory
+import com.example.betterme.domain.repository.ChallengeLeaderboardRepository
 import com.example.betterme.domain.usecase.ai.AnalyzeHabitCreationUseCase
 import com.example.betterme.domain.usecase.ai.AnalyzeHabitProgressionUseCase
 import com.example.betterme.domain.usecase.ai.AnalyzeHabitRecoveryUseCase
 import com.example.betterme.domain.usecase.ai.AnalyzeLifestyleUseCase
 import com.example.betterme.domain.usecase.ai.AnalyzeScheduleUseCase
+import com.example.betterme.domain.usecase.leaderboard.GetChallengeLeaderboardSummaryUseCase
+import com.example.betterme.domain.usecase.leaderboard.GetChallengeLeaderboardUseCase
+import com.example.betterme.domain.usecase.leaderboard.SyncMyChallengeScoreUseCase
 import com.example.betterme.domain.usecase.ai.ApplyScheduleSuggestionsUseCase
 import com.example.betterme.domain.usecase.ai.GenerateHabitGroupReviewUseCase
 import com.example.betterme.domain.usecase.ai.SuggestHabitsForCategoryUseCase
@@ -86,6 +94,7 @@ import com.example.betterme.presentation.home.HomeViewModel
 import com.example.betterme.presentation.addhabit.aicreation.HabitCreationAssistantViewModel
 import com.example.betterme.presentation.home.progression.HabitProgressionAssistantViewModel
 import com.example.betterme.presentation.home.recovery.HabitRecoveryAssistantViewModel
+import com.example.betterme.presentation.leaderboard.LeaderboardViewModel
 import com.example.betterme.presentation.dailyhabits.DailyHabitsViewModel
 import com.example.betterme.presentation.dailyhabits.schedule.ScheduleAnalysisViewModel
 import com.example.betterme.presentation.onboarding.ai.OnboardingAiViewModel
@@ -230,6 +239,22 @@ val repositoryModule = module {
     // Progression / Lifestyle cards from re-analyzing on every Home entry.
     single { AiHomeSessionMemory() }
 
+    // Challenge leaderboard stack — Firestore datasource + deterministic
+    // seeded competitors + session cache. The repository merges real
+    // entries with seeded rivals at read time.
+    single { FirebaseChallengeLeaderboardDataSource(get()) }
+    single { HybridCompetitorSeeder() }
+    single { LeaderboardSessionMemory() }
+    single<ChallengeLeaderboardRepository> {
+        ChallengeLeaderboardRepositoryImpl(
+            firestoreDs = get(),
+            seeder = get(),
+            sessionMemory = get(),
+            dataStoreManager = get(),
+            challengeRepository = get()
+        )
+    }
+
     // Image upload repo: Cloudinary if configured, local-passthrough otherwise. Pick at
     // DI time so the rest of the app never has to branch on whether the cloud is set up.
     single<ImageUploadRepository> {
@@ -255,8 +280,10 @@ val useCaseModule = module {
         )
     }
     factory {
+        // database, challengeRepo, userChallengeRepo, challengeLogRepo,
+        // groupTeamRepo, awardCompletionUseCase, syncMyChallengeScore
         CheckInChallengeUseCase(
-            get(), get(), get(), get(), get(), get()
+            get(), get(), get(), get(), get(), get(), get()
         )
     }
     factory { ScheduleChallengeReminderUseCase(get(), get()) }
@@ -295,6 +322,13 @@ val useCaseModule = module {
     // Smart Habit Progression — order: dataStore, habitRepo, habitLogRepo,
     // aiRepo, cache
     factory { AnalyzeHabitProgressionUseCase(get(), get(), get(), get(), get()) }
+
+    // Challenge leaderboard use cases.
+    factory { GetChallengeLeaderboardUseCase(get()) }
+    factory { GetChallengeLeaderboardSummaryUseCase(get()) }
+    // SyncMyChallengeScore — order: dataStore, challengeRepo,
+    // userChallengeRepo, challengeLogRepo, leaderboardRepository.
+    factory { SyncMyChallengeScoreUseCase(get(), get(), get(), get(), get()) }
 }
 
 val viewModelModule = module {
@@ -312,6 +346,7 @@ val viewModelModule = module {
     viewModelOf(::HabitCreationAssistantViewModel)
     viewModelOf(::HabitRecoveryAssistantViewModel)
     viewModelOf(::HabitProgressionAssistantViewModel)
+    viewModelOf(::LeaderboardViewModel)
     viewModelOf(::AddHabitViewModel)
     viewModelOf(::CategoryDetailViewModel)
     viewModelOf(::HabitDetailViewModel)

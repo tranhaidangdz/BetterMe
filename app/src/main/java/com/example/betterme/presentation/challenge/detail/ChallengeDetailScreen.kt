@@ -47,6 +47,10 @@ import com.example.betterme.presentation.components.checkin.CheckInConfirmSheet
 import com.example.betterme.presentation.components.checkin.CheckInSuccessSheet
 import com.example.betterme.presentation.components.checkin.CheckInUiState
 import com.example.betterme.presentation.components.view.BetterMeTopBar
+import com.example.betterme.presentation.leaderboard.LeaderboardIntent
+import com.example.betterme.presentation.leaderboard.LeaderboardUi
+import com.example.betterme.presentation.leaderboard.LeaderboardViewModel
+import com.example.betterme.presentation.leaderboard.components.LeaderboardSummaryCard
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
 import com.example.betterme.utils.ShareUtils
@@ -72,10 +76,24 @@ fun ChallengeDetailScreen(
     userChallengeId: Int? = null,
     isPreview: Boolean = false,
     onBackClick: () -> Unit,
-    viewModel: ChallengeDetailViewModel = koinViewModel()
+    onOpenLeaderboard: (Int, String) -> Unit = { _, _ -> },
+    viewModel: ChallengeDetailViewModel = koinViewModel(),
+    leaderboardViewModel: LeaderboardViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
+    val leaderboardState by leaderboardViewModel.viewState.collectAsState()
     val context = LocalContext.current
+
+    // Initialize the leaderboard preview once the challenge id + title
+    // are known. Uses the session-cached read path so re-entering the
+    // detail screen for the same challenge is instant.
+    LaunchedEffect(state.challengeId, state.title) {
+        if (state.challengeId != 0 && state.title.isNotBlank()) {
+            leaderboardViewModel.processIntent(
+                LeaderboardIntent.Initialize(state.challengeId, state.title)
+            )
+        }
+    }
 
     var photoUri by remember { mutableStateOf<Uri?>(null) }
 
@@ -286,6 +304,29 @@ fun ChallengeDetailScreen(
                     item {
                         DescriptionBulletList(
                             bullets = state.descriptionBullets,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                }
+
+                // Monthly leaderboard preview — renders only when the
+                // session-cached snapshot has resolved with entries. The
+                // card itself handles the empty case (returns no UI).
+                (leaderboardState.ui as? LeaderboardUi.Success)?.let { ui ->
+                    item {
+                        Text(
+                            text = "Bảng xếp hạng tháng",
+                            style = BetterMeTypography.Title.Small.Bold,
+                            color = BetterMeColors.Text.TextPrimary,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                    item {
+                        LeaderboardSummaryCard(
+                            snapshot = ui.snapshot,
+                            onOpenFullLeaderboard = {
+                                onOpenLeaderboard(state.challengeId, state.title)
+                            },
                             modifier = Modifier.padding(horizontal = 16.dp)
                         )
                     }

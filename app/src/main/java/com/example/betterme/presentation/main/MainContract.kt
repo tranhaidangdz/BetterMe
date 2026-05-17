@@ -21,7 +21,10 @@ data class MainState(
     val challengeGroupId: Int? = null,
     val showChallengeUpcoming: Boolean = false,
     val showChallengeCompleted: Boolean = false,
-    val challengeCelebrationId: Int? = null
+    val challengeCelebrationId: Int? = null,
+    /** When non-null, render the monthly Leaderboard overlay for this challenge. */
+    val leaderboardChallengeId: Int? = null,
+    val leaderboardChallengeTitle: String = ""
 ) : MviViewState
 
 sealed class MainIntent : MviIntent {
@@ -53,6 +56,10 @@ sealed class MainIntent : MviIntent {
     data object CloseChallengeCompleted : MainIntent()
     data class ShowChallengeCelebration(val userChallengeId: Int) : MainIntent()
     data object DismissChallengeCelebration : MainIntent()
+
+    /** Open the monthly leaderboard overlay for a challenge. */
+    data class OpenLeaderboard(val challengeId: Int, val challengeTitle: String) : MainIntent()
+    data object CloseLeaderboard : MainIntent()
 }
 
 sealed class MainEvent : MviSingleEvent

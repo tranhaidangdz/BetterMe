@@ -8,6 +8,7 @@ import com.example.betterme.domain.repository.ChallengeLogRepository
 import com.example.betterme.domain.repository.ChallengeRepository
 import com.example.betterme.domain.repository.GroupTeamRepository
 import com.example.betterme.domain.repository.UserChallengeRepository
+import com.example.betterme.domain.usecase.leaderboard.SyncMyChallengeScoreUseCase
 import com.example.betterme.utils.DateUtils
 
 /**
@@ -27,7 +28,8 @@ class CheckInChallengeUseCase(
     private val userChallengeRepository: UserChallengeRepository,
     private val challengeLogRepository: ChallengeLogRepository,
     private val groupTeamRepository: GroupTeamRepository,
-    private val awardCompletionUseCase: AwardChallengeCompletionUseCase
+    private val awardCompletionUseCase: AwardChallengeCompletionUseCase,
+    private val syncMyChallengeScore: SyncMyChallengeScoreUseCase
 ) {
 
     sealed class Result {
@@ -53,7 +55,7 @@ class CheckInChallengeUseCase(
         latitude: Double? = null,
         longitude: Double? = null
     ): Result {
-        return try {
+        val txResult: Result = try {
             database.withTransaction {
                 val uc = userChallengeRepository.getById(userChallengeId)
                     ?: return@withTransaction Result.Error("UserChallenge $userChallengeId not found")
@@ -123,5 +125,18 @@ class CheckInChallengeUseCase(
         } catch (e: Exception) {
             Result.Error(e.message ?: "Đã xảy ra lỗi không xác định")
         }
+
+        // Fire-and-forget Firestore sync after a successful local commit.
+        // Failures inside the sync use case are logged but do NOT undo the
+        // check-in — the local record is the source of truth. Completion
+        // bypasses the 30s write throttle because the user is about to
+        // see the post-check-in celebration and expects the leaderboard
+        // to be up to date.
+        when (txResult) {
+            is Result.Progress -> runCatching { syncMyChallengeScore(userChallengeId, force = false) }
+            is Result.Completed -> runCatching { syncMyChallengeScore(userChallengeId, force = true) }
+            else -> Unit
+        }
+        return txResult
     }
 }

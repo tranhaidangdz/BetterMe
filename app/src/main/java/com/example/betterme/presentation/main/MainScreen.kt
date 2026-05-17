@@ -22,6 +22,7 @@ import com.example.betterme.presentation.challenge.achievements.ChallengeAchieve
 import com.example.betterme.presentation.challenge.badges.ChallengeBadgesScreen
 import com.example.betterme.presentation.challenge.completed.ChallengeCompletedScreen
 import com.example.betterme.presentation.challenge.detail.ChallengeDetailScreen
+import com.example.betterme.presentation.leaderboard.LeaderboardScreen
 import com.example.betterme.presentation.challenge.discover.ChallengeDiscoverScreen
 import com.example.betterme.presentation.challenge.group.ChallengeGroupScreen
 import com.example.betterme.presentation.challenge.overview.ChallengeOverviewScreen
@@ -306,7 +307,21 @@ fun MainScreen(
                 challengeId = if (state.challengeDetailIsPreview) detailId else null,
                 userChallengeId = if (state.challengeDetailIsPreview) null else detailId,
                 isPreview = state.challengeDetailIsPreview,
-                onBackClick = { viewModel.processIntent(MainIntent.CloseChallengeDetail) }
+                onBackClick = { viewModel.processIntent(MainIntent.CloseChallengeDetail) },
+                onOpenLeaderboard = { cid, title ->
+                    viewModel.processIntent(MainIntent.OpenLeaderboard(cid, title))
+                }
+            )
+        }
+
+        // Monthly Leaderboard overlay — full-screen. Mounts above the
+        // Challenge Detail overlay so back-stack-navigation feels natural
+        // (close leaderboard → back to detail → back to overview).
+        if (state.leaderboardChallengeId != null) {
+            LeaderboardScreen(
+                challengeId = state.leaderboardChallengeId!!,
+                challengeTitle = state.leaderboardChallengeTitle,
+                onBackClick = { viewModel.processIntent(MainIntent.CloseLeaderboard) }
             )
         }
 
@@ -321,6 +336,7 @@ fun MainScreen(
             || state.showChallengeUpcoming
             || state.showChallengeCompleted
             || state.challengeCelebrationId != null
+            || state.leaderboardChallengeId != null
         if (!anyOverlay) {
             BottomNavBar(
                 selectedTab = state.selectedTab,
