@@ -70,5 +70,5 @@ fun ShareCheckInRow(
     }
 }
 
-private val rowDateFmt = SimpleDateFormat("dd/MM/yyyy", Locale("vi"))
+private val rowDateFmt = SimpleDateFormat("dd/MM/yyyy", Locale.forLanguageTag("vi"))
 private fun formatRowDate(ms: Long): String = rowDateFmt.format(Date(ms))

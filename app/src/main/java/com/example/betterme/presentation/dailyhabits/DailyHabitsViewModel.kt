@@ -128,9 +128,9 @@ class DailyHabitsViewModel(
         val dates = (-3..3).map { offset ->
             val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, offset) }
             DateUiModel(
-                month = SimpleDateFormat("MMM", Locale("vi")).format(cal.time),
+                month = SimpleDateFormat("MMM", Locale.forLanguageTag("vi")).format(cal.time),
                 day = SimpleDateFormat("dd", Locale.getDefault()).format(cal.time),
-                weekDay = SimpleDateFormat("EEE", Locale("vi")).format(cal.time),
+                weekDay = SimpleDateFormat("EEE", Locale.forLanguageTag("vi")).format(cal.time),
                 dateMillis = startOfDay(cal),
                 isToday = offset == 0
             )

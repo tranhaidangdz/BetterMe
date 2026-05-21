@@ -188,6 +188,6 @@ private fun SheetPrimaryButton(
 
 /** "dd/MM/yyyy" — used as the sheet headline. */
 private fun formatShort(ms: Long): String {
-    val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale("vi"))
+    val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.forLanguageTag("vi"))
     return sdf.format(java.util.Date(ms))
 }

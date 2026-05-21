@@ -467,11 +467,11 @@ class HabitDetailViewModel(
             set(Calendar.MONTH, month)
             set(Calendar.YEAR, year)
         }
-        return SimpleDateFormat("'Tháng' M, yyyy", Locale("vi")).format(cal.time)
+        return SimpleDateFormat("'Tháng' M, yyyy", Locale.forLanguageTag("vi")).format(cal.time)
     }
 
     private fun formatLogDate(dateMillis: Long): String {
-        val sdf = SimpleDateFormat("EEEE, dd/M/yyyy", Locale("vi"))
+        val sdf = SimpleDateFormat("EEEE, dd/M/yyyy", Locale.forLanguageTag("vi"))
         return sdf.format(dateMillis).replaceFirstChar { it.uppercase() }
     }
 

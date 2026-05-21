@@ -539,6 +539,6 @@ private fun StickyCta(
 }
 
 private fun formatDate(ms: Long): String {
-    val sdf = SimpleDateFormat("dd/MM/yyyy", Locale("vi"))
+    val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.forLanguageTag("vi"))
     return sdf.format(Date(ms))
 }

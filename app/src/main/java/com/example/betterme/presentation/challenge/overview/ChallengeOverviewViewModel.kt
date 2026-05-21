@@ -165,7 +165,7 @@ class ChallengeOverviewViewModel(
             iconEmoji = c.icon_emoji,
             accentColor = parseColor(c.color_hex),
             isCompleted = isCompleted,
-            finishedDateLabel = SimpleDateFormat("dd/MM/yyyy", Locale("vi")).format(Date(finishedDate)),
+            finishedDateLabel = SimpleDateFormat("dd/MM/yyyy", Locale.forLanguageTag("vi")).format(Date(finishedDate)),
             rewardCoins = if (isCompleted) c.reward_coins else 0,
             rewardBadgeName = if (isCompleted) rewardBadgeName else null
         )

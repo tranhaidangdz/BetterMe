@@ -366,8 +366,13 @@ private fun LeaderboardRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = entry.displayName + if (entry.isCurrentUser) "  · Bạn" else "" +
-                        if (entry.isSuspicious) "  ?" else "",
+                    // Explicit parens around each `if/else` are load-bearing:
+                    // without them, Kotlin's `if` expression swallows the
+                    // trailing `+` and the suspicious-marker is dropped when
+                    // isCurrentUser is true.
+                    text = entry.displayName +
+                        (if (entry.isCurrentUser) "  · Bạn" else "") +
+                        (if (entry.isSuspicious) "  ?" else ""),
                     style = BetterMeTypography.Body.Medium,
                     color = BetterMeColors.Text.TextPrimary,
                     fontWeight = if (highlight) FontWeight.Bold else FontWeight.SemiBold,

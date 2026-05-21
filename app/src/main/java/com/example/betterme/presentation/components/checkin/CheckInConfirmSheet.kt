@@ -135,7 +135,7 @@ fun CheckInConfirmSheet(
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         val timeStr = if (state.timestamp > 0) {
-                            SimpleDateFormat("HH:mm • dd/MM/yyyy", Locale("vi"))
+                            SimpleDateFormat("HH:mm • dd/MM/yyyy", Locale.forLanguageTag("vi"))
                                 .format(Date(state.timestamp))
                         } else ""
                         Text(

@@ -232,5 +232,5 @@ private fun ProfileCard(share: VerifiedShare) {
     }
 }
 
-private val dateFmt = SimpleDateFormat("dd/MM/yyyy", Locale("vi"))
+private val dateFmt = SimpleDateFormat("dd/MM/yyyy", Locale.forLanguageTag("vi"))
 private fun formatDate(ms: Long): String = dateFmt.format(Date(ms))

@@ -90,6 +90,6 @@ fun RangeSummaryChip(
 
 private fun formatShort(ms: Long): String {
     if (ms <= 0) return "—"
-    val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale("vi"))
+    val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.forLanguageTag("vi"))
     return sdf.format(java.util.Date(ms))
 }

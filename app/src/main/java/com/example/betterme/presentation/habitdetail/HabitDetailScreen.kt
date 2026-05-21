@@ -490,7 +490,7 @@ private fun fetchLocation(context: Context, viewModel: HabitDetailViewModel) {
             if (location != null) {
                 // Reverse geocode
                 val locationName = try {
-                    val geocoder = Geocoder(context, Locale("vi"))
+                    val geocoder = Geocoder(context, Locale.forLanguageTag("vi"))
                     @Suppress("DEPRECATION")
                     val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
                     addresses?.firstOrNull()?.let { addr ->

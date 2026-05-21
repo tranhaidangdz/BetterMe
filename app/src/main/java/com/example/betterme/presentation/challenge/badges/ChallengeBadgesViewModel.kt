@@ -85,7 +85,7 @@ class ChallengeBadgesViewModel(
             accentColor = parseColor(color_hex),
             isEarned = earnedAt != null,
             earnedAtLabel = earnedAt?.let {
-                SimpleDateFormat("dd/MM/yyyy", Locale("vi")).format(Date(it))
+                SimpleDateFormat("dd/MM/yyyy", Locale.forLanguageTag("vi")).format(Date(it))
             }
         )
     }

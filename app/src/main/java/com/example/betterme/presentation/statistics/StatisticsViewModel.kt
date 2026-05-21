@@ -420,5 +420,5 @@ class StatisticsViewModel(
     }
 
     @Suppress("unused")
-    private val dateLabel = SimpleDateFormat("dd/MM", Locale("vi"))
+    private val dateLabel = SimpleDateFormat("dd/MM", Locale.forLanguageTag("vi"))
 }

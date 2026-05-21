@@ -138,7 +138,7 @@ class ChallengeDiscoverViewModel(
     private fun ChallengeEntity.toUpcomingUi(now: Long): com.example.betterme.presentation.challenge.model.UpcomingFeatureUiModel {
         val DAY_MS = 24L * 60L * 60L * 1000L
         val days = ((((start_date ?: now) - now) / DAY_MS).toInt()).coerceAtLeast(0)
-        val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale("vi"))
+        val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.forLanguageTag("vi"))
         return com.example.betterme.presentation.challenge.model.UpcomingFeatureUiModel(
             challengeId = id,
             title = title,

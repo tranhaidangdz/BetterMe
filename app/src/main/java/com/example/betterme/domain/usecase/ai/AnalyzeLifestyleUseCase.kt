@@ -59,15 +59,19 @@ class AnalyzeLifestyleUseCase(
 
         val effectiveLifestyle = lifestyle ?: UserLifestyleProfile.Default
         val habits = habitRepository.getHabits(userId).first()
-        val now = System.currentTimeMillis()
-        val windowStart = DateUtils.startOfDay() - WINDOW_DAYS_MS
+        // Day-precise everything — logs land at start-of-day, habit.start_date
+        // is normalized at write time, so using intra-day clock here would
+        // open a window of off-by-one drift between the numerator's range
+        // and the denominator's day-count.
+        val today = DateUtils.startOfDay()
+        val windowStart = today - WINDOW_DAYS_MS
 
         val records = habits.map { habit ->
             val logs = habitLogRepository.getLogs(habit.id).first()
             val doneInWindow = logs.count { log ->
-                log.status == "DONE" && log.date in windowStart..now
+                log.status == "DONE" && log.date in windowStart..today
             }
-            val habitDays = (((now - habit.start_date) / DAY_MS) + 1)
+            val habitDays = (((today - habit.start_date) / DAY_MS) + 1)
                 .toInt()
                 .coerceIn(1, WINDOW_DAYS)
             val rate = ((doneInWindow.toFloat() / habitDays.toFloat()) * 100f)

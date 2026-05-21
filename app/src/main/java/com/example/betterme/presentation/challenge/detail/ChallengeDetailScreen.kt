@@ -448,7 +448,7 @@ private fun fetchLocation(context: Context, viewModel: ChallengeDetailViewModel)
             .addOnSuccessListener { location ->
                 if (location != null) {
                     val name = try {
-                        val geo = Geocoder(context, Locale("vi"))
+                        val geo = Geocoder(context, Locale.forLanguageTag("vi"))
                         @Suppress("DEPRECATION")
                         val addrs = geo.getFromLocation(location.latitude, location.longitude, 1)
                         addrs?.firstOrNull()?.let { addr ->
