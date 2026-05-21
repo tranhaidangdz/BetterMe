@@ -39,13 +39,24 @@ class UserChallengeRepositoryImpl(
         lastCheckIn: Long
     ) = dao.updateProgress(id, currentStreak, bestStreak, progressPct, lastCheckIn)
 
-    override suspend fun markCompleted(id: Int, endDate: Long) = dao.markCompleted(id, endDate)
+    override suspend fun markCompleted(id: Int, endDate: Long): Boolean =
+        dao.markCompleted(id, endDate) > 0
+
+    override suspend fun markFailed(id: Int, endDate: Long): Boolean =
+        dao.markFailed(id, endDate) > 0
 
     override suspend fun markAbandoned(id: Int, endDate: Long) = dao.markAbandoned(id, endDate)
+
+    override suspend fun updateTargetEndDate(id: Int, targetEndDate: Long) =
+        dao.updateTargetEndDate(id, targetEndDate)
+
+    override suspend fun getAllActiveOrUpcoming() = dao.getAllActiveOrUpcoming()
 
     override suspend fun countCompletedByUser(userId: String) = dao.countCompletedByUser(userId)
 
     override suspend fun countActiveByUser(userId: String) = dao.countActiveByUser(userId)
+
+    override suspend fun countFailedByUser(userId: String) = dao.countFailedByUser(userId)
 
     override suspend fun maxBestStreak(userId: String) = dao.maxBestStreak(userId)
 }

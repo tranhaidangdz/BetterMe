@@ -4,6 +4,9 @@ import java.util.Calendar
 
 object DateUtils {
 
+    /** One calendar day in milliseconds. */
+    const val DAY_MS: Long = 24L * 60L * 60L * 1000L
+
     /** Floor a millis timestamp to start-of-day in the local timezone. */
     fun startOfDay(millis: Long = System.currentTimeMillis()): Long {
         val cal = Calendar.getInstance().apply {
@@ -67,4 +70,30 @@ object DateUtils {
 
     /** True when both timestamps fall on the same calendar day. */
     fun isSameDay(a: Long, b: Long): Boolean = startOfDay(a) == startOfDay(b)
+
+    /**
+     * Add `n` calendar days (positive or negative) using a Calendar so DST transitions
+     * stay on the correct day. `dayMillis + DAY_MS * n` would land on the wrong day on
+     * spring-forward / fall-back days; this never does.
+     */
+    fun plusDays(dayMillis: Long, n: Int): Long {
+        val cal = Calendar.getInstance().apply {
+            timeInMillis = dayMillis
+            add(Calendar.DAY_OF_YEAR, n)
+        }
+        return startOfDay(cal.timeInMillis)
+    }
+
+    /**
+     * Inclusive count of calendar days from `fromDay` (start-of-day) to `toDay`
+     * (start-of-day). DST-safe. Returns 0 when fromDay > toDay.
+     */
+    fun daysInclusive(fromDay: Long, toDay: Long): Int {
+        val from = startOfDay(fromDay)
+        val to = startOfDay(toDay)
+        if (from > to) return 0
+        val raw = ((to - from) / DAY_MS).toInt()
+        // DST can leave a ±1h sliver in the modulus — snap to nearest whole day.
+        return raw + 1
+    }
 }

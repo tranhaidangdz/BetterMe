@@ -7,6 +7,7 @@ import com.example.betterme.data.local.datastore.DataStoreManager
 import com.example.betterme.data.local.room.entities.ChallengeEntity
 import com.example.betterme.data.local.room.entities.UserChallengeEntity
 import com.example.betterme.data.local.room.relation.UserChallengeWithDetails
+import com.example.betterme.domain.challenge.UserChallengeStatus
 import com.example.betterme.domain.repository.AchievementRepository
 import com.example.betterme.domain.repository.ChallengeLogRepository
 import com.example.betterme.domain.repository.ChallengeRepository
@@ -17,6 +18,7 @@ import com.example.betterme.presentation.challenge.model.ChallengeProgressUiMode
 import com.example.betterme.presentation.challenge.model.CompletedChallengeUiModel
 import com.example.betterme.presentation.challenge.model.OverviewFilter
 import com.example.betterme.presentation.challenge.model.OverviewStatsUi
+import com.example.betterme.presentation.challenge.model.TerminalStatus
 import com.example.betterme.presentation.challenge.model.UpcomingChallengeUiModel
 import com.example.betterme.presentation.challenge.shared.Difficulty
 import com.example.betterme.utils.DateUtils
@@ -83,18 +85,18 @@ class ChallengeOverviewViewModel(
                 Triple(joined, upcomingPool, reminderIds)
             }.collect { (joined, upcomingPool, reminderIds) ->
                 val today = DateUtils.startOfDay()
-                val active = joined.filter { it.userChallenge.status == "ACTIVE" }
+                val active = joined.filter { it.userChallenge.status == UserChallengeStatus.ACTIVE }
                     .map { details ->
                         val log = challengeLogRepository.getLogByDate(details.userChallenge.id, today)
                         details.toProgressUi(isCheckedInToday = log?.status == "DONE")
                     }
                 val completed = joined.filter {
-                    it.userChallenge.status == "COMPLETED" || it.userChallenge.status == "ABANDONED"
+                    UserChallengeStatus.isTerminal(it.userChallenge.status)
                 }.map { it.toCompletedUi(achievementRepository) }
                 val upcoming = upcomingPool.map { it.toUpcomingUi(reminderIds.contains(it.id)) }
 
                 val joinedCount = joined.size
-                val completedCount = joined.count { it.userChallenge.status == "COMPLETED" }
+                val completedCount = joined.count { it.userChallenge.status == UserChallengeStatus.COMPLETED }
                 val rate = if (joinedCount > 0) (completedCount * 100) / joinedCount else 0
 
                 updateState {
@@ -154,7 +156,13 @@ class ChallengeOverviewViewModel(
     ): CompletedChallengeUiModel {
         val c = challenge
         val finishedDate = userChallenge.end_date ?: System.currentTimeMillis()
-        val isCompleted = userChallenge.status == "COMPLETED"
+        val terminalStatus = when (userChallenge.status) {
+            UserChallengeStatus.COMPLETED -> TerminalStatus.Completed
+            UserChallengeStatus.FAILED -> TerminalStatus.Failed
+            UserChallengeStatus.ABANDONED -> TerminalStatus.Abandoned
+            else -> TerminalStatus.Abandoned // Defensive: shouldn't surface for non-terminal.
+        }
+        val isCompleted = terminalStatus == TerminalStatus.Completed
         val rewardBadgeName = c.reward_badge_id?.let { id ->
             achievementRepo.getById(id)?.title
         }
@@ -164,8 +172,9 @@ class ChallengeOverviewViewModel(
             title = c.title,
             iconEmoji = c.icon_emoji,
             accentColor = parseColor(c.color_hex),
-            isCompleted = isCompleted,
-            finishedDateLabel = SimpleDateFormat("dd/MM/yyyy", Locale.forLanguageTag("vi")).format(Date(finishedDate)),
+            terminalStatus = terminalStatus,
+            finishedDateLabel = SimpleDateFormat("dd/MM/yyyy", Locale.forLanguageTag("vi"))
+                .format(Date(finishedDate)),
             rewardCoins = if (isCompleted) c.reward_coins else 0,
             rewardBadgeName = if (isCompleted) rewardBadgeName else null
         )

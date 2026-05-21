@@ -45,7 +45,9 @@ import com.example.betterme.domain.repository.UserRepository
 import com.example.betterme.domain.usecase.challenge.AwardChallengeCompletionUseCase
 import com.example.betterme.domain.usecase.challenge.CancelChallengeReminderUseCase
 import com.example.betterme.domain.usecase.challenge.ChallengeSeederUseCase
+import com.example.betterme.domain.usecase.challenge.BackfillChallengeStatusesUseCase
 import com.example.betterme.domain.usecase.challenge.CheckInChallengeUseCase
+import com.example.betterme.domain.usecase.challenge.EvaluateChallengeStatusUseCase
 import com.example.betterme.domain.usecase.challenge.JoinChallengeUseCase
 import com.example.betterme.domain.usecase.challenge.LeaveChallengeUseCase
 import com.example.betterme.domain.usecase.challenge.ScheduleChallengeReminderUseCase
@@ -328,12 +330,19 @@ val useCaseModule = module {
         )
     }
     factory {
+        // userChallengeRepo, challengeRepo, challengeLogRepo, awardCompletionUseCase
+        EvaluateChallengeStatusUseCase(get(), get(), get(), get())
+    }
+    factory {
         // database, challengeRepo, userChallengeRepo, challengeLogRepo,
-        // groupTeamRepo, awardCompletionUseCase, syncMyChallengeScore,
-        // syncGlobalLeaderboard
+        // groupTeamRepo, awardCompletionUseCase, evaluateStatusUseCase,
+        // syncMyChallengeScore, syncGlobalLeaderboard
         CheckInChallengeUseCase(
-            get(), get(), get(), get(), get(), get(), get(), get()
+            get(), get(), get(), get(), get(), get(), get(), get(), get()
         )
+    }
+    factory {
+        BackfillChallengeStatusesUseCase(get(), get())
     }
     factory { ScheduleChallengeReminderUseCase(get(), get()) }
     factory { CancelChallengeReminderUseCase(get(), get()) }

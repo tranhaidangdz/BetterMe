@@ -134,7 +134,7 @@ fun ChallengeOverviewScreen(
                 }
                 OverviewFilter.Completed -> {
                     if (state.completed.isEmpty()) {
-                        item { EmptyState("Bạn chưa hoàn thành thử thách nào") }
+                        item { EmptyState("Chưa có thử thách nào kết thúc") }
                     } else {
                         items(state.completed, key = { it.userChallengeId }) { row ->
                             CompletedChallengeRow(

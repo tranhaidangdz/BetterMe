@@ -28,8 +28,17 @@ data class UserChallengeEntity(
     val id: Int = 0,
     val user_id: String,
     val challenge_id: Int,
-    val status: String = "ACTIVE",                  // "ACTIVE" | "UPCOMING" | "COMPLETED" | "ABANDONED"
+    /** One of [com.example.betterme.domain.challenge.UserChallengeStatus]. */
+    val status: String = "ACTIVE",
+    /** Day-precise start (startOfDay millis) — set at join time. */
     val start_date: Long,
+    /**
+     * Day-precise deadline (startOfDay millis) — `start_date + (duration_days - 1) * DAY_MS`.
+     * Strict-daily validation requires a DONE log for every calendar day in [start_date, target_end_date].
+     * Nullable only for legacy rows joined before v12; the migration backfills these.
+     */
+    val target_end_date: Long? = null,
+    /** Terminal timestamp set on COMPLETED / FAILED / ABANDONED. Null while ACTIVE. */
     val end_date: Long? = null,
     val current_streak: Int = 0,
     val best_streak: Int = 0,

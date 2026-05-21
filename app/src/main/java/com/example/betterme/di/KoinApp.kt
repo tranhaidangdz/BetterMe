@@ -14,8 +14,14 @@ import com.example.betterme.BuildConfig
 import com.example.betterme.data.receiver.HabitReminderReceiver
 import com.example.betterme.data.worker.ChallengeReminderWorker
 import com.example.betterme.data.worker.MidnightCleanupWorker
+import com.example.betterme.domain.usecase.challenge.BackfillChallengeStatusesUseCase
 import com.google.firebase.FirebaseApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
+import org.koin.core.context.GlobalContext
 import org.koin.core.context.GlobalContext.startKoin
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
@@ -37,6 +43,30 @@ class KoinApp : Application() {
         registerNotificationChannels()
         scheduleDailyMidnightCleanup()
         initCloudinary()
+        runChallengeStatusBackfill()
+    }
+
+    /**
+     * Run the strict-daily evaluator across every ACTIVE / UPCOMING user_challenge row
+     * exactly once per process launch. This catches the "user opens the app after several
+     * days away" case — any row that crossed its deadline (or missed a day) gets its
+     * permanent FAILED transition recorded before the UI flow loads it.
+     *
+     * Runs on a process-scoped IO supervisor so a single bad row can't tear down the
+     * launch. Fire-and-forget: the UI does not block on this, but the first overview /
+     * detail render that lands after backfill completes will see updated statuses
+     * automatically because the Room flow re-emits on row updates.
+     */
+    private fun runChallengeStatusBackfill() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        scope.launch {
+            try {
+                val useCase = GlobalContext.get().get<BackfillChallengeStatusesUseCase>()
+                useCase()
+            } catch (e: Exception) {
+                Log.w("ChallengeBackfill", "Backfill scheduling failed", e)
+            }
+        }
     }
 
     /**

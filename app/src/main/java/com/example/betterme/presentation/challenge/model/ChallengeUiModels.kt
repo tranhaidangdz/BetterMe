@@ -38,7 +38,11 @@ data class UpcomingChallengeUiModel(
 )
 
 /**
- * UI model for a completed (or failed) challenge row.
+ * UI model for an ended challenge row (COMPLETED / FAILED / ABANDONED).
+ *
+ * `terminalStatus` is the discriminator. The row composable uses it to pick the badge
+ * label ("Đã thất bại" for FAILED, "Đã bỏ" for ABANDONED, no badge for COMPLETED) and
+ * whether to show reward chips.
  */
 data class CompletedChallengeUiModel(
     val userChallengeId: Int,
@@ -46,11 +50,16 @@ data class CompletedChallengeUiModel(
     val title: String,
     val iconEmoji: String,
     val accentColor: Color,
-    val isCompleted: Boolean,
+    val terminalStatus: TerminalStatus,
     val finishedDateLabel: String,
     val rewardCoins: Int,
     val rewardBadgeName: String?
-)
+) {
+    val isCompleted: Boolean get() = terminalStatus == TerminalStatus.Completed
+    val isFailed: Boolean get() = terminalStatus == TerminalStatus.Failed
+}
+
+enum class TerminalStatus { Completed, Failed, Abandoned }
 
 /**
  * UI model for cards on the Discover screen.
@@ -192,18 +201,23 @@ data class CelebrationUi(
 
 /**
  * Filter selection on the Overview screen.
+ *
+ * `storedStatus` is informational only — the actual filtering happens in-memory in
+ * [com.example.betterme.presentation.challenge.overview.ChallengeOverviewViewModel],
+ * which buckets terminal rows (COMPLETED / FAILED / ABANDONED) into the `Completed`
+ * tab together so the user can browse their full ended-challenge history in one place.
  */
 enum class OverviewFilter(val label: String, val storedStatus: String) {
     Active("Đang diễn ra", "ACTIVE"),
     Upcoming("Sắp diễn ra", "UPCOMING"),
-    Completed("Đã hoàn thành", "COMPLETED")
+    Completed("Đã kết thúc", "COMPLETED")
 }
 
 /**
- * Sub-filter for the Completed screen.
+ * Sub-filter for the ended-challenges screen.
  */
 enum class CompletedFilter(val label: String) {
     All("Tất cả"),
     Done("Đã hoàn thành"),
-    Failed("Chưa hoàn thành")
+    Failed("Đã thất bại")
 }

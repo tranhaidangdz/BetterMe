@@ -68,18 +68,35 @@ interface UserChallengeDao {
         SET status = 'COMPLETED',
             end_date = :endDate,
             progress_pct = 100
-        WHERE id = :id
+        WHERE id = :id AND status NOT IN ('COMPLETED', 'FAILED', 'ABANDONED')
     """)
-    suspend fun markCompleted(id: Int, endDate: Long)
+    suspend fun markCompleted(id: Int, endDate: Long): Int
+
+    @Query("""
+        UPDATE user_challenges
+        SET status = 'FAILED',
+            end_date = :endDate
+        WHERE id = :id AND status NOT IN ('COMPLETED', 'FAILED', 'ABANDONED')
+    """)
+    suspend fun markFailed(id: Int, endDate: Long): Int
 
     @Query("UPDATE user_challenges SET status = 'ABANDONED', end_date = :endDate WHERE id = :id")
     suspend fun markAbandoned(id: Int, endDate: Long)
+
+    @Query("UPDATE user_challenges SET target_end_date = :targetEndDate WHERE id = :id")
+    suspend fun updateTargetEndDate(id: Int, targetEndDate: Long)
+
+    @Query("SELECT * FROM user_challenges WHERE status IN ('ACTIVE', 'UPCOMING')")
+    suspend fun getAllActiveOrUpcoming(): List<UserChallengeEntity>
 
     @Query("SELECT COUNT(*) FROM user_challenges WHERE user_id = :userId AND status = 'COMPLETED'")
     suspend fun countCompletedByUser(userId: String): Int
 
     @Query("SELECT COUNT(*) FROM user_challenges WHERE user_id = :userId AND status = 'ACTIVE'")
     suspend fun countActiveByUser(userId: String): Int
+
+    @Query("SELECT COUNT(*) FROM user_challenges WHERE user_id = :userId AND status = 'FAILED'")
+    suspend fun countFailedByUser(userId: String): Int
 
     @Query("SELECT MAX(best_streak) FROM user_challenges WHERE user_id = :userId")
     suspend fun maxBestStreak(userId: String): Int?

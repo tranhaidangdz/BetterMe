@@ -79,6 +79,44 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
     }
 }
 
+/**
+ * v11 → v12 (strict-daily challenge validation):
+ * adds nullable `target_end_date` column to `user_challenges` and backfills it for every
+ * existing row from `start_date + (duration_days - 1) * 86_400_000`. Legacy rows that
+ * don't have a matching challenge row (FK should prevent this but we still null-guard) are
+ * left as NULL — the runtime evaluator treats NULL `target_end_date` as "not strict" and
+ * falls back to the legacy streak rule, so old data can never crash the evaluator.
+ *
+ * No status values are mutated by this migration; the startup backfill pass
+ * (BetterMeApplication) runs the EvaluateChallengeStatusUseCase across all ACTIVE rows
+ * exactly once per launch and writes COMPLETED / FAILED as appropriate.
+ */
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE user_challenges ADD COLUMN target_end_date INTEGER")
+        // Backfill: target_end_date = start_date + (duration_days - 1) * 86_400_000
+        // Day length in ms is 86_400_000. We use a sub-select against challenges so each
+        // row gets its own duration.
+        db.execSQL(
+            """
+            UPDATE user_challenges
+            SET target_end_date = start_date + (
+                (SELECT duration_days FROM challenges WHERE challenges.id = user_challenges.challenge_id) - 1
+            ) * 86400000
+            WHERE EXISTS (
+                SELECT 1 FROM challenges WHERE challenges.id = user_challenges.challenge_id
+            )
+            """.trimIndent()
+        )
+    }
+}
+
 /** Aggregated list passed to the Room builder. Add new migrations to this list as the
  *  schema evolves. */
-val ALL_MIGRATIONS = arrayOf(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+val ALL_MIGRATIONS = arrayOf(
+    MIGRATION_7_8,
+    MIGRATION_8_9,
+    MIGRATION_9_10,
+    MIGRATION_10_11,
+    MIGRATION_11_12
+)

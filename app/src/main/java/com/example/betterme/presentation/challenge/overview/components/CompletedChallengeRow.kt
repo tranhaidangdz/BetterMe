@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.betterme.presentation.challenge.model.CompletedChallengeUiModel
+import com.example.betterme.presentation.challenge.model.TerminalStatus
 import com.example.betterme.presentation.challenge.shared.ChallengeIconTile
 import com.example.betterme.presentation.challenge.shared.ChipTheme
 import com.example.betterme.presentation.challenge.shared.RewardChip
@@ -65,22 +66,19 @@ fun CompletedChallengeRow(
                     maxLines = 2,
                     modifier = Modifier.weight(1f, fill = false)
                 )
-                if (!model.isCompleted) {
-                    Text(
-                        text = "Chưa hoàn thành",
-                        style = BetterMeTypography.Body.Small.Medium,
-                        color = BetterMeColors.Red,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(BetterMeColors.Red.copy(alpha = 0.1f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
+                when (model.terminalStatus) {
+                    TerminalStatus.Failed -> StatusBadge(text = "Đã thất bại")
+                    TerminalStatus.Abandoned -> StatusBadge(text = "Đã bỏ")
+                    TerminalStatus.Completed -> Unit
                 }
             }
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = if (model.isCompleted) "Hoàn thành ${model.finishedDateLabel}"
-                else "Kết thúc ${model.finishedDateLabel}",
+                text = when (model.terminalStatus) {
+                    TerminalStatus.Completed -> "Hoàn thành ${model.finishedDateLabel}"
+                    TerminalStatus.Failed -> "Thất bại ngày ${model.finishedDateLabel}"
+                    TerminalStatus.Abandoned -> "Kết thúc ${model.finishedDateLabel}"
+                },
                 style = BetterMeTypography.Body.Small.Medium,
                 color = BetterMeColors.Text.TextTertiary
             )
@@ -94,4 +92,17 @@ fun CompletedChallengeRow(
             }
         }
     }
+}
+
+@Composable
+private fun StatusBadge(text: String) {
+    Text(
+        text = text,
+        style = BetterMeTypography.Body.Small.Medium,
+        color = BetterMeColors.Red,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(BetterMeColors.Red.copy(alpha = 0.1f))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    )
 }

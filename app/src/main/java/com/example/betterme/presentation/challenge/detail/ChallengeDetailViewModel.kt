@@ -6,12 +6,14 @@ import com.example.betterme.base.BaseMviViewModel
 import com.example.betterme.data.local.datastore.DataStoreManager
 import com.example.betterme.data.local.room.entities.ChallengeEntity
 import com.example.betterme.data.local.room.entities.UserChallengeEntity
+import com.example.betterme.domain.challenge.UserChallengeStatus
 import com.example.betterme.domain.repository.AchievementRepository
 import com.example.betterme.domain.repository.ChallengeLogRepository
 import com.example.betterme.domain.repository.ChallengeRepository
 import com.example.betterme.domain.repository.ImageUploadRepository
 import com.example.betterme.domain.repository.UserChallengeRepository
 import com.example.betterme.domain.usecase.challenge.CheckInChallengeUseCase
+import com.example.betterme.domain.usecase.challenge.EvaluateChallengeStatusUseCase
 import com.example.betterme.domain.usecase.challenge.JoinChallengeUseCase
 import com.example.betterme.domain.usecase.challenge.LeaveChallengeUseCase
 import com.example.betterme.domain.usecase.challenge.ScheduleChallengeReminderUseCase
@@ -33,6 +35,7 @@ class ChallengeDetailViewModel(
     private val joinChallengeUseCase: JoinChallengeUseCase,
     private val leaveChallengeUseCase: LeaveChallengeUseCase,
     private val checkInChallengeUseCase: CheckInChallengeUseCase,
+    private val evaluateChallengeStatusUseCase: EvaluateChallengeStatusUseCase,
     private val scheduleReminderUseCase: ScheduleChallengeReminderUseCase,
     private val imageUploadRepository: ImageUploadRepository
 ) : BaseMviViewModel<ChallengeDetailIntent, ChallengeDetailState, ChallengeDetailEvent>() {
@@ -114,7 +117,10 @@ class ChallengeDetailViewModel(
         val existing = if (userId.isNotBlank()) {
             userChallengeRepository.getByUserAndChallenge(userId, challengeId)
         } else null
-        if (existing != null && existing.status == "ACTIVE") {
+        if (existing != null) {
+            // Active, upcoming, OR terminal (COMPLETED / FAILED / ABANDONED) → use the
+            // engaged-mode loader so the user can see history and continue check-ins
+            // on a FAILED row.
             loadActiveSuspending(existing.id)
             return
         }
@@ -156,6 +162,11 @@ class ChallengeDetailViewModel(
      */
     private suspend fun loadActiveSuspending(userChallengeId: Int) {
         updateState { copy(isLoading = true, userChallengeId = userChallengeId) }
+        // Re-evaluate first so a row that crossed its deadline (or missed a day) while
+        // the user was away gets its FAILED transition committed before we render the
+        // detail UI. Without this, the screen would render ACTIVE for a frame, then
+        // flip when the user's next check-in attempt triggers the evaluator.
+        evaluateChallengeStatusUseCase(userChallengeId)
         val uc = userChallengeRepository.getById(userChallengeId)
         val challenge = uc?.challenge_id?.let { challengeRepository.getById(it) }
         if (uc == null || challenge == null) {
@@ -169,7 +180,8 @@ class ChallengeDetailViewModel(
         val weekStrip = buildWeekStrip(doneDates.toSet(), uc.start_date, challenge.target_streak)
         val daysRemaining = (challenge.target_streak - uc.current_streak).coerceAtLeast(0)
         val mode = when (uc.status) {
-            "COMPLETED", "ABANDONED" -> DetailMode.Completed
+            UserChallengeStatus.COMPLETED, UserChallengeStatus.ABANDONED -> DetailMode.Completed
+            UserChallengeStatus.FAILED -> DetailMode.Failed
             else -> DetailMode.Active
         }
 
@@ -193,6 +205,8 @@ class ChallengeDetailViewModel(
                 currentStreak = uc.current_streak,
                 progressPct = uc.progress_pct,
                 daysRemaining = daysRemaining,
+                targetEndDate = uc.target_end_date,
+                failedAtDate = if (uc.status == UserChallengeStatus.FAILED) uc.end_date else null,
                 isGroup = challenge.is_group,
                 weekStrip = weekStrip,
                 descriptionBullets = challenge.toBullets(),
@@ -298,6 +312,37 @@ class ChallengeDetailViewModel(
                             )
                         )
                     }
+                }
+                is CheckInChallengeUseCase.Result.FailedNow -> {
+                    // The user just checked in, but a prior gap was detected — the row
+                    // is now permanently FAILED. Reload so the banner + status surface
+                    // appear; the new check-in is preserved in the timeline.
+                    updateState { copy(checkInStep = CheckInStep.Idle) }
+                    sendEvent(
+                        ChallengeDetailEvent.ShowMessage(
+                            "Thử thách đã thất bại do thiếu ngày check-in. Lịch sử vẫn được lưu."
+                        )
+                    )
+                    currentState.userChallengeId?.let { reloadActive(it) }
+                }
+                is CheckInChallengeUseCase.Result.LoggedAfterTerminal -> {
+                    // Post-terminal history check-in. Refresh the strip so the new dot
+                    // shows up, but don't claim progress or fire a celebration.
+                    val refreshedStrip = currentState.weekStrip.map { day ->
+                        if (day.isToday) day.copy(status = com.example.betterme.presentation.challenge.model.DayStatus.Done)
+                        else day
+                    }
+                    updateState {
+                        copy(
+                            weekStrip = refreshedStrip,
+                            checkInStep = CheckInStep.Idle
+                        )
+                    }
+                    sendEvent(
+                        ChallengeDetailEvent.ShowMessage(
+                            "Đã ghi check-in cho lịch sử. Trạng thái thử thách không đổi."
+                        )
+                    )
                 }
                 CheckInChallengeUseCase.Result.AlreadyCheckedIn -> {
                     updateState { copy(checkInStep = CheckInStep.Idle) }

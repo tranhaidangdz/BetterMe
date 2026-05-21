@@ -11,9 +11,10 @@ import com.example.betterme.domain.repository.UserChallengeRepository
 import com.example.betterme.domain.repository.UserRepository
 
 /**
- * Runs when a UserChallenge crosses its target streak. Marks the row COMPLETED, awards
- * coins, awards the configured reward badge (if any), auto-awards any threshold-based
- * badges (streak / total check-ins / coins), and bumps the user's group team coins.
+ * Grants the rewards for a successful challenge completion: coins, configured reward
+ * badge, threshold bonus badges (streak / total check-ins / coins), and group-team coin
+ * bumps. Assumes the caller has already flipped the row to COMPLETED via
+ * [EvaluateChallengeStatusUseCase] (which is the only place permitted to do that).
  *
  * Caller is expected to have already inserted the final ChallengeLog row.
  */
@@ -36,19 +37,14 @@ class AwardChallengeCompletionUseCase(
         userChallenge: UserChallengeEntity,
         challenge: ChallengeEntity
     ): Result {
-        val now = System.currentTimeMillis()
-
-        // 1. Mark the user_challenge row COMPLETED.
-        userChallengeRepository.markCompleted(userChallenge.id, now)
-
-        // 2. Award coins (also bumps xp).
+        // Award coins (also bumps xp).
         val coins = challenge.reward_coins
         if (coins > 0) {
             userRepository.addCoins(userChallenge.user_id, coins)
             userRepository.recomputeLevel(userChallenge.user_id)
         }
 
-        // 3. Award the configured reward badge (idempotent).
+        // Award the configured reward badge (idempotent).
         val rewardBadge = challenge.reward_badge_id?.let { badgeId ->
             val badge = achievementRepository.getById(badgeId)
             if (badge != null && !userAchievementRepository.hasEarned(userChallenge.user_id, badgeId)) {
@@ -61,7 +57,7 @@ class AwardChallengeCompletionUseCase(
             } else null
         }
 
-        // 4. Auto-award threshold badges (streak / total check-ins / coins / challenges).
+        // Auto-award threshold badges (streak / total check-ins / coins / challenges).
         val bonusBadges = buildList {
             // Streak — best streak across all the user's challenges.
             val maxStreak = userChallengeRepository.maxBestStreak(userChallenge.user_id) ?: 0
@@ -101,7 +97,7 @@ class AwardChallengeCompletionUseCase(
             )
         }
 
-        // 5. Group challenge — bump team's total_coins by the reward amount.
+        // Group challenge — bump team's total_coins by the reward amount.
         if (challenge.is_group && userChallenge.team_id != null && coins > 0) {
             groupTeamRepository.addCoinsToTeam(userChallenge.team_id, coins)
         }

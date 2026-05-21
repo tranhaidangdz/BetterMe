@@ -42,7 +42,10 @@ fun ChallengeCompletedScreen(
         when (subFilter) {
             CompletedFilter.All -> state.completed
             CompletedFilter.Done -> state.completed.filter { it.isCompleted }
-            CompletedFilter.Failed -> state.completed.filter { !it.isCompleted }
+            // Strict "FAILED only" — ABANDONED rows show up in All but not here, since
+            // abandonment is a user action while FAILED is the consequence of missing
+            // a required day. The user asked for these to be visually distinguishable.
+            CompletedFilter.Failed -> state.completed.filter { it.isFailed }
         }
     }
 
@@ -61,7 +64,7 @@ fun ChallengeCompletedScreen(
             item {
                 BetterMeTopBar(
                     leadingIconRes = R.drawable.ic_arrow_left,
-                    title = "Đã hoàn thành",
+                    title = "Lịch sử thử thách",
                     onLeadingClick = onBackClick
                 )
             }

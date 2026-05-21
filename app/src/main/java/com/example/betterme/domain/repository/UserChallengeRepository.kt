@@ -34,13 +34,23 @@ interface UserChallengeRepository {
         lastCheckIn: Long
     )
 
-    suspend fun markCompleted(id: Int, endDate: Long)
+    /** Returns true when the row transitioned to COMPLETED. False if already terminal. */
+    suspend fun markCompleted(id: Int, endDate: Long): Boolean
+
+    /** Returns true when the row transitioned to FAILED. False if already terminal. */
+    suspend fun markFailed(id: Int, endDate: Long): Boolean
 
     suspend fun markAbandoned(id: Int, endDate: Long)
+
+    suspend fun updateTargetEndDate(id: Int, targetEndDate: Long)
+
+    suspend fun getAllActiveOrUpcoming(): List<UserChallengeEntity>
 
     suspend fun countCompletedByUser(userId: String): Int
 
     suspend fun countActiveByUser(userId: String): Int
+
+    suspend fun countFailedByUser(userId: String): Int
 
     suspend fun maxBestStreak(userId: String): Int?
 }

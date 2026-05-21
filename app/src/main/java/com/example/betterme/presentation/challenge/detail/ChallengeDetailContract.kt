@@ -9,7 +9,15 @@ import com.example.betterme.presentation.challenge.model.DayCellUi
 import com.example.betterme.presentation.challenge.shared.Difficulty
 import androidx.compose.ui.graphics.Color
 
-enum class DetailMode { Preview, Active, Completed }
+/**
+ * Visual mode for the detail screen.
+ *  - Preview: catalog row (not yet joined).
+ *  - Active: joined and still in the strict window.
+ *  - Completed: terminal success (status=COMPLETED).
+ *  - Failed: terminal fail (status=FAILED). Check-in button stays visible — the user can
+ *    log post-fail check-ins for tracking history, but they do not affect status.
+ */
+enum class DetailMode { Preview, Active, Completed, Failed }
 
 enum class CheckInStep { Idle, Confirm, Success }
 
@@ -34,6 +42,10 @@ data class ChallengeDetailState(
     val currentStreak: Int = 0,
     val progressPct: Int = 0,
     val daysRemaining: Int = 0,
+    /** Strict-daily deadline (start_of_day millis). Null on Preview mode. */
+    val targetEndDate: Long? = null,
+    /** First missed calendar day, only set when status == FAILED. */
+    val failedAtDate: Long? = null,
     val isGroup: Boolean = false,
     val weekStrip: List<DayCellUi> = emptyList(),
     val descriptionBullets: List<String> = emptyList(),

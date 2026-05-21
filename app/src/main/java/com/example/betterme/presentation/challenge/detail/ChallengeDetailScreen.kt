@@ -41,6 +41,7 @@ import com.example.betterme.presentation.challenge.detail.components.ChallengeHe
 import com.example.betterme.presentation.challenge.detail.components.ChallengeStatsRow
 import com.example.betterme.presentation.challenge.detail.components.ContinueChallengeBottomBar
 import com.example.betterme.presentation.challenge.detail.components.DescriptionBulletList
+import com.example.betterme.presentation.challenge.detail.components.FailedChallengeBanner
 import com.example.betterme.presentation.challenge.detail.components.RewardRow
 import com.example.betterme.presentation.challenge.detail.components.WeekStreakRow
 import com.example.betterme.presentation.components.checkin.CheckInConfirmSheet
@@ -247,7 +248,20 @@ fun ChallengeDetailScreen(
                     )
                 }
 
-                if (state.mode == DetailMode.Active || state.mode == DetailMode.Completed) {
+                if (state.mode == DetailMode.Failed) {
+                    item {
+                        FailedChallengeBanner(
+                            failedAtDate = state.failedAtDate,
+                            targetEndDate = state.targetEndDate,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                }
+
+                if (state.mode == DetailMode.Active ||
+                    state.mode == DetailMode.Completed ||
+                    state.mode == DetailMode.Failed
+                ) {
                     item {
                         Text(
                             text = "Lịch sử",
@@ -358,6 +372,23 @@ fun ChallengeDetailScreen(
                         state.isSavingCheckIn -> "Đang lưu..." to false
                         alreadyCheckedInToday -> "Hôm nay đã check-in" to false
                         else -> "Check-in hôm nay" to true
+                    }
+                    ContinueChallengeBottomBar(
+                        label = label,
+                        enabled = enabled,
+                        onClick = { viewModel.processIntent(ChallengeDetailIntent.StartCheckIn) }
+                    )
+                }
+                DetailMode.Failed -> {
+                    // History-only check-ins. The button keeps a softer label so the
+                    // user understands the action doesn't recover the challenge.
+                    val alreadyCheckedInToday = state.weekStrip.any {
+                        it.isToday && it.status == com.example.betterme.presentation.challenge.model.DayStatus.Done
+                    }
+                    val (label, enabled) = when {
+                        state.isSavingCheckIn -> "Đang lưu..." to false
+                        alreadyCheckedInToday -> "Hôm nay đã check-in" to false
+                        else -> "Ghi check-in lịch sử" to true
                     }
                     ContinueChallengeBottomBar(
                         label = label,
