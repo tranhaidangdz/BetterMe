@@ -27,5 +27,14 @@ data class HabitLogEntity(
     val image: String?,
     val created_at: Long,
     val latitude: Double? = null,
-    val longitude: Double? = null
+    val longitude: Double? = null,
+    /**
+     * Wall-clock of last local mutation. Drives last-write-wins reconciliation
+     * against `users/{uid}/habit_logs/{habitId}_{date}`.
+     */
+    val updated_at: Long = System.currentTimeMillis(),
+    /** Last successful push timestamp. Dirty when synced_at < updated_at. */
+    val synced_at: Long? = null,
+    /** Soft-delete marker for two-way sync. */
+    val is_deleted: Boolean = false
 )

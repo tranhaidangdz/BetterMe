@@ -20,6 +20,7 @@ import com.example.betterme.data.local.room.dao.UserAchievementDao
 import com.example.betterme.data.local.room.dao.UserCategoryDao
 import com.example.betterme.data.local.room.dao.UserChallengeDao
 import com.example.betterme.data.local.room.dao.UserDao
+import com.example.betterme.data.local.room.dao.UserSettingsDao
 import com.example.betterme.data.local.room.entities.AIChatEntity
 import com.example.betterme.data.local.room.entities.AchievementEntity
 import com.example.betterme.data.local.room.entities.AiCacheEntity
@@ -35,6 +36,7 @@ import com.example.betterme.data.local.room.entities.UserAchievementEntity
 import com.example.betterme.data.local.room.entities.UserCategoryEntity
 import com.example.betterme.data.local.room.entities.UserChallengeEntity
 import com.example.betterme.data.local.room.entities.UserEntity
+import com.example.betterme.data.local.room.entities.UserSettingsEntity
 import com.example.betterme.data.local.room.migrations.ALL_MIGRATIONS
 
 @Database(
@@ -53,9 +55,10 @@ import com.example.betterme.data.local.room.migrations.ALL_MIGRATIONS
         UserAchievementEntity::class,
         NotificationEntity::class,
         AIChatEntity::class,
-        AiCacheEntity::class
+        AiCacheEntity::class,
+        UserSettingsEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -77,6 +80,7 @@ abstract class BetterMeDatabase : RoomDatabase() {
     abstract fun aiChatDao(): AIChatDao
     abstract fun aiCacheDao(): AiCacheDao
     abstract fun userDao(): UserDao
+    abstract fun userSettingsDao(): UserSettingsDao
 
     companion object {
 

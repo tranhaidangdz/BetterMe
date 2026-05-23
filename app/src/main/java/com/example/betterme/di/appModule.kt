@@ -24,6 +24,7 @@ import com.example.betterme.data.repository.LocalImageUploadRepositoryImpl
 import com.example.betterme.data.repository.ReminderRepositoryImpl
 import com.example.betterme.data.repository.NotificationRepositoryImpl
 import com.example.betterme.data.repository.UserAchievementRepositoryImpl
+import com.example.betterme.data.repository.UserSettingsRepositoryImpl
 import com.example.betterme.data.repository.UserCategoryRepositoryImpl
 import com.example.betterme.data.repository.UserChallengeRepositoryImpl
 import com.example.betterme.data.repository.UserRepositoryImpl
@@ -42,6 +43,7 @@ import com.example.betterme.domain.repository.UserAchievementRepository
 import com.example.betterme.domain.repository.UserCategoryRepository
 import com.example.betterme.domain.repository.UserChallengeRepository
 import com.example.betterme.domain.repository.UserRepository
+import com.example.betterme.domain.repository.UserSettingsRepository
 import com.example.betterme.domain.usecase.challenge.AwardChallengeCompletionUseCase
 import com.example.betterme.domain.usecase.challenge.CancelChallengeReminderUseCase
 import com.example.betterme.domain.usecase.challenge.ChallengeSeederUseCase
@@ -70,12 +72,16 @@ import com.example.betterme.data.leaderboard.MotivationalEventEngine
 import com.example.betterme.data.leaderboard.RankSnapshotStore
 import com.example.betterme.data.repository.AiCacheRepositoryImpl
 import com.example.betterme.data.share.ShareRepositoryImpl
+import com.example.betterme.data.sync.AIChatSynchronizer
 import com.example.betterme.data.sync.ChallengeLogSynchronizer
 import com.example.betterme.data.sync.ConnectivityObserver
+import com.example.betterme.data.sync.HabitLogSynchronizer
+import com.example.betterme.data.sync.HabitSynchronizer
 import com.example.betterme.data.sync.SyncCoordinator
 import com.example.betterme.data.sync.SyncStatusRepository
 import com.example.betterme.data.sync.UserChallengeSynchronizer
 import com.example.betterme.data.sync.UserProfileSynchronizer
+import com.example.betterme.data.sync.UserSettingsSynchronizer
 import com.example.betterme.domain.ai.AiCacheRepository
 import com.example.betterme.domain.ai.AiHabitInsightRepository
 import com.example.betterme.domain.ai.AiHomeSessionMemory
@@ -109,6 +115,7 @@ import com.example.betterme.presentation.challenge.detail.ChallengeDetailViewMod
 import com.example.betterme.presentation.challenge.discover.ChallengeDiscoverViewModel
 import com.example.betterme.presentation.challenge.group.ChallengeGroupViewModel
 import com.example.betterme.presentation.challenge.overview.ChallengeOverviewViewModel
+import com.example.betterme.presentation.sync.SyncStatusViewModel
 import com.example.betterme.presentation.onboarding.habitselection.HabitSelectionViewModel
 import com.example.betterme.presentation.onboarding.habitsuggestion.HabitSuggestionViewModel
 import com.example.betterme.presentation.onboarding.OnboardingViewModel
@@ -185,15 +192,27 @@ val appModule = module {
     single { UserProfileSynchronizer(get(), get()) }
     single { UserChallengeSynchronizer(get(), get()) }
     single { ChallengeLogSynchronizer(get(), get(), get()) }
+    single { AIChatSynchronizer(get(), get()) }
+    single { UserSettingsSynchronizer(get(), get()) }
+    single { HabitSynchronizer(get(), get()) }
+    single { HabitLogSynchronizer(get(), get()) }
     single {
         SyncCoordinator(
             dataStoreManager = get(),
             connectivity = get(),
             syncStatusRepository = get(),
             synchronizers = listOf(
+                // Order matters slightly: settings + profile first so subsequent
+                // pulls land on a row that knows the right onboarding state,
+                // then user-private content (habits → habit_logs, then user
+                // challenges → challenge_logs).
                 get<UserProfileSynchronizer>(),
+                get<UserSettingsSynchronizer>(),
+                get<HabitSynchronizer>(),
+                get<HabitLogSynchronizer>(),
                 get<UserChallengeSynchronizer>(),
-                get<ChallengeLogSynchronizer>()
+                get<ChallengeLogSynchronizer>(),
+                get<AIChatSynchronizer>()
             )
         )
     }
@@ -218,6 +237,7 @@ val roomModule = module {
     single { get<BetterMeDatabase>().userAchievementDao() }
     single { get<BetterMeDatabase>().notificationDao() }
     single { get<BetterMeDatabase>().aiChatDao() }
+    single { get<BetterMeDatabase>().userSettingsDao() }
     single { get<BetterMeDatabase>().aiCacheDao() }
     single { get<BetterMeDatabase>().userDao() }
 }
@@ -278,6 +298,10 @@ val repositoryModule = module {
 
     single<UserRepository> {
         UserRepositoryImpl(get())
+    }
+
+    single<UserSettingsRepository> {
+        UserSettingsRepositoryImpl(get())
     }
 
     // AI / OpenRouter — single Retrofit instance with a key-provider lambda so a
@@ -464,6 +488,7 @@ val viewModelModule = module {
     viewModelOf(::HabitDetailViewModel)
     viewModelOf(::StatisticsViewModel)
     viewModelOf(::ChallengeOverviewViewModel)
+    viewModelOf(::SyncStatusViewModel)
     viewModelOf(::ChallengeDetailViewModel)
     viewModelOf(::ChallengeDiscoverViewModel)
     viewModelOf(::ChallengeBadgesViewModel)

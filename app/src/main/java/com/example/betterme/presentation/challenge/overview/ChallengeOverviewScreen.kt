@@ -92,6 +92,15 @@ fun ChallengeOverviewScreen(
             }
 
             item {
+                // Slim sync-status pill above the hero card. Disappears entirely
+                // when the app is IDLE with no prior successful sync (nothing
+                // meaningful to surface yet).
+                com.example.betterme.presentation.sync.SyncStatusBadge(
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                )
+            }
+
+            item {
                 OverviewHeroCard(
                     joined = state.stats.joined,
                     completed = state.stats.completed,

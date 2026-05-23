@@ -46,8 +46,44 @@ interface HabitLogDao {
 
     /** Lấy tất cả habitId đã DONE trong ngày (date = startOfDay millis) */
     @Query("""
-        SELECT habit_id FROM habit_logs 
+        SELECT habit_id FROM habit_logs
         WHERE date = :dateMillis AND status = 'DONE'
     """)
     suspend fun getCompletedHabitIdsByDate(dateMillis: Long): List<Int>
+
+    // ============================================================
+    // Sync helpers (offline-first)
+    // ============================================================
+
+    /**
+     * Soft-delete a single log row. Used in preference to hard delete so the
+     * deletion propagates via sync.
+     */
+    @Query("""
+        UPDATE habit_logs
+        SET is_deleted = 1,
+            updated_at = :updatedAt,
+            synced_at = NULL
+        WHERE id = :logId
+    """)
+    suspend fun softDeleteLog(logId: Int, updatedAt: Long)
+
+    @Query("""
+        SELECT hl.* FROM habit_logs hl
+        INNER JOIN habits h ON hl.habit_id = h.id
+        WHERE h.user_id = :userId
+          AND (hl.synced_at IS NULL OR hl.synced_at < hl.updated_at)
+    """)
+    suspend fun getDirtyHabitLogs(userId: String): List<HabitLogEntity>
+
+    @Query("""
+        SELECT COUNT(*) FROM habit_logs hl
+        INNER JOIN habits h ON hl.habit_id = h.id
+        WHERE h.user_id = :userId
+          AND (hl.synced_at IS NULL OR hl.synced_at < hl.updated_at)
+    """)
+    suspend fun countDirtyHabitLogs(userId: String): Int
+
+    @Query("UPDATE habit_logs SET synced_at = :syncedAt WHERE id = :id AND updated_at = :pushedUpdatedAt")
+    suspend fun markHabitLogSynced(id: Int, pushedUpdatedAt: Long, syncedAt: Long)
 }

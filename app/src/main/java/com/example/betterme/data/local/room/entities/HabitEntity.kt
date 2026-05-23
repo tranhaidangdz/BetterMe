@@ -33,5 +33,14 @@ data class HabitEntity(
     val start_date: Long,
     val end_date: Long? = null,
     val reminder_time: String?,
-    val created_at: Long
+    val created_at: Long,
+    /**
+     * Wall-clock of last local mutation. Drives last-write-wins reconciliation
+     * against `users/{uid}/habits/{habitId}`.
+     */
+    val updated_at: Long = System.currentTimeMillis(),
+    /** Last successful push timestamp. Dirty when synced_at < updated_at. */
+    val synced_at: Long? = null,
+    /** Soft-delete marker for two-way sync. Hard deletes would race with upload. */
+    val is_deleted: Boolean = false
 )

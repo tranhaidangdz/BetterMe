@@ -141,6 +141,63 @@ val MIGRATION_12_13 = object : Migration(12, 13) {
     }
 }
 
+/**
+ * v13 → v14 (complete sync coverage):
+ *  - Adds `updated_at`, `synced_at`, `is_deleted` to `ai_chat`, `habits`, `habit_logs`
+ *    (the remaining entities not covered in the v12→v13 first pass).
+ *  - Creates `user_settings` table for cross-device-syncable lifestyle profile +
+ *    onboarding flags. The previous in-memory `UserLifestyleProfile.Default` + the
+ *    device-local DataStore flags (`HAS_SELECTED_HABITS`, `IS_FIRST_TIME`) now
+ *    persist here so they survive reinstall and replicate across devices.
+ *
+ * Backfill of `updated_at` from `created_at` mirrors the v12→v13 approach so legacy
+ * rows enter the sync layer at a known epoch.
+ */
+val MIGRATION_13_14 = object : Migration(13, 14) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // ai_chat
+        db.execSQL("ALTER TABLE ai_chat ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE ai_chat ADD COLUMN synced_at INTEGER")
+        db.execSQL("ALTER TABLE ai_chat ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("UPDATE ai_chat SET updated_at = created_at WHERE updated_at = 0")
+
+        // habits
+        db.execSQL("ALTER TABLE habits ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE habits ADD COLUMN synced_at INTEGER")
+        db.execSQL("ALTER TABLE habits ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("UPDATE habits SET updated_at = created_at WHERE updated_at = 0")
+
+        // habit_logs
+        db.execSQL("ALTER TABLE habit_logs ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE habit_logs ADD COLUMN synced_at INTEGER")
+        db.execSQL("ALTER TABLE habit_logs ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("UPDATE habit_logs SET updated_at = created_at WHERE updated_at = 0")
+
+        // user_settings (new table)
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS user_settings (
+                user_id TEXT NOT NULL PRIMARY KEY,
+                sleep_start TEXT NOT NULL DEFAULT '23:00',
+                sleep_end TEXT NOT NULL DEFAULT '07:00',
+                sleep_duration_target_hours INTEGER NOT NULL DEFAULT 8,
+                work_start TEXT NOT NULL DEFAULT '08:30',
+                work_end TEXT NOT NULL DEFAULT '17:30',
+                breakfast TEXT NOT NULL DEFAULT '07:30',
+                lunch TEXT NOT NULL DEFAULT '12:00',
+                dinner TEXT NOT NULL DEFAULT '18:30',
+                activity_level TEXT NOT NULL DEFAULT 'MODERATE',
+                has_selected_habits INTEGER NOT NULL DEFAULT 0,
+                is_first_time INTEGER NOT NULL DEFAULT 1,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                synced_at INTEGER
+            )
+            """.trimIndent()
+        )
+    }
+}
+
 /** Aggregated list passed to the Room builder. Add new migrations to this list as the
  *  schema evolves. */
 val ALL_MIGRATIONS = arrayOf(
@@ -149,5 +206,6 @@ val ALL_MIGRATIONS = arrayOf(
     MIGRATION_9_10,
     MIGRATION_10_11,
     MIGRATION_11_12,
-    MIGRATION_12_13
+    MIGRATION_12_13,
+    MIGRATION_13_14
 )
