@@ -64,7 +64,7 @@ import kotlinx.coroutines.delay
  *   - Burnout pill (color-coded)
  *   - Primary insight + coaching message
  *   - Adaptive suggestions list (1-4 cards)
- *   - "Phân tích lại" pill + offline chip if isCanned
+ *   - "Phân tích lại" pill regenerates with a fresh AI call
  *
  * Loading shows a soft skeleton + rotating Vietnamese message (lifecycle-
  * safe LaunchedEffect, dies with the Loading branch). Idle hides itself.
@@ -267,18 +267,12 @@ private fun SuccessCard(insight: LifestyleInsight, onRefresh: () -> Unit) {
 
             // ─── Footer ──────────────────────────────────────────
             Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Pill(
-                    label = "↻  Phân tích lại",
-                    color = accent,
-                    background = accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft),
-                    onClick = onRefresh
-                )
-                if (insight.isCanned) {
-                    Spacer(Modifier.size(8.dp))
-                    OfflineChip()
-                }
-            }
+            Pill(
+                label = "↻  Phân tích lại",
+                color = accent,
+                background = accent.copy(alpha = BetterMeTokens.AccentAlpha.Soft),
+                onClick = onRefresh
+            )
         }
     }
 }
@@ -435,22 +429,6 @@ private fun SuggestionRow(s: AdaptiveSuggestion) {
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun OfflineChip() {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
-            .background(BetterMeColors.Gray.Gray3)
-            .padding(horizontal = 10.dp, vertical = 6.dp)
-    ) {
-        Text(
-            text = "📴 Bản phân tích nhanh",
-            style = BetterMeTypography.Body.Small.Medium,
-            color = BetterMeColors.Text.TextTertiary
-        )
     }
 }
 

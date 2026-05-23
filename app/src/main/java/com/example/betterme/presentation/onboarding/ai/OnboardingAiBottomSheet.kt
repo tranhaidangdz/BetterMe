@@ -301,10 +301,6 @@ private fun SuccessBody(
             AllAcceptedBanner()
         }
 
-        Spacer(Modifier.height(14.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (ui.suggestion.isCanned) OfflineChip()
-        }
     }
 }
 
@@ -510,18 +506,3 @@ private fun AllAcceptedBanner() {
     }
 }
 
-@Composable
-private fun OfflineChip() {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
-            .background(BetterMeColors.Gray.Gray3)
-            .padding(horizontal = 10.dp, vertical = 6.dp)
-    ) {
-        Text(
-            text = "📴 Bản gợi ý nhanh (ngoại tuyến)",
-            style = BetterMeTypography.Body.Small.Medium,
-            color = BetterMeColors.Text.TextTertiary
-        )
-    }
-}

@@ -38,8 +38,9 @@ import kotlinx.serialization.json.Json
  *     If any gate fails → short-circuit to baseline `shouldProgress = false`
  *     WITHOUT calling OpenRouter.
  *  3. Cache-first read keyed by the fingerprint of progression signals.
- *     24h TTL. Skips cache.save when `isCanned` so connectivity recovery
- *     isn't blocked.
+ *     24h TTL. When all AI models fail the repo throws
+ *     [com.example.betterme.domain.ai.AiUnavailableException] — the VM
+ *     surfaces a retry-able error state and nothing is cached.
  *
  * Progression actions in this iteration are all advisory: HabitEntity
  * doesn't store duration / frequency / difficulty, so the UI shows a
@@ -156,9 +157,7 @@ class AnalyzeHabitProgressionUseCase(
         }
 
         val result = aiRepository.analyzeHabitProgression(input)
-        if (!result.isCanned) {
-            cache.save(cacheKey, TYPE_HABIT_PROGRESSION, encode(result))
-        }
+        cache.save(cacheKey, TYPE_HABIT_PROGRESSION, encode(result))
         return result
     }
 
@@ -246,7 +245,6 @@ class AnalyzeHabitProgressionUseCase(
         coachingMessage = "",
         vibrant = emptyList(),
         progressionActions = emptyList(),
-        isCanned = false
     )
 
     private fun encode(a: HabitProgressionAnalysis): String =
@@ -300,7 +298,6 @@ class AnalyzeHabitProgressionUseCase(
                     suggestedValue = a.suggestedValue
                 )
             },
-            isCanned = false
         )
 
         companion object {

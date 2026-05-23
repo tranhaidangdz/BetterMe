@@ -33,8 +33,9 @@ import java.util.concurrent.TimeUnit
  *    experience + activity + existing habits + lifestyle). 24h TTL — long
  *    enough that revisits during the same onboarding session don't burn quota.
  * 2. Calls [AiHabitInsightRepository.suggestOnboardingHabits].
- * 3. Persists real-model output to the cache; canned (`isCanned = true`)
- *    results are skipped so the next session is free to fetch a real one.
+ * 3. Persists real-model output to the cache. When all AI models fail the repo
+ *    throws [com.example.betterme.domain.ai.AiUnavailableException] — the VM
+ *    surfaces a retry-able error state and nothing is cached.
  *
  * The [accept] entry point materializes a chosen [OnboardingSuggestedHabit]
  * as a real [HabitEntity]: resolves the AI's `HabitCategoryKey` enum against
@@ -70,9 +71,7 @@ class SuggestOnboardingHabitsUseCase(
         }
 
         val result = aiRepository.suggestOnboardingHabits(profile, effectiveLifestyle)
-        if (!result.isCanned) {
-            cache.save(cacheKey, TYPE_ONBOARDING, encode(result))
-        }
+        cache.save(cacheKey, TYPE_ONBOARDING, encode(result))
         return result
     }
 
@@ -189,7 +188,6 @@ class SuggestOnboardingHabitsUseCase(
                 .getOrDefault(EnergyLevel.MODERATE),
             recommendedFocus = recommendedFocus,
             habits = habits.mapNotNull { it.toDomain() },
-            isCanned = false
         )
 
         companion object {

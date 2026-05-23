@@ -55,8 +55,8 @@ import kotlinx.coroutines.delay
  *
  * Visual differs from Recovery deliberately: a green/emerald palette
  * signaling growth instead of recovery's red/orange. The same surface
- * primitives (CardSurface, Pill, OfflineChip) are local copies to keep
- * the file self-contained.
+ * primitives (CardSurface, Pill) are local copies to keep the file
+ * self-contained.
  *
  * Actions render with a "Tham khảo" hint instead of an Apply CTA —
  * HabitEntity doesn't store duration/frequency today, so a real Apply
@@ -281,10 +281,6 @@ private fun SuccessCard(
                     background = BetterMeColors.Gray.Gray3,
                     onClick = onDismiss
                 )
-                if (analysis.isCanned) {
-                    Spacer(Modifier.size(8.dp))
-                    OfflineChip()
-                }
             }
         }
     }
@@ -426,22 +422,6 @@ private fun PacePill(pace: PaceSpec) {
             style = BetterMeTypography.Body.Small.Medium,
             color = pace.color,
             fontWeight = FontWeight.SemiBold
-        )
-    }
-}
-
-@Composable
-private fun OfflineChip() {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
-            .background(BetterMeColors.Gray.Gray3)
-            .padding(horizontal = 10.dp, vertical = 6.dp)
-    ) {
-        Text(
-            text = "📴 Bản đề xuất nhanh",
-            style = BetterMeTypography.Body.Small.Medium,
-            color = BetterMeColors.Text.TextTertiary
         )
     }
 }

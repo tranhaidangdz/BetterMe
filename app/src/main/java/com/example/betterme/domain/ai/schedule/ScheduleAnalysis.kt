@@ -8,11 +8,6 @@ package com.example.betterme.domain.ai.schedule
  * Enum fields use string discriminators that are pinned in the prompt, so an
  * unexpected value from a misbehaving free-tier model surfaces as a parse
  * failure rather than a silently-wrong analysis.
- *
- * [isCanned] is true when every OpenRouter model in the fallback chain failed
- * and the repo served a handwritten local analysis. Use cases inspect this
- * flag and skip caching canned results — next session's network attempt is
- * always free to produce a real analysis.
  */
 data class ScheduleAnalysis(
     val hasConflict: Boolean,
@@ -25,8 +20,7 @@ data class ScheduleAnalysis(
     /** 1-sentence Vietnamese positive observation; may be empty. */
     val positiveFeedback: String,
     val conflicts: List<ScheduleConflict>,
-    val optimizedSchedule: List<OptimizedHabitTime>,
-    val isCanned: Boolean = false
+    val optimizedSchedule: List<OptimizedHabitTime>
 )
 
 enum class EnergyLevel { LOW, MODERATE, HIGH }

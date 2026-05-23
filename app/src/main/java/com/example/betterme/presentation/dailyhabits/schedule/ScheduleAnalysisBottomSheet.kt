@@ -68,8 +68,9 @@ import kotlinx.coroutines.delay
  *   - "Chưa đủ dữ liệu" gets a calm sun-icon hero with helper copy instead of
  *     the standard zero-conflict success treatment.
  *   - hasConflict = false with non-empty habits gets a green celebratory hero.
- *   - All-models-failed (isCanned = true) shows a quiet "Bản phân tích nhanh
- *     (ngoại tuyến)" chip so the user knows why suggestions are sparse.
+ *   - All-models-failed surfaces a retry-able error state via the ViewModel
+ *     ([ScheduleAnalysisUi.Error]); the bottom sheet renders the existing
+ *     error path. There is no canned fallback any more.
  *
  * Loading message rotates every ~1.8s. The rotation is implemented as a
  * single [LaunchedEffect] inside the Loading branch, so it dies with the
@@ -354,18 +355,12 @@ private fun CelebratoryHero(
             PositiveCard(text = analysis.positiveFeedback)
         }
         Spacer(Modifier.height(16.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Pill(
-                label = "↻  Phân tích lại",
-                color = BetterMeColors.Primary.Primary,
-                background = BetterMeColors.Primary.Primary.copy(alpha = BetterMeTokens.AccentAlpha.Soft),
-                onClick = onRegenerate
-            )
-            if (analysis.isCanned) {
-                Spacer(Modifier.size(8.dp))
-                OfflineChip()
-            }
-        }
+        Pill(
+            label = "↻  Phân tích lại",
+            color = BetterMeColors.Primary.Primary,
+            background = BetterMeColors.Primary.Primary.copy(alpha = BetterMeTokens.AccentAlpha.Soft),
+            onClick = onRegenerate
+        )
     }
 }
 
@@ -427,18 +422,12 @@ private fun ConflictsBody(
         }
 
         Spacer(Modifier.height(16.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Pill(
-                label = "↻  Phân tích lại",
-                color = BetterMeColors.Primary.Primary,
-                background = BetterMeColors.Primary.Primary.copy(alpha = BetterMeTokens.AccentAlpha.Soft),
-                onClick = onRegenerate
-            )
-            if (analysis.isCanned) {
-                Spacer(Modifier.size(8.dp))
-                OfflineChip()
-            }
-        }
+        Pill(
+            label = "↻  Phân tích lại",
+            color = BetterMeColors.Primary.Primary,
+            background = BetterMeColors.Primary.Primary.copy(alpha = BetterMeTokens.AccentAlpha.Soft),
+            onClick = onRegenerate
+        )
     }
 }
 
@@ -489,22 +478,6 @@ private fun PositiveCard(text: String) {
             text = "🌱  $text",
             style = BetterMeTypography.Body.Small.Medium,
             color = BetterMeColors.Text.TextPrimary
-        )
-    }
-}
-
-@Composable
-private fun OfflineChip() {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
-            .background(BetterMeColors.Gray.Gray3)
-            .padding(horizontal = 10.dp, vertical = 6.dp)
-    ) {
-        Text(
-            text = "📴 Bản phân tích nhanh",
-            style = BetterMeTypography.Body.Small.Medium,
-            color = BetterMeColors.Text.TextTertiary
         )
     }
 }

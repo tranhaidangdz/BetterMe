@@ -34,9 +34,9 @@ import kotlinx.serialization.json.Json
  *    categoryId so distinct schedules don't collide on a single row. 24h TTL.
  * 4. Cache hit → decode the stored JSON and return.
  * 5. Cache miss / [forceRefresh] → call the repo; on real-model success, persist
- *    the JSON for next time. Canned fallbacks (`isCanned = true`) are NOT
- *    cached — next session's network attempt should be free to produce a real
- *    analysis.
+ *    the JSON for next time. When all AI models fail the repo throws
+ *    [com.example.betterme.domain.ai.AiUnavailableException] — the VM surfaces
+ *    a retry-able error state and nothing is cached.
  */
 class AnalyzeScheduleUseCase(
     private val dataStoreManager: DataStoreManager,
@@ -69,12 +69,7 @@ class AnalyzeScheduleUseCase(
         }
 
         val result = aiRepository.analyzeSchedule(effectiveProfile, inputs)
-        if (!result.isCanned) {
-            // Persist real model output. Canned fallbacks intentionally aren't
-            // cached so the user gets a real analysis the moment connectivity
-            // recovers.
-            cache.save(cacheKey, TYPE_SCHEDULE_ANALYSIS, encode(result))
-        }
+        cache.save(cacheKey, TYPE_SCHEDULE_ANALYSIS, encode(result))
         return result
     }
 
@@ -148,7 +143,6 @@ class AnalyzeScheduleUseCase(
             optimizedSchedule = optimizedSchedule.map { OptimizedHabitTime(it.habit, it.suggestedTime) },
             // Cached entries are always real model results (we don't cache canned
             // ones); flag them as not-canned so the UI shows the live treatment.
-            isCanned = false
         )
 
         companion object {

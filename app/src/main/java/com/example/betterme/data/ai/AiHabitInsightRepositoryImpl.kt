@@ -7,6 +7,7 @@ import com.example.betterme.domain.ai.AiCoachPersonality
 import com.example.betterme.domain.ai.AiHabitInsightRepository
 import com.example.betterme.domain.ai.AiHabitInsightRepository.AiResult
 import com.example.betterme.domain.ai.AiHabitInsightRepository.AiSuggestResult
+import com.example.betterme.domain.ai.AiUnavailableException
 import com.example.betterme.domain.ai.ScheduleHabitInput
 import com.example.betterme.domain.ai.SuggestedHabit
 import com.example.betterme.domain.ai.habitcreation.CreationRiskLevel
@@ -22,7 +23,6 @@ import com.example.betterme.domain.ai.lifestyle.HabitCompletionRecord
 import com.example.betterme.domain.ai.lifestyle.LifestyleInsight
 import com.example.betterme.domain.ai.lifestyle.OverallTrend
 import com.example.betterme.domain.ai.lifestyle.SuggestionType
-import com.example.betterme.domain.ai.personalization.CannedTemplatePool
 import com.example.betterme.domain.ai.personalization.GroupInsightContext
 import com.example.betterme.domain.ai.personalization.PersonalitySignal
 import com.example.betterme.domain.ai.personalization.SuggestionContext
@@ -74,16 +74,14 @@ import retrofit2.HttpException
  * - On any failure, the chain advances to the next model. The user never sees
  *   intermediate failures unless EVERY model is exhausted.
  *
- * Last-resort fallback
- * - If all 4 models fail, the repo returns a canned (handwritten) response
- *   tagged with `isCanned = true`. The use cases never cache canned content,
- *   so the next attempt is fresh. The UI renders canned content through the
- *   same premium card — the user always sees meaningful content.
+ * Failure surface
+ * - When all 4 models fail, the analyze* methods throw [AiUnavailableException]
+ *   (or return AiResult.Failure for review/suggest). Callers must render a
+ *   retry-able error state — there is no canned fallback any more.
  *
  * Output shaping
  * - max_tokens = 120 across the board. Prompts are deliberately terse so a
- *   120-token reply still feels complete. This trades occasional truncation
- *   (caught by the canned fallback) for a much smaller per-call quota burn.
+ *   120-token reply still feels complete.
  */
 class AiHabitInsightRepositoryImpl(
     private val api: OpenRouterApi
@@ -112,8 +110,8 @@ class AiHabitInsightRepositoryImpl(
             Log.w(TAG, "Review model[$index]=$model failed: ${lastFailure.message}")
         }
 
-        Log.w(TAG, "All review models exhausted — serving canned review")
-        return AiResult.Success(text = CannedTemplatePool.pickReview(context), isCanned = true)
+        Log.w(TAG, "All review models exhausted — surfacing failure to UI")
+        return lastFailure ?: AiResult.Failure("AI tạm thời không khả dụng. Hãy thử lại.")
     }
 
     private fun buildReviewUserPrompt(c: GroupInsightContext): String = buildString {
@@ -156,11 +154,8 @@ class AiHabitInsightRepositoryImpl(
             Log.w(TAG, "Suggest model[$index]=$model failed: ${lastFailure.message}")
         }
 
-        Log.w(TAG, "All suggest models exhausted — serving canned suggestions")
-        return AiSuggestResult.Success(
-            suggestions = CannedTemplatePool.pickSuggestions(context),
-            isCanned = true
-        )
+        Log.w(TAG, "All suggest models exhausted — surfacing failure to UI")
+        return lastFailure ?: AiSuggestResult.Failure("AI tạm thời không khả dụng. Hãy thử lại.")
     }
 
     private fun buildSuggestUserPrompt(c: SuggestionContext): String = buildString {
@@ -223,8 +218,8 @@ class AiHabitInsightRepositoryImpl(
             Log.w(TAG, "Schedule model[$index]=$model failed: $lastFailure")
         }
 
-        Log.w(TAG, "All schedule models exhausted — serving canned analysis")
-        return cannedScheduleAnalysis(withReminders, effectiveProfile)
+        Log.w(TAG, "All schedule models exhausted — throwing AiUnavailableException")
+        throw AiUnavailableException(lastFailure ?: "AI tạm thời không khả dụng. Hãy thử lại.")
     }
 
     private suspend fun tryScheduleModel(
@@ -323,7 +318,6 @@ class AiHabitInsightRepositoryImpl(
                     if (!o.suggestedTime.matches(HHMM_REGEX)) return@mapNotNull null
                     OptimizedHabitTime(habit = o.habit.trim(), suggestedTime = o.suggestedTime)
                 },
-                isCanned = false
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse schedule JSON: $raw", e)
@@ -355,126 +349,8 @@ class AiHabitInsightRepositoryImpl(
         positiveFeedback = "",
         conflicts = emptyList(),
         optimizedSchedule = emptyList(),
-        isCanned = false
     )
 
-    /**
-     * Local deterministic fallback served when every OpenRouter model fails.
-     *
-     * Runs four rule-based detectors against the user's actual schedule + lifestyle
-     * profile so the offline result feels believable instead of generic:
-     *
-     * 1. **OVERLAP** — any two consecutive reminders within 15 minutes.
-     *    Cost: −10 / suggestion: dời một trong hai trễ hơn ~15 phút.
-     * 2. **OVERLOAD** — 3+ reminders inside any sliding 90-minute window.
-     *    Cost: −15 / suggestion: rút bớt 1 thói quen khỏi khung này.
-     * 3. **LATE_NIGHT** — a reminder at or after 22:00. Cost: −10.
-     * 4. **POOR_SLEEP** — sleep duration under 6h. Cost: −20.
-     *
-     * At most 3 conflicts surface (matches the prompt's contract). Score
-     * starts at 100 and decrements per rule, floored at 0. Burnout risk
-     * derives from rule severity: POOR_SLEEP → HIGH; LATE_NIGHT or
-     * OVERLOAD → MODERATE; otherwise LOW. Mirrors the same thresholds the
-     * remote prompt uses so the user can't tell offline from online by score.
-     */
-    private fun cannedScheduleAnalysis(
-        habits: List<ScheduleHabitInput>,
-        profile: UserLifestyleProfile
-    ): ScheduleAnalysis {
-        val sorted = habits
-            .mapNotNull { h -> h.toMinutesOrNull()?.let { h to it } }
-            .sortedBy { it.second }
-        val detected = mutableListOf<ScheduleConflict>()
-        var score = 100
-
-        // (1) Pairwise overlap.
-        sorted.zipWithNext().firstOrNull { (a, b) -> b.second - a.second <= 15 }?.let { (a, b) ->
-            detected += ScheduleConflict(
-                type = ConflictType.OVERLAP,
-                habitA = a.first.title,
-                habitB = b.first.title,
-                issue = "Hai thói quen này cách nhau dưới 15 phút.",
-                suggestion = "Hãy thử dời một trong hai ra xa hơn ~15 phút."
-            )
-            score -= 10
-        }
-
-        // (2) Sliding 90-min overload — find the first window containing 3+ reminders.
-        run {
-            for (i in sorted.indices) {
-                val window = sorted.drop(i).takeWhile { it.second - sorted[i].second <= 90 }
-                if (window.size >= 3) {
-                    detected += ScheduleConflict(
-                        type = ConflictType.OVERLOAD,
-                        habitA = window[0].first.title,
-                        habitB = window[1].first.title,
-                        issue = "Có ${window.size} thói quen trong vòng 90 phút quanh ${window[0].first.reminderTime}.",
-                        suggestion = "Cân nhắc dời một thói quen ra khỏi khung này để dễ thở hơn."
-                    )
-                    score -= 15
-                    break
-                }
-            }
-        }
-
-        // (3) Late-night reminder. Threshold tracks HealthyDefaults.HARD_HABIT_LATEST_HOUR
-        // (21:00) — the same boundary the system prompt uses, so offline and online
-        // analyses don't disagree on what counts as "late".
-        val lateBoundary = HealthyDefaults.HARD_HABIT_LATEST_HOUR * 60
-        habits.firstOrNull { (it.toMinutesOrNull() ?: -1) >= lateBoundary }?.let { late ->
-            detected += ScheduleConflict(
-                type = ConflictType.LATE_NIGHT,
-                habitA = late.title,
-                habitB = null,
-                issue = "Thói quen này được đặt khá muộn (sau ${HealthyDefaults.HARD_HABIT_LATEST_HOUR}:00).",
-                suggestion = "Hãy thử dời sớm hơn ~1 tiếng để dễ phục hồi."
-            )
-            score -= 10
-        }
-
-        // (4) Sleep duration. Handles ranges that cross midnight (start > end).
-        val sleepMinutes = sleepDurationMinutes(profile)
-        if (sleepMinutes != null && sleepMinutes < 6 * 60) {
-            detected += ScheduleConflict(
-                type = ConflictType.POOR_SLEEP,
-                habitA = "Giờ ngủ",
-                habitB = null,
-                issue = "Tổng thời gian ngủ của bạn dưới 6 tiếng.",
-                suggestion = "Hãy cố gắng giữ giấc ngủ ít nhất 7 tiếng mỗi đêm."
-            )
-            score -= 20
-        }
-
-        val finalConflicts = detected.take(3)
-        val burnout = when {
-            finalConflicts.any { it.type == ConflictType.POOR_SLEEP } -> BurnoutRisk.HIGH
-            finalConflicts.any { it.type == ConflictType.LATE_NIGHT } -> BurnoutRisk.MODERATE
-            finalConflicts.any { it.type == ConflictType.OVERLOAD } -> BurnoutRisk.MODERATE
-            else -> BurnoutRisk.LOW
-        }
-        val energy = when (burnout) {
-            BurnoutRisk.HIGH -> EnergyLevel.LOW
-            BurnoutRisk.MODERATE -> EnergyLevel.MODERATE
-            BurnoutRisk.LOW -> EnergyLevel.HIGH
-        }
-        val summary = when {
-            finalConflicts.isEmpty() -> "Lịch trình của bạn nhìn chung khá cân đối."
-            finalConflicts.size == 1 -> "Lịch trình của bạn ổn, có một điểm nhỏ nên điều chỉnh."
-            else -> "Lịch trình có ${finalConflicts.size} điểm cần điều chỉnh nhẹ."
-        }
-
-        return ScheduleAnalysis(
-            hasConflict = finalConflicts.isNotEmpty(),
-            scheduleScore = score.coerceAtLeast(0),
-            energyLevel = energy,
-            burnoutRisk = burnout,
-            summary = summary,
-            positiveFeedback = "Bạn đang duy trì lịch trình đều đặn — đó là điểm cộng quan trọng.",
-            conflicts = finalConflicts,
-            optimizedSchedule = emptyList(),
-            isCanned = true
-        )
-    }
 
     /**
      * Total sleep duration in minutes given a profile, handling sleep that
@@ -565,8 +441,8 @@ class AiHabitInsightRepositoryImpl(
             Log.w(TAG, "Onboarding model[$index]=$model failed: $lastFailure")
         }
 
-        Log.w(TAG, "All onboarding models exhausted — serving canned starter set")
-        return cannedOnboardingSuggestion()
+        Log.w(TAG, "All onboarding models exhausted — throwing AiUnavailableException")
+        throw AiUnavailableException(lastFailure ?: "AI tạm thời không khả dụng. Hãy thử lại.")
     }
 
     private suspend fun tryOnboardingModel(
@@ -670,7 +546,6 @@ class AiHabitInsightRepositoryImpl(
                         motivation = h.motivation.trim()
                     )
                 },
-                isCanned = false
             ).takeIf { it.habits.isNotEmpty() }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse onboarding JSON: $raw", e)
@@ -678,63 +553,6 @@ class AiHabitInsightRepositoryImpl(
         }
     }
 
-    /**
-     * Handwritten 4-habit beginner starter set served when every OpenRouter
-     * model fails. All EASY, all ≤15 minutes, spread across morning / day /
-     * evening so the user never lands on a blank screen.
-     */
-    private fun cannedOnboardingSuggestion(): OnboardingSuggestion = OnboardingSuggestion(
-        summary = "Bộ thói quen khởi đầu nhẹ nhàng và bền vững cho bạn.",
-        energyProfile = EnergyLevel.MODERATE,
-        recommendedFocus = "Hãy bắt đầu với những thói quen ngắn để xây dựng đà đều đặn.",
-        habits = listOf(
-            OnboardingSuggestedHabit(
-                title = "Uống 1 cốc nước sau khi thức",
-                emoji = "💧",
-                description = "Bù nước cho cơ thể ngay khi bắt đầu ngày mới.",
-                category = HabitCategoryKey.HEALTH,
-                difficulty = Difficulty.EASY,
-                priority = Priority.MEDIUM,
-                estimatedMinutes = 2,
-                reminderTime = "07:30",
-                motivation = "Một thói quen nhỏ tạo đà cho cả ngày."
-            ),
-            OnboardingSuggestedHabit(
-                title = "Đi bộ 15 phút sau giờ làm",
-                emoji = "🚶",
-                description = "Vận động nhẹ giúp giãn cơ và làm dịu đầu óc.",
-                category = HabitCategoryKey.FITNESS,
-                difficulty = Difficulty.EASY,
-                priority = Priority.MEDIUM,
-                estimatedMinutes = 15,
-                reminderTime = "18:00",
-                motivation = "15 phút mỗi ngày tốt hơn 1 giờ mỗi tuần."
-            ),
-            OnboardingSuggestedHabit(
-                title = "Đọc 10 phút trước khi ngủ",
-                emoji = "📖",
-                description = "Đọc gì cũng được — một cuốn sách bạn thích.",
-                category = HabitCategoryKey.STUDY,
-                difficulty = Difficulty.EASY,
-                priority = Priority.LOW,
-                estimatedMinutes = 10,
-                reminderTime = "21:30",
-                motivation = "10 phút mỗi tối tích lũy thành kiến thức bền."
-            ),
-            OnboardingSuggestedHabit(
-                title = "Ghi 3 điều biết ơn",
-                emoji = "📝",
-                description = "Viết ngắn 3 điều bạn biết ơn hôm nay.",
-                category = HabitCategoryKey.MINDFULNESS,
-                difficulty = Difficulty.EASY,
-                priority = Priority.LOW,
-                estimatedMinutes = 5,
-                reminderTime = "22:00",
-                motivation = "Tâm trí nhẹ nhõm trước khi ngủ."
-            )
-        ),
-        isCanned = true
-    )
 
     @Serializable
     private data class OnboardingSuggestionDto(
@@ -790,8 +608,8 @@ class AiHabitInsightRepositoryImpl(
             Log.w(TAG, "Lifestyle model[$index]=$model failed: $lastFailure")
         }
 
-        Log.w(TAG, "All lifestyle models exhausted — serving canned insight")
-        return cannedLifestyleInsight(history)
+        Log.w(TAG, "All lifestyle models exhausted — throwing AiUnavailableException")
+        throw AiUnavailableException(lastFailure ?: "AI tạm thời không khả dụng. Hãy thử lại.")
     }
 
     private suspend fun tryLifestyleModel(
@@ -912,7 +730,6 @@ class AiHabitInsightRepositoryImpl(
                 primaryInsight = dto.primaryInsight.trim(),
                 coachingMessage = dto.coachingMessage.trim(),
                 adaptiveSuggestions = parsedSuggestions,
-                isCanned = false
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse lifestyle JSON: $raw", e)
@@ -920,91 +737,6 @@ class AiHabitInsightRepositoryImpl(
         }
     }
 
-    /**
-     * Deterministic local insight served when every OpenRouter model fails.
-     * Reads the same 14-day history the prompt would have received and produces
-     * a calibrated baseline: average completion rate drives the consistency
-     * score; any habit ≥ 21:00 with sub-50 completion triggers an IMPROVE_SLEEP
-     * suggestion; otherwise the user gets a MAINTAIN_STABILITY pat on the
-     * back. Mirrors the prompt's coaching stance so offline and online
-     * insights stay tonally aligned.
-     */
-    private fun cannedLifestyleInsight(history: List<HabitCompletionRecord>): LifestyleInsight {
-        if (history.isEmpty()) {
-            return LifestyleInsight(
-                overallTrend = OverallTrend.STABLE,
-                burnoutRisk = BurnoutRisk.LOW,
-                consistencyScore = 70,
-                energyPattern = EnergyPattern.INCONSISTENT,
-                recoveryScore = 70,
-                primaryInsight = "Hãy bắt đầu với một vài thói quen nhẹ để mình có dữ liệu phân tích.",
-                coachingMessage = "Khi bạn check-in đều trong ít nhất 7 ngày, mình sẽ đưa ra gợi ý sát hơn với nhịp sống của bạn.",
-                adaptiveSuggestions = listOf(
-                    AdaptiveSuggestion(
-                        type = SuggestionType.IMPROVE_CONSISTENCY,
-                        title = "Bắt đầu với 2-3 thói quen nhỏ",
-                        reason = "Chưa có dữ liệu hành vi để phân tích.",
-                        suggestion = "Hãy chọn 2-3 thói quen ngắn và duy trì đều trong tuần đầu."
-                    )
-                ),
-                isCanned = true
-            )
-        }
-
-        val avgCompletion = history.map { it.completionRate }.average().toInt()
-        val lateLowPerformers = history.filter { r ->
-            val parts = r.preferredTime.split(":")
-            val hour = parts.firstOrNull()?.toIntOrNull() ?: -1
-            hour >= 21 && r.completionRate < 50
-        }
-        val trend = when {
-            avgCompletion >= 75 -> OverallTrend.IMPROVING
-            avgCompletion >= 50 -> OverallTrend.STABLE
-            else -> OverallTrend.DECLINING
-        }
-        val burnout = when {
-            avgCompletion < 40 -> BurnoutRisk.MODERATE
-            lateLowPerformers.size >= 2 -> BurnoutRisk.MODERATE
-            else -> BurnoutRisk.LOW
-        }
-
-        val suggestion = when {
-            lateLowPerformers.isNotEmpty() -> AdaptiveSuggestion(
-                type = SuggestionType.IMPROVE_SLEEP,
-                title = "Cân nhắc dời thói quen tối sớm hơn",
-                reason = "Bạn thường bỏ lỡ ${lateLowPerformers.size} thói quen sau 21:00.",
-                suggestion = "Hãy thử dời các thói quen này sớm hơn 1-2 tiếng để dễ duy trì."
-            )
-            avgCompletion < 50 -> AdaptiveSuggestion(
-                type = SuggestionType.SIMPLIFY_ROUTINE,
-                title = "Đơn giản hoá lịch trình",
-                reason = "Tỉ lệ hoàn thành trung bình $avgCompletion% — có thể bạn đang ôm hơi nhiều.",
-                suggestion = "Tạm giảm còn 3-4 thói quen ưu tiên và giữ đều trong 2 tuần."
-            )
-            else -> AdaptiveSuggestion(
-                type = SuggestionType.MAINTAIN_STABILITY,
-                title = "Tiếp tục giữ nhịp hiện tại",
-                reason = "Bạn đang duy trì khá đều ở mức $avgCompletion%.",
-                suggestion = "Giữ nguyên các thói quen — sự nhất quán đáng giá hơn tăng cường độ."
-            )
-        }
-
-        return LifestyleInsight(
-            overallTrend = trend,
-            burnoutRisk = burnout,
-            consistencyScore = avgCompletion,
-            energyPattern = EnergyPattern.INCONSISTENT,
-            recoveryScore = (avgCompletion + 10).coerceAtMost(95),
-            primaryInsight = when (trend) {
-                OverallTrend.IMPROVING -> "Bạn đang giữ nhịp tốt với mức hoàn thành trung bình $avgCompletion%."
-                OverallTrend.STABLE -> "Nhịp thói quen của bạn ổn định, có chỗ để cải thiện nhẹ."
-                OverallTrend.DECLINING -> "Tuần qua hơi gấp với bạn — hãy nhẹ nhàng với chính mình."
-            },
-            coachingMessage = "Sự nhất quán quan trọng hơn cường độ. Hãy tập trung vào những thói quen bạn đã làm tốt thay vì thêm mới ngay.",
-            adaptiveSuggestions = listOf(suggestion),
-            isCanned = true
-        )
-    }
 
     @Serializable
     private data class LifestyleInsightDto(
@@ -1043,8 +775,8 @@ class AiHabitInsightRepositoryImpl(
             Log.w(TAG, "HabitCreation model[$index]=$model failed: $lastFailure")
         }
 
-        Log.w(TAG, "All habit-creation models exhausted — serving canned analysis")
-        return cannedHabitCreationAnalysis(input)
+        Log.w(TAG, "All habit-creation models exhausted — throwing AiUnavailableException")
+        throw AiUnavailableException(lastFailure ?: "AI tạm thời không khả dụng. Hãy thử lại.")
     }
 
     private suspend fun tryHabitCreationModel(
@@ -1167,7 +899,6 @@ class AiHabitInsightRepositoryImpl(
                 warnings = warnings,
                 suggestions = suggestions,
                 encouragement = dto.encouragement.trim(),
-                isCanned = false
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse habit-creation JSON: $raw", e)
@@ -1175,113 +906,6 @@ class AiHabitInsightRepositoryImpl(
         }
     }
 
-    /**
-     * Rule-based local analysis served when every OpenRouter model fails.
-     * Detects four conditions against the actual form input + user's existing
-     * habits — same boundaries the system prompt uses, so the offline result
-     * stays tonally aligned with what online would produce.
-     *
-     *   1. TIME_CONFLICT  — existing reminder within 15 min of the new one.
-     *   2. SLEEP_CONFLICT — new reminder at or after [HealthyDefaults.HARD_HABIT_LATEST_HOUR].
-     *   3. TOO_MANY_HABITS — user already has ≥ 8 active habits.
-     *   4. DUPLICATE_INTENT — substring match of the new title against any existing.
-     *
-     * Encouragement and risk level are calibrated to the strongest warning
-     * detected; if nothing fires we still produce a supportive "go for it"
-     * line with an empty warning list so the UI surfaces nothing alarming.
-     */
-    private fun cannedHabitCreationAnalysis(input: HabitCreationInput): HabitCreationAnalysis {
-        val warnings = mutableListOf<HabitCreationWarning>()
-        val suggestions = mutableListOf<HabitCreationSuggestion>()
-
-        val newMinutes = parseHhMm(input.newHabit.reminderTime)
-        // (1) Time conflict — pairwise check against active habits.
-        if (newMinutes != null) {
-            val collision = input.activeHabits.firstOrNull { h ->
-                val existing = parseHhMm(h.reminderTime) ?: return@firstOrNull false
-                kotlin.math.abs(existing - newMinutes) <= 15
-            }
-            if (collision != null) {
-                warnings += HabitCreationWarning(
-                    WarningType.TIME_CONFLICT,
-                    "Giờ nhắc mới sát với thói quen \"${collision.title}\" (${collision.reminderTime})."
-                )
-                // Suggest a slot 60 minutes away from the collision (or fall
-                // back to a safe morning slot when arithmetic would wrap).
-                val suggestedSlot = offsetHhMm(collision.reminderTime, deltaMinutes = 60)
-                    ?: "07:00"
-                suggestions += HabitCreationSuggestion(
-                    type = CreationSuggestionType.CHANGE_TIME,
-                    message = "Bạn có thể dời sang một khung khác cách ít nhất 15-30 phút để dễ duy trì cả hai.",
-                    suggestedReminderTime = suggestedSlot
-                )
-            }
-        }
-
-        // (2) Sleep conflict — late-night reminder.
-        if (newMinutes != null && newMinutes >= HealthyDefaults.HARD_HABIT_LATEST_HOUR * 60) {
-            warnings += HabitCreationWarning(
-                WarningType.SLEEP_CONFLICT,
-                "Thói quen này khá muộn (sau ${HealthyDefaults.HARD_HABIT_LATEST_HOUR}:00) — có thể ảnh hưởng nhịp ngủ."
-            )
-            suggestions += HabitCreationSuggestion(
-                type = CreationSuggestionType.CHANGE_TIME,
-                message = "Hãy thử dời sớm hơn 1-2 tiếng để dễ phục hồi và ngủ ngon hơn.",
-                suggestedReminderTime = "18:30"
-            )
-        }
-
-        // (3) Too many habits.
-        if (input.activeHabits.size >= 8) {
-            warnings += HabitCreationWarning(
-                WarningType.TOO_MANY_HABITS,
-                "Bạn đang theo dõi ${input.activeHabits.size} thói quen — khá nhiều cho một ngày."
-            )
-            suggestions += HabitCreationSuggestion(
-                CreationSuggestionType.START_SMALLER,
-                "Cân nhắc tạm dừng 1-2 thói quen ít ưu tiên trước khi thêm cái mới."
-            )
-        }
-
-        // (4) Duplicate intent — fuzzy title overlap.
-        val newTitle = input.newHabit.title.trim().lowercase()
-        if (newTitle.length >= 3) {
-            val similar = input.activeHabits.firstOrNull { h ->
-                val existing = h.title.trim().lowercase()
-                existing.contains(newTitle) || newTitle.contains(existing)
-            }
-            if (similar != null) {
-                warnings += HabitCreationWarning(
-                    WarningType.DUPLICATE_INTENT,
-                    "Bạn đã có một thói quen khá giống: \"${similar.title}\"."
-                )
-                suggestions += HabitCreationSuggestion(
-                    type = CreationSuggestionType.REPLACE_EXISTING,
-                    message = "Có thể nâng cấp thói quen hiện tại sẽ bền vững hơn là tạo thêm một thói quen mới.",
-                    suggestedReplacementHabit = similar.title
-                )
-            }
-        }
-
-        val risk = when {
-            warnings.any { it.type == WarningType.SLEEP_CONFLICT } -> CreationRiskLevel.MODERATE
-            warnings.size >= 2 -> CreationRiskLevel.MODERATE
-            warnings.isEmpty() -> CreationRiskLevel.LOW
-            else -> CreationRiskLevel.LOW
-        }
-        val encouragement = when {
-            warnings.isEmpty() -> "Một thói quen nhẹ nhàng nữa — chúc bạn duy trì đều đặn."
-            else -> "Bắt đầu nhẹ sẽ giúp bạn duy trì lâu dài hơn."
-        }
-        return HabitCreationAnalysis(
-            shouldWarn = warnings.isNotEmpty(),
-            overallRisk = risk,
-            warnings = warnings.take(3),
-            suggestions = suggestions.take(3),
-            encouragement = encouragement,
-            isCanned = true
-        )
-    }
 
     @Serializable
     private data class HabitCreationDto(
@@ -1328,8 +952,8 @@ class AiHabitInsightRepositoryImpl(
             Log.w(TAG, "Recovery model[$index]=$model failed: $lastFailure")
         }
 
-        Log.w(TAG, "All recovery models exhausted — serving canned plan")
-        return cannedRecoveryAnalysis(input)
+        Log.w(TAG, "All recovery models exhausted — throwing AiUnavailableException")
+        throw AiUnavailableException(lastFailure ?: "AI tạm thời không khả dụng. Hãy thử lại.")
     }
 
     private suspend fun tryRecoveryModel(
@@ -1445,7 +1069,6 @@ class AiHabitInsightRepositoryImpl(
                 coachingMessage = dto.coachingMessage.trim(),
                 struggling = struggling,
                 recoveryActions = actions,
-                isCanned = false
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse recovery JSON: $raw", e)
@@ -1453,129 +1076,6 @@ class AiHabitInsightRepositoryImpl(
         }
     }
 
-    /**
-     * Local recovery plan when every OpenRouter model fails. Builds the same
-     * shape the prompt would have produced, calibrated from the use case's
-     * pre-computed triggers + stats:
-     *
-     *   - Each habit with `missStreak ≥ 3` becomes a [StrugglingHabit] row with
-     *     a calibrated `recoveryReason`.
-     *   - At least one [HabitRecoveryAction] is emitted per detected trigger,
-     *     capped at 4 total.
-     *   - [RecoveryIntensity] derives from the worst signal — LIGHT for a
-     *     single low-completion habit, MODERATE for multiple, AGGRESSIVE when
-     *     burnout / hard-failing habits / late-night failures stack up.
-     */
-    private fun cannedRecoveryAnalysis(input: HabitRecoveryInput): HabitRecoveryAnalysis {
-        val struggling = input.allHabitStats
-            .filter { it.missStreak >= 3 || it.completionRate14d < 40 || it.title in input.strugglingTitles }
-            .take(5)
-            .map { row ->
-                val reason = when {
-                    row.missStreak >= 5 -> "Đã lỡ $row.missStreak ngày liên tiếp."
-                    row.completionRate14d < 30 -> "Tỉ lệ hoàn thành 2 tuần chỉ ${row.completionRate14d}%."
-                    row.difficulty == "HARD" -> "Cường độ HARD đang khó duy trì."
-                    else -> "Có dấu hiệu bị quá tải."
-                }
-                StrugglingHabit(
-                    title = row.title,
-                    completionRate7d = row.completionRate7d,
-                    completionRate14d = row.completionRate14d,
-                    missStreak = row.missStreak,
-                    recoveryReason = reason
-                )
-            }
-
-        val actions = mutableListOf<HabitRecoveryAction>()
-        val firstStruggling = struggling.firstOrNull()
-
-        if (RecoveryTrigger.HARD_HABIT_FAILING in input.detectedTriggers && firstStruggling != null) {
-            actions += HabitRecoveryAction(
-                type = RecoveryActionType.REDUCE_DIFFICULTY,
-                targetHabit = firstStruggling.title,
-                title = "Giảm độ khó tạm thời",
-                description = "Hãy thử phiên bản nhẹ hơn của thói quen này trong 1-2 tuần để khôi phục đà.",
-                suggestedValue = ""
-            )
-        }
-        if (RecoveryTrigger.LOW_COMPLETION in input.detectedTriggers && firstStruggling != null) {
-            actions += HabitRecoveryAction(
-                type = RecoveryActionType.REDUCE_DURATION,
-                targetHabit = firstStruggling.title,
-                title = "Rút ngắn thời lượng",
-                description = "Bắt đầu lại với một phiên ngắn hơn — duy trì đều quan trọng hơn dài.",
-                suggestedValue = "10 phút"
-            )
-        }
-        if (RecoveryTrigger.LATE_NIGHT_FAILURES in input.detectedTriggers) {
-            val late = input.lateNightHabitTitles.firstOrNull()
-            actions += HabitRecoveryAction(
-                type = RecoveryActionType.CHANGE_TIME,
-                targetHabit = late,
-                title = "Dời sớm hơn ${HealthyDefaults.HARD_HABIT_LATEST_HOUR}:00",
-                description = "Thói quen muộn thường khó hoàn thành — hãy thử khung giờ sớm hơn.",
-                suggestedValue = "19:00"
-            )
-        }
-        if (RecoveryTrigger.TOO_MANY_HABITS in input.detectedTriggers) {
-            actions += HabitRecoveryAction(
-                type = RecoveryActionType.PAUSE_TEMPORARILY,
-                targetHabit = null,
-                title = "Tạm dừng 1-2 thói quen ít ưu tiên",
-                description = "Tập trung vào ${input.strugglingTitles.size.coerceAtLeast(2)} thói quen quan trọng nhất sẽ bền vững hơn.",
-                suggestedValue = ""
-            )
-        }
-        if (actions.isEmpty() && firstStruggling != null) {
-            actions += HabitRecoveryAction(
-                type = RecoveryActionType.ADD_RECOVERY_HABIT,
-                targetHabit = null,
-                title = "Thêm thói quen phục hồi nhẹ",
-                description = "Một thói quen ngắn như uống nước hoặc giãn cơ giúp bạn lấy lại nhịp.",
-                suggestedValue = ""
-            )
-        }
-
-        val tone = when {
-            input.detectedTriggers.any {
-                it == RecoveryTrigger.BURNOUT_RISK ||
-                    it == RecoveryTrigger.HARD_HABIT_FAILING ||
-                    it == RecoveryTrigger.CONSECUTIVE_FAILS
-            } -> RecoveryIntensity.AGGRESSIVE
-            input.detectedTriggers.size >= 2 -> RecoveryIntensity.MODERATE
-            else -> RecoveryIntensity.LIGHT
-        }
-        // Week-over-week trend across the whole stat set. Used to add a
-        // tiny longitudinal clause to the canned message — "đang khôi phục
-        // dần" reads very differently from "đang xấu đi".
-        val avgDelta = if (input.allHabitStats.isNotEmpty()) {
-            input.allHabitStats.map { it.completionRate7d - it.previousWeekCompletionRate }
-                .average().toInt()
-        } else 0
-        val trendClause = when {
-            avgDelta >= 10 -> " Khá hơn tuần trước một chút —"
-            avgDelta <= -10 -> " Đang chững so với tuần trước —"
-            else -> ""
-        }
-        val message = when (tone) {
-            RecoveryIntensity.AGGRESSIVE ->
-                "${trendClause.ifBlank { "" }} Bạn đang khá đuối — hãy giảm tải để hồi phục, đừng tự trách nhé.".trim()
-            RecoveryIntensity.MODERATE ->
-                "${trendClause.ifBlank { "" }} Lịch trình đang hơi nặng — vài điều chỉnh nhỏ sẽ giúp bạn duy trì bền hơn.".trim()
-            RecoveryIntensity.LIGHT ->
-                "${trendClause.ifBlank { "" }} Một vài thói quen đang chững lại — nghỉ ngơi nhẹ và tiếp tục sẽ ổn thôi.".trim()
-        }
-
-        return HabitRecoveryAnalysis(
-            shouldRecover = struggling.isNotEmpty() || input.detectedTriggers.isNotEmpty(),
-            triggerReasons = input.detectedTriggers,
-            overallTone = tone,
-            coachingMessage = message,
-            struggling = struggling,
-            recoveryActions = actions.take(4),
-            isCanned = true
-        )
-    }
 
     @Serializable
     private data class HabitRecoveryDto(
@@ -1622,8 +1122,8 @@ class AiHabitInsightRepositoryImpl(
             Log.w(TAG, "Progression model[$index]=$model failed: $lastFailure")
         }
 
-        Log.w(TAG, "All progression models exhausted — serving canned plan")
-        return cannedProgressionAnalysis(input)
+        Log.w(TAG, "All progression models exhausted — throwing AiUnavailableException")
+        throw AiUnavailableException(lastFailure ?: "AI tạm thời không khả dụng. Hãy thử lại.")
     }
 
     private suspend fun tryProgressionModel(
@@ -1734,7 +1234,6 @@ class AiHabitInsightRepositoryImpl(
                 coachingMessage = dto.coachingMessage.trim(),
                 vibrant = vibrant,
                 progressionActions = actions,
-                isCanned = false
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse progression JSON: $raw", e)
@@ -1742,105 +1241,6 @@ class AiHabitInsightRepositoryImpl(
         }
     }
 
-    /**
-     * Local progression plan when every OpenRouter model fails. Derived from
-     * the same vibrant stats the prompt would have consumed:
-     *
-     *   - Top habits with 14d ≥ 85% become [VibrantHabit] rows.
-     *   - Suggestions are conservative: a duration bump for the top habit,
-     *     a complementary supportive habit, and a positive reinforcement
-     *     line. Never aggressive — canned content respects the same spec
-     *     constraints the AI does.
-     *   - Pace defaults to GENTLE; promotes to STEADY only when the top
-     *     habit has ≥ 21-day streak.
-     */
-    private fun cannedProgressionAnalysis(input: HabitProgressionInput): HabitProgressionAnalysis {
-        val vibrantRows = input.allHabitStats
-            .filter { it.completionRate14d >= 85 }
-            .sortedByDescending { it.currentStreak }
-            .take(5)
-            .map { row ->
-                val reason = when {
-                    row.currentStreak >= 21 -> "Duy trì ${row.currentStreak} ngày liền — nền tảng đã rất chắc."
-                    row.currentStreak >= 14 -> "Đã giữ vững 2 tuần — sẵn sàng cho bước tiếp theo nhẹ nhàng."
-                    row.completionRate14d >= 90 -> "Hoàn thành ${row.completionRate14d}% trong 14 ngày — nhịp đang tốt."
-                    else -> "Tỉ lệ ổn định — có thể nâng nhẹ độ thử thách."
-                }
-                VibrantHabit(
-                    title = row.title,
-                    completionRate7d = row.completionRate7d,
-                    completionRate14d = row.completionRate14d,
-                    currentStreak = row.currentStreak,
-                    readinessReason = reason
-                )
-            }
-
-        val actions = mutableListOf<HabitProgressionAction>()
-        val topHabit = vibrantRows.firstOrNull()
-        if (topHabit != null) {
-            actions += HabitProgressionAction(
-                type = ProgressionActionType.INCREASE_DURATION,
-                targetHabit = topHabit.title,
-                title = "Tăng nhẹ thời lượng",
-                description = "Bạn đã duy trì rất tốt — thử kéo dài thêm 5 phút mỗi lần để tiếp tục phát triển.",
-                suggestedValue = "+5 phút"
-            )
-            if (topHabit.currentStreak >= 14 && input.activeHabitCount <= 5) {
-                actions += HabitProgressionAction(
-                    type = ProgressionActionType.ADD_COMPLEMENTARY_HABIT,
-                    targetHabit = null,
-                    title = "Thêm thói quen bổ trợ nhẹ",
-                    description = "Một thói quen ngắn bổ trợ (uống nước, hít thở sâu) sẽ làm nhịp hiện tại cân bằng hơn.",
-                    suggestedValue = ""
-                )
-            }
-            if (vibrantRows.size >= 2) {
-                actions += HabitProgressionAction(
-                    type = ProgressionActionType.INCREASE_FREQUENCY,
-                    targetHabit = vibrantRows[1].title,
-                    title = "Thêm 1 ngày trong tuần",
-                    description = "Nhịp đang ổn — có thể nâng tần suất nhẹ mà vẫn dễ duy trì.",
-                    suggestedValue = "+1 lần/tuần"
-                )
-            }
-        }
-        actions += HabitProgressionAction(
-            type = ProgressionActionType.CONSISTENCY_REWARD,
-            targetHabit = null,
-            title = "Bạn đang làm rất tốt",
-            description = "Giữ vững chuỗi hiện tại đã là một thành tích — phát triển bền vững quan trọng hơn tốc độ.",
-            suggestedValue = ""
-        )
-
-        val pace = if ((topHabit?.currentStreak ?: 0) >= 21) ProgressionPace.STEADY
-        else ProgressionPace.GENTLE
-        // Week-over-week delta across the vibrant set. Lets the canned
-        // message acknowledge upward momentum specifically when it exists.
-        val avgDelta = if (vibrantRows.isNotEmpty()) {
-            input.allHabitStats
-                .filter { row -> vibrantRows.any { it.title == row.title } }
-                .map { it.completionRate7d - it.previousWeekCompletionRate }
-                .average().toInt()
-        } else 0
-        val message = when {
-            pace == ProgressionPace.STEADY ->
-                "Bạn đã rất ổn định trong 3 tuần qua — có thể nâng nhẹ độ thử thách để tiếp tục phát triển."
-            avgDelta >= 10 ->
-                "Tuần này bạn nhất quán hơn tuần trước — một bước nhỏ tiếp theo sẽ vừa sức và bền vững."
-            else ->
-                "Bạn đang duy trì rất tốt — một bước nhỏ tiếp theo sẽ vừa sức và bền vững."
-        }
-
-        return HabitProgressionAnalysis(
-            shouldProgress = vibrantRows.isNotEmpty(),
-            triggerReasons = input.detectedTriggers,
-            overallPace = pace,
-            coachingMessage = message,
-            vibrant = vibrantRows,
-            progressionActions = actions.take(4),
-            isCanned = true
-        )
-    }
 
     @Serializable
     private data class HabitProgressionDto(
@@ -2044,16 +1444,6 @@ class AiHabitInsightRepositoryImpl(
             else -> "Lỗi AI ($code)${if (detail.isNotBlank()) ": $detail" else ""}"
         }
     }
-
-    // ============================================================
-    // CANNED FALLBACK — see CannedTemplatePool for the actual content.
-    // ============================================================
-    // Both reviewHabitGroup() and suggestHabits() now delegate to
-    // CannedTemplatePool when every OpenRouter model fails. The pool is
-    // group-aware (per CategoryKind), trend-aware (per completion bucket),
-    // and signal-aware (recovery overlay for overloaded users), and it
-    // rotates by category so revisiting the same group doesn't show the
-    // same canned copy twice in a row.
 
     // ============================================================
     // DTO / JSON

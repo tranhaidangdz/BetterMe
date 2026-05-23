@@ -168,11 +168,8 @@ class GenerateHabitGroupReviewUseCase(
         )
 
         // Real model success → persist for the next 12h.
-        // Canned success (all models failed) → DO NOT cache.
         if (result is AiResult.Success) {
-            if (!result.isCanned) {
-                cache.save(categoryId, TYPE_REVIEW, result.text)
-            }
+            cache.save(categoryId, TYPE_REVIEW, result.text)
             return result
         }
 

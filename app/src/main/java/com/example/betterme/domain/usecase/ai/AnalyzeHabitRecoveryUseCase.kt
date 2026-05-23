@@ -163,9 +163,7 @@ class AnalyzeHabitRecoveryUseCase(
         }
 
         val result = aiRepository.analyzeHabitRecovery(input)
-        if (!result.isCanned) {
-            cache.save(cacheKey, TYPE_HABIT_RECOVERY, encode(result))
-        }
+        cache.save(cacheKey, TYPE_HABIT_RECOVERY, encode(result))
         return result
     }
 
@@ -287,7 +285,6 @@ class AnalyzeHabitRecoveryUseCase(
         coachingMessage = "",
         struggling = emptyList(),
         recoveryActions = emptyList(),
-        isCanned = false
     )
 
     private fun encode(a: HabitRecoveryAnalysis): String =
@@ -340,7 +337,6 @@ class AnalyzeHabitRecoveryUseCase(
                     suggestedValue = a.suggestedValue
                 )
             },
-            isCanned = false
         )
 
         companion object {

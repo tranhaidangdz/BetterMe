@@ -116,9 +116,7 @@ class SuggestHabitsForCategoryUseCase(
         )
 
         if (result is AiSuggestResult.Success) {
-            if (!result.isCanned) {
-                cache.save(categoryId, TYPE_SUGGESTIONS, encode(result.suggestions))
-            }
+            cache.save(categoryId, TYPE_SUGGESTIONS, encode(result.suggestions))
             return result
         }
 

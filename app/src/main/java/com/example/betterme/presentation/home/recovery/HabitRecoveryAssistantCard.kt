@@ -60,7 +60,7 @@ import kotlinx.coroutines.delay
  *   - "Thói quen đang gặp khó" block listing struggling habits with
  *     7d/14d % + miss streak
  *   - Recovery actions list with per-action CTA + spinner + applied state
- *   - Footer: "Phân tích lại" pill + "Ẩn" link + offline chip if isCanned
+ *   - Footer: "Phân tích lại" pill regenerates with a fresh AI call
  */
 @Composable
 fun HabitRecoveryAssistantCard(
@@ -289,10 +289,6 @@ private fun SuccessCard(
                     background = BetterMeColors.Gray.Gray3,
                     onClick = onDismiss
                 )
-                if (analysis.isCanned) {
-                    Spacer(Modifier.size(8.dp))
-                    OfflineChip()
-                }
             }
         }
     }
@@ -464,22 +460,6 @@ private fun TonePill(tone: ToneSpec) {
             style = BetterMeTypography.Body.Small.Medium,
             color = tone.color,
             fontWeight = FontWeight.SemiBold
-        )
-    }
-}
-
-@Composable
-private fun OfflineChip() {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
-            .background(BetterMeColors.Gray.Gray3)
-            .padding(horizontal = 10.dp, vertical = 6.dp)
-    ) {
-        Text(
-            text = "📴 Bản đề xuất nhanh",
-            style = BetterMeTypography.Body.Small.Medium,
-            color = BetterMeColors.Text.TextTertiary
         )
     }
 }

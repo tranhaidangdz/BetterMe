@@ -34,8 +34,9 @@ import kotlinx.serialization.json.Json
  *     - "weekend inconsistency" — Sat+Sun avg < weekday avg − 20pts
  *     - "low overall completion" — global avg < 50%
  * 4. Cache-first read keyed by the fingerprint of habit set + completion
- *    rollup + lifestyle. 24h TTL. Canned (`isCanned = true`) results are
- *    skipped so the next session can produce a real insight.
+ *    rollup + lifestyle. 24h TTL. When all AI models fail the repo throws
+ *    [com.example.betterme.domain.ai.AiUnavailableException] and the VM
+ *    surfaces a retry-able error state — there is no canned fallback.
  */
 class AnalyzeLifestyleUseCase(
     private val dataStoreManager: DataStoreManager,
@@ -102,9 +103,7 @@ class AnalyzeLifestyleUseCase(
             activeHabitTitles = activeTitles,
             wellnessSignals = emptyList()
         )
-        if (!result.isCanned) {
-            cache.save(cacheKey, TYPE_LIFESTYLE_INSIGHT, encode(result))
-        }
+        cache.save(cacheKey, TYPE_LIFESTYLE_INSIGHT, encode(result))
         return result
     }
 
@@ -190,7 +189,6 @@ class AnalyzeLifestyleUseCase(
             primaryInsight = primaryInsight,
             coachingMessage = coachingMessage,
             adaptiveSuggestions = adaptiveSuggestions.mapNotNull { it.toDomain() },
-            isCanned = false
         )
 
         companion object {

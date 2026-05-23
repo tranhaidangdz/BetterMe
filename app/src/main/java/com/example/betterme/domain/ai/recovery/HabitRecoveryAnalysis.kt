@@ -5,14 +5,9 @@ package com.example.betterme.domain.ai.recovery
  *
  * The engine is proactive coaching for users who are struggling — short
  * windows of low completion, growing miss streaks, late-night failures. When
- * no struggle signals fire, the use case short-circuits to an `shouldRecover
+ * no struggle signals fire, the use case short-circuits to a `shouldRecover
  * = false` baseline analysis WITHOUT calling OpenRouter (saves quota on
  * healthy users; the Home card simply doesn't mount).
- *
- * [isCanned] = true when every model in the fallback chain failed and the
- * repo served a deterministic local analysis derived from the same struggle
- * stats the prompt would have consumed. Use cases skip caching canned
- * content so the next session can produce a real coaching message.
  */
 data class HabitRecoveryAnalysis(
     /** True when at least one trigger fired and the UI should surface the card. */
@@ -26,8 +21,7 @@ data class HabitRecoveryAnalysis(
     /** Habits the engine specifically flags as struggling. Empty when no struggle. */
     val struggling: List<StrugglingHabit>,
     /** 1–4 recovery actions. Empty when [shouldRecover] = false. */
-    val recoveryActions: List<HabitRecoveryAction>,
-    val isCanned: Boolean = false
+    val recoveryActions: List<HabitRecoveryAction>
 )
 
 enum class RecoveryTrigger {

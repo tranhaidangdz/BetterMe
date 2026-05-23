@@ -11,10 +11,6 @@ package com.example.betterme.domain.ai.progression
  * Note on tone: there is intentionally no AGGRESSIVE pace. The spec
  * forbids aggressive productivity pushes; the worst we ever go is
  * STEADY ("a clear step up, still gentle").
- *
- * @param isCanned true when every OpenRouter model failed and the repo
- *                 served a deterministic local plan. Use cases must NOT
- *                 persist canned content into the 24h cache.
  */
 data class HabitProgressionAnalysis(
     val shouldProgress: Boolean,
@@ -22,8 +18,7 @@ data class HabitProgressionAnalysis(
     val overallPace: ProgressionPace,
     val coachingMessage: String,
     val vibrant: List<VibrantHabit>,
-    val progressionActions: List<HabitProgressionAction>,
-    val isCanned: Boolean = false
+    val progressionActions: List<HabitProgressionAction>
 )
 
 /**

@@ -10,11 +10,6 @@ import com.example.betterme.domain.ai.schedule.BurnoutRisk
  * Reuses [BurnoutRisk] from the schedule analyzer package. The two features
  * share the LOW / MODERATE / HIGH bucket exactly; introducing a parallel enum
  * would split a single concept across two files for no benefit.
- *
- * [isCanned] = true when every OpenRouter model in the fallback chain failed
- * and the repo served a deterministic local "stable baseline" insight. Use
- * cases skip caching canned results so the next session's network attempt is
- * free to produce real coaching.
  */
 data class LifestyleInsight(
     val overallTrend: OverallTrend,
@@ -28,10 +23,8 @@ data class LifestyleInsight(
     val primaryInsight: String,
     /** ≤ 2-sentence Vietnamese practical coaching message. */
     val coachingMessage: String,
-    /** 1–4 items. Parser enforces the upper bound; canned fallback enforces
-     *  the lower bound (always at least one suggestion). */
-    val adaptiveSuggestions: List<AdaptiveSuggestion>,
-    val isCanned: Boolean = false
+    /** 1–4 items. Parser enforces the upper bound. */
+    val adaptiveSuggestions: List<AdaptiveSuggestion>
 )
 
 enum class OverallTrend { IMPROVING, STABLE, DECLINING }

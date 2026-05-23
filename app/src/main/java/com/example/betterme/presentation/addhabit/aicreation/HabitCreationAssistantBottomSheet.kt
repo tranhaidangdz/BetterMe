@@ -65,7 +65,7 @@ import kotlinx.coroutines.delay
  *  - Warnings list (max 3, type-tinted)
  *  - Suggestions list (max 3, type-tinted)
  *  - Two buttons at the bottom: "Áp dụng gợi ý" (close, advisory) + "Vẫn tạo"
- *  - Offline chip if isCanned
+ *  - AI errors surface via the bottom sheet's Error state (no canned fallback)
  *
  * Loading shows a rotating Vietnamese message via a lifecycle-safe
  * LaunchedEffect; Error shows a friendly line with a "Vẫn tạo" escape.
@@ -308,10 +308,6 @@ private fun SuccessBody(
             )
         }
 
-        if (analysis.isCanned) {
-            Spacer(Modifier.height(10.dp))
-            OfflineChip()
-        }
     }
 }
 
@@ -566,22 +562,6 @@ private fun SecondaryButton(
             style = BetterMeTypography.Body.Medium,
             color = accent,
             fontWeight = FontWeight.SemiBold
-        )
-    }
-}
-
-@Composable
-private fun OfflineChip() {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(BetterMeTokens.CardRadius.Pill))
-            .background(BetterMeColors.Gray.Gray3)
-            .padding(horizontal = 10.dp, vertical = 6.dp)
-    ) {
-        Text(
-            text = "Bản phân tích nhanh (ngoại tuyến)",
-            style = BetterMeTypography.Body.Small.Medium,
-            color = BetterMeColors.Text.TextTertiary
         )
     }
 }

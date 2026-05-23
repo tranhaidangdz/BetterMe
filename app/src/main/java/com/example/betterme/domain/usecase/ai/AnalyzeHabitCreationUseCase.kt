@@ -40,8 +40,9 @@ import kotlinx.serialization.json.Json
  * 3. Cache-first read keyed by the fingerprint of (new habit + existing habit
  *    ids + reminder times + lifestyle). 24h TTL — re-tapping Save with the
  *    same form within the day is a free local read.
- * 4. Cache write is skipped when `isCanned = true` so connectivity recovery
- *    isn't blocked by stale offline content.
+ * 4. When all AI models fail the repo throws
+ *    [com.example.betterme.domain.ai.AiUnavailableException] — the VM surfaces
+ *    a retry-able error state and nothing is cached.
  */
 class AnalyzeHabitCreationUseCase(
     private val dataStoreManager: DataStoreManager,
@@ -132,9 +133,7 @@ class AnalyzeHabitCreationUseCase(
         }
 
         val result = aiRepository.analyzeHabitCreation(input)
-        if (!result.isCanned) {
-            cache.save(cacheKey, TYPE_HABIT_CREATION_ANALYSIS, encode(result))
-        }
+        cache.save(cacheKey, TYPE_HABIT_CREATION_ANALYSIS, encode(result))
         return result
     }
 
@@ -144,7 +143,6 @@ class AnalyzeHabitCreationUseCase(
         warnings = emptyList(),
         suggestions = emptyList(),
         encouragement = "Chúc bạn duy trì đều đặn — một thói quen nhỏ tốt hơn không có thói quen nào.",
-        isCanned = false
     )
 
     /**
@@ -193,7 +191,6 @@ class AnalyzeHabitCreationUseCase(
             warnings = warnings.mapNotNull { it.toDomain() },
             suggestions = suggestions.mapNotNull { it.toDomain() },
             encouragement = encouragement,
-            isCanned = false
         )
 
         companion object {

@@ -32,13 +32,7 @@ import com.example.betterme.domain.ai.schedule.UserLifestyleProfile
 interface AiHabitInsightRepository {
 
     sealed class AiResult {
-        /**
-         * @param isCanned true when the response is a local "hard fallback" served
-         *                 because every OpenRouter model in the chain failed. Use
-         *                 cases must NOT persist canned content into the 12h cache —
-         *                 next visit might have working connectivity.
-         */
-        data class Success(val text: String, val isCanned: Boolean = false) : AiResult()
+        data class Success(val text: String) : AiResult()
         data class Failure(val message: String) : AiResult()
     }
 
@@ -76,19 +70,16 @@ interface AiHabitInsightRepository {
     ): AiSuggestResult
 
     sealed class AiSuggestResult {
-        /** [isCanned] semantics match [AiResult.Success.isCanned]. */
-        data class Success(
-            val suggestions: List<SuggestedHabit>,
-            val isCanned: Boolean = false
-        ) : AiSuggestResult()
+        data class Success(val suggestions: List<SuggestedHabit>) : AiSuggestResult()
         data class Failure(val message: String) : AiSuggestResult()
     }
 
     /**
      * Analyzes a habit schedule for overlaps, overload, sleep balance, transition
-     * realism, and burnout risk. Always returns a [ScheduleAnalysis] — when every
-     * model in the fallback chain fails, a handwritten local analysis is served
-     * with `isCanned = true` so the UI never has to handle a hard error path.
+     * realism, and burnout risk.
+     *
+     * Throws [AiUnavailableException] when every model in the fallback chain fails.
+     * Callers must surface a retry-able error state — there is no canned fallback.
      *
      * @param profile sleep / wake / work-hours context. Pass null to use [UserLifestyleProfile.Default].
      * @param habits  domain-side input shape (see [ScheduleHabitInput]); the use
@@ -105,10 +96,8 @@ interface AiHabitInsightRepository {
      * EASY/MEDIUM, ≤2 HARD, etc.) and respects [OnboardingProfile.selectedCategories]
      * when non-empty.
      *
-     * Always returns an [OnboardingSuggestion]. When every OpenRouter model in
-     * the fallback chain fails, the repo serves a handwritten 4-habit beginner
-     * starter set with `isCanned = true` so the onboarding flow never deadlocks
-     * on a network error.
+     * Throws [AiUnavailableException] when every model in the fallback chain fails.
+     * Callers must surface a retry-able error state — there is no canned fallback.
      *
      * @param profile   user inputs (goals, categories, experience, activity, etc.)
      * @param lifestyle sleep / work / meal anchors. Pass null to use
@@ -122,9 +111,8 @@ interface AiHabitInsightRepository {
     /**
      * Long-term adaptive coaching. Reads a 14-day rollup of habit completion +
      * detected behavioral patterns and returns gentle, sustainable adjustments.
-     * Always returns a [LifestyleInsight] — when every OpenRouter model fails,
-     * the repo serves a deterministic local "stable baseline" insight flagged
-     * `isCanned = true`.
+     * Throws [AiUnavailableException] when every model in the fallback chain fails.
+     * Callers must surface a retry-able error state — there is no canned fallback.
      *
      * @param lifestyle             sleep / work / meal anchors; null → use Default.
      * @param history               per-habit completion rollup, last 14 days.
@@ -150,10 +138,8 @@ interface AiHabitInsightRepository {
      * advisory** — the UI always proceeds to save on "Vẫn tạo" regardless of
      * the analysis content; the assistant never blocks creation.
      *
-     * Always returns a [HabitCreationAnalysis]. When every OpenRouter model
-     * in the fallback chain fails, the repo runs a deterministic rule-based
-     * local analysis (overlap, late-night, overload, duplicate title) and
-     * flags `isCanned = true`.
+     * Throws [AiUnavailableException] when every model in the fallback chain fails.
+     * Callers must surface a retry-able error state — there is no canned fallback.
      */
     suspend fun analyzeHabitCreation(input: HabitCreationInput): HabitCreationAnalysis
 
@@ -163,10 +149,8 @@ interface AiHabitInsightRepository {
      * (low completion, miss streaks, late-night failures, overload) — the
      * AI never decides on its own whether to surface a recovery card.
      *
-     * Always returns a [HabitRecoveryAnalysis]. When every model in the
-     * fallback chain fails, the repo derives a deterministic local plan from
-     * the same struggle stats the prompt would have consumed and flags
-     * `isCanned = true`.
+     * Throws [AiUnavailableException] when every model in the fallback chain fails.
+     * Callers must surface a retry-able error state — there is no canned fallback.
      */
     suspend fun analyzeHabitRecovery(input: HabitRecoveryInput): HabitRecoveryAnalysis
 
@@ -175,10 +159,8 @@ interface AiHabitInsightRepository {
      * Called ONLY after deterministic gates pass (every habit ≥ 60%, ≥1 at
      * ≥ 85%, no recovery triggers, activeHabitCount ≤ 8, hardHabitCount ≤ 1).
      *
-     * Always returns a [HabitProgressionAnalysis]. When every model in the
-     * fallback chain fails, the repo derives a deterministic local plan from
-     * the same vibrant stats the prompt would have consumed and flags
-     * `isCanned = true`. The use case must NOT cache canned content.
+     * Throws [AiUnavailableException] when every model in the fallback chain fails.
+     * Callers must surface a retry-able error state — there is no canned fallback.
      *
      * The system prompt strictly forbids: aggressive jumps, sleep reduction,
      * adding HARD habits, 4 AM routines, marathon-style upgrades.
