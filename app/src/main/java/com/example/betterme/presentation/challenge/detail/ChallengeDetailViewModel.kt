@@ -91,9 +91,33 @@ class ChallengeDetailViewModel(
             ChallengeDetailIntent.LeaveChallenge -> leave()
             ChallengeDetailIntent.Share -> {
                 val s = currentState
-                val message = "Tôi vừa hoàn thành thử thách \"${s.title}\" và nhận được " +
-                    "${s.rewardCoins} xu" +
-                    if (s.rewardBadgeName != null) " + huy hiệu ${s.rewardBadgeName}!" else "!"
+                // Build a richer payload than the legacy one-liner so the receiving
+                // app (Messenger / Zalo / Facebook / SMS) shows the progress in
+                // context, not just a brag line. Header line varies with the row's
+                // terminal state — completed vs in-progress vs failed.
+                val header = when (s.mode) {
+                    DetailMode.Completed ->
+                        "🏆 Mình vừa hoàn thành thử thách \"${s.title}\" trên BetterMe!"
+                    DetailMode.Failed ->
+                        "💪 Mình đang theo đuổi thử thách \"${s.title}\" trên BetterMe."
+                    else ->
+                        "🔥 Mình đang tham gia thử thách \"${s.title}\" trên BetterMe!"
+                }
+                val message = buildString {
+                    append(header).append("\n\n")
+                    append("📊 Tiến độ: ${s.currentStreak}/${s.targetStreak} ngày (${s.progressPct}%)\n")
+                    if (s.daysRemaining > 0 && s.mode == DetailMode.Active) {
+                        append("⏳ Còn lại: ${s.daysRemaining} ngày\n")
+                    }
+                    if (s.mode == DetailMode.Completed) {
+                        append("🪙 Phần thưởng: ${s.rewardCoins} xu")
+                        if (s.rewardBadgeName != null) {
+                            append(" + huy hiệu ${s.rewardBadgeName}")
+                        }
+                        append("\n")
+                    }
+                    append("\nCùng mình xây thói quen tốt trên BetterMe nhé!")
+                }
                 sendEvent(ChallengeDetailEvent.LaunchShareSheet(message))
             }
             ChallengeDetailIntent.Reset -> updateState { ChallengeDetailState() }

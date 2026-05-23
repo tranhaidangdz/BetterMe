@@ -47,6 +47,7 @@ import com.example.betterme.domain.usecase.challenge.CancelChallengeReminderUseC
 import com.example.betterme.domain.usecase.challenge.ChallengeSeederUseCase
 import com.example.betterme.domain.usecase.challenge.BackfillChallengeStatusesUseCase
 import com.example.betterme.domain.usecase.challenge.CheckInChallengeUseCase
+import com.example.betterme.domain.usecase.challenge.BuildChallengeProgressShareTextUseCase
 import com.example.betterme.domain.usecase.challenge.EvaluateChallengeStatusUseCase
 import com.example.betterme.domain.usecase.challenge.JoinChallengeUseCase
 import com.example.betterme.domain.usecase.challenge.LeaveChallengeUseCase
@@ -347,6 +348,7 @@ val useCaseModule = module {
     factory { ScheduleChallengeReminderUseCase(get(), get()) }
     factory { CancelChallengeReminderUseCase(get(), get()) }
     factory { ToggleStartReminderUseCase(get(), get(), get()) }
+    factory { BuildChallengeProgressShareTextUseCase(get(), get(), get()) }
 
     // Habit reminders (AlarmManager exact alarms). Pulled out into use cases so
     // both the UI (AddHabit / HabitDetail) and the receivers (boot reschedule)

@@ -15,14 +15,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import android.widget.Toast
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.example.betterme.R
@@ -34,6 +37,8 @@ import com.example.betterme.presentation.challenge.overview.components.UpcomingC
 import com.example.betterme.presentation.components.view.PillSegmentedTabs
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
+import com.example.betterme.utils.ShareUtils
+import kotlinx.coroutines.flow.collectLatest
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -47,6 +52,22 @@ fun ChallengeOverviewScreen(
     viewModel: ChallengeOverviewViewModel = koinViewModel()
 ) {
     val state by viewModel.viewState.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(viewModel) {
+        viewModel.singleEvent.collectLatest { event ->
+            when (event) {
+                is ChallengeOverviewEvent.ShowMessage ->
+                    Toast.makeText(context, event.text, Toast.LENGTH_SHORT).show()
+                is ChallengeOverviewEvent.LaunchShareSheet ->
+                    ShareUtils.shareChallengeCompletion(
+                        context = context,
+                        message = event.text,
+                        chooserTitle = "Chia sẻ tiến độ"
+                    )
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -63,7 +84,10 @@ fun ChallengeOverviewScreen(
             item {
                 OverviewTopBar(
                     onTrophyClick = onOpenAchievements,
-                    onLeaderboardClick = onOpenGlobalLeaderboard
+                    onLeaderboardClick = onOpenGlobalLeaderboard,
+                    onShareClick = {
+                        viewModel.processIntent(ChallengeOverviewIntent.ShareProgress)
+                    }
                 )
             }
 
@@ -168,7 +192,8 @@ fun ChallengeOverviewScreen(
 @Composable
 private fun OverviewTopBar(
     onTrophyClick: () -> Unit,
-    onLeaderboardClick: () -> Unit
+    onLeaderboardClick: () -> Unit,
+    onShareClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -200,6 +225,22 @@ private fun OverviewTopBar(
             modifier = Modifier.weight(1f),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
+        // Share progress → native ACTION_SEND chooser. Surfaces Messenger / Zalo /
+        // Facebook / SMS based on what the user has installed.
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .clickable { onShareClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_share),
+                contentDescription = "Chia sẻ tiến độ",
+                tint = BetterMeColors.Primary.Primary,
+                modifier = Modifier.size(22.dp)
+            )
+        }
         Box(
             modifier = Modifier
                 .size(40.dp)

@@ -23,8 +23,15 @@ sealed class ChallengeOverviewIntent : MviIntent {
     data object Load : ChallengeOverviewIntent()
     data class SelectFilter(val filter: OverviewFilter) : ChallengeOverviewIntent()
     data class ToggleStartReminder(val challengeId: Int) : ChallengeOverviewIntent()
+    /**
+     * User tapped "Chia sẻ tiến độ". VM builds the rich text payload via the use
+     * case, then emits [ChallengeOverviewEvent.LaunchShareSheet]; the screen
+     * dispatches the OS share intent.
+     */
+    data object ShareProgress : ChallengeOverviewIntent()
 }
 
 sealed class ChallengeOverviewEvent : MviSingleEvent {
     data class ShowMessage(val text: String) : ChallengeOverviewEvent()
+    data class LaunchShareSheet(val text: String) : ChallengeOverviewEvent()
 }

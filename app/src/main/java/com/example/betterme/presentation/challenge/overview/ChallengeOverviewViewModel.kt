@@ -13,6 +13,7 @@ import com.example.betterme.domain.repository.ChallengeLogRepository
 import com.example.betterme.domain.repository.ChallengeRepository
 import com.example.betterme.domain.repository.ReminderRepository
 import com.example.betterme.domain.repository.UserChallengeRepository
+import com.example.betterme.domain.usecase.challenge.BuildChallengeProgressShareTextUseCase
 import com.example.betterme.domain.usecase.challenge.ToggleStartReminderUseCase
 import com.example.betterme.presentation.challenge.model.ChallengeProgressUiModel
 import com.example.betterme.presentation.challenge.model.CompletedChallengeUiModel
@@ -39,7 +40,8 @@ class ChallengeOverviewViewModel(
     private val achievementRepository: AchievementRepository,
     private val challengeLogRepository: ChallengeLogRepository,
     private val reminderRepository: ReminderRepository,
-    private val toggleStartReminderUseCase: ToggleStartReminderUseCase
+    private val toggleStartReminderUseCase: ToggleStartReminderUseCase,
+    private val buildChallengeProgressShareTextUseCase: BuildChallengeProgressShareTextUseCase
 ) : BaseMviViewModel<ChallengeOverviewIntent, ChallengeOverviewState, ChallengeOverviewEvent>() {
 
     private val reminderEnabledIds = MutableStateFlow<Set<Int>>(emptySet())
@@ -55,6 +57,21 @@ class ChallengeOverviewViewModel(
             ChallengeOverviewIntent.Load -> load()
             is ChallengeOverviewIntent.SelectFilter -> updateState { copy(selectedFilter = intent.filter) }
             is ChallengeOverviewIntent.ToggleStartReminder -> toggleReminder(intent.challengeId)
+            ChallengeOverviewIntent.ShareProgress -> shareProgress()
+        }
+    }
+
+    /**
+     * Build a fresh, data-rich share payload and hand it to the OS share sheet.
+     * The use case reads from the repos so the text always reflects the current
+     * state — no stale snapshot from `currentState` (which only carries UI rows,
+     * not check-in dates or per-challenge metadata).
+     */
+    private fun shareProgress() {
+        viewModelScope.launch {
+            val text = runCatching { buildChallengeProgressShareTextUseCase() }
+                .getOrDefault("Mình đang xây thói quen tốt trên BetterMe — cùng tham gia nhé!")
+            sendEvent(ChallengeOverviewEvent.LaunchShareSheet(text))
         }
     }
 
