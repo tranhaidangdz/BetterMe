@@ -30,5 +30,18 @@ data class ChallengeLogEntity(
     val image: String? = null,
     val created_at: Long = System.currentTimeMillis(),
     val latitude: Double? = null,
-    val longitude: Double? = null
+    val longitude: Double? = null,
+    /**
+     * Wall-clock of the last local mutation. Drives last-write-wins reconciliation
+     * against `users/{uid}/challenge_logs/{challengeId}_{date}` — whichever side
+     * has the larger `updated_at` wins.
+     */
+    val updated_at: Long = System.currentTimeMillis(),
+    /** Last successful push timestamp. Row is dirty when synced_at < updated_at. */
+    val synced_at: Long? = null,
+    /**
+     * Soft-delete marker for two-way sync. Hard deletes would race with the upload
+     * loop and disappear before propagation; this flag preserves the audit trail.
+     */
+    val is_deleted: Boolean = false
 )

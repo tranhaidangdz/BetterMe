@@ -18,15 +18,17 @@ class UserRepositoryImpl(
 
     override suspend fun deleteUser(user: UserEntity) = dao.deleteUser(user)
 
-    override suspend fun addCoins(userId: String, delta: Int) = dao.addCoins(userId, delta)
+    override suspend fun addCoins(userId: String, delta: Int) =
+        dao.addCoins(userId, delta, updatedAt = System.currentTimeMillis())
 
-    override suspend fun setLevel(userId: String, level: Int) = dao.setLevel(userId, level)
+    override suspend fun setLevel(userId: String, level: Int) =
+        dao.setLevel(userId, level, updatedAt = System.currentTimeMillis())
 
     override suspend fun recomputeLevel(userId: String) {
         val user = dao.getUserById(userId) ?: return
         val newLevel = 1 + (user.xp / 100)
         if (newLevel != user.level) {
-            dao.setLevel(userId, newLevel)
+            dao.setLevel(userId, newLevel, updatedAt = System.currentTimeMillis())
         }
     }
 }

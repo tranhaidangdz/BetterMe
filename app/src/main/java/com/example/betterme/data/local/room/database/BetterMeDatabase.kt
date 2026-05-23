@@ -55,7 +55,7 @@ import com.example.betterme.data.local.room.migrations.ALL_MIGRATIONS
         AIChatEntity::class,
         AiCacheEntity::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

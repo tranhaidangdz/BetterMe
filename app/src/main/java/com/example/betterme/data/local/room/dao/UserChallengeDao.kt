@@ -47,12 +47,18 @@ interface UserChallengeDao {
     @Query("SELECT * FROM user_challenges WHERE user_id = :userId AND challenge_id = :challengeId LIMIT 1")
     suspend fun getByUserAndChallenge(userId: String, challengeId: Int): UserChallengeEntity?
 
+    // Every state-mutating UPDATE here also bumps `updated_at` and nulls `synced_at`
+    // so the sync layer can recognize the row as dirty. Callers (the repository)
+    // pass `updatedAt = System.currentTimeMillis()` at the call site.
+
     @Query("""
         UPDATE user_challenges
         SET current_streak = :currentStreak,
             best_streak = :bestStreak,
             progress_pct = :progressPct,
-            last_check_in_date = :lastCheckIn
+            last_check_in_date = :lastCheckIn,
+            updated_at = :updatedAt,
+            synced_at = NULL
         WHERE id = :id
     """)
     suspend fun updateProgress(
@@ -60,31 +66,49 @@ interface UserChallengeDao {
         currentStreak: Int,
         bestStreak: Int,
         progressPct: Int,
-        lastCheckIn: Long
+        lastCheckIn: Long,
+        updatedAt: Long
     )
 
     @Query("""
         UPDATE user_challenges
         SET status = 'COMPLETED',
             end_date = :endDate,
-            progress_pct = 100
+            progress_pct = 100,
+            updated_at = :updatedAt,
+            synced_at = NULL
         WHERE id = :id AND status NOT IN ('COMPLETED', 'FAILED', 'ABANDONED')
     """)
-    suspend fun markCompleted(id: Int, endDate: Long): Int
+    suspend fun markCompleted(id: Int, endDate: Long, updatedAt: Long): Int
 
     @Query("""
         UPDATE user_challenges
         SET status = 'FAILED',
-            end_date = :endDate
+            end_date = :endDate,
+            updated_at = :updatedAt,
+            synced_at = NULL
         WHERE id = :id AND status NOT IN ('COMPLETED', 'FAILED', 'ABANDONED')
     """)
-    suspend fun markFailed(id: Int, endDate: Long): Int
+    suspend fun markFailed(id: Int, endDate: Long, updatedAt: Long): Int
 
-    @Query("UPDATE user_challenges SET status = 'ABANDONED', end_date = :endDate WHERE id = :id")
-    suspend fun markAbandoned(id: Int, endDate: Long)
+    @Query("""
+        UPDATE user_challenges
+        SET status = 'ABANDONED',
+            end_date = :endDate,
+            updated_at = :updatedAt,
+            synced_at = NULL
+        WHERE id = :id
+    """)
+    suspend fun markAbandoned(id: Int, endDate: Long, updatedAt: Long)
 
-    @Query("UPDATE user_challenges SET target_end_date = :targetEndDate WHERE id = :id")
-    suspend fun updateTargetEndDate(id: Int, targetEndDate: Long)
+    @Query("""
+        UPDATE user_challenges
+        SET target_end_date = :targetEndDate,
+            updated_at = :updatedAt,
+            synced_at = NULL
+        WHERE id = :id
+    """)
+    suspend fun updateTargetEndDate(id: Int, targetEndDate: Long, updatedAt: Long)
 
     @Query("SELECT * FROM user_challenges WHERE status IN ('ACTIVE', 'UPCOMING')")
     suspend fun getAllActiveOrUpcoming(): List<UserChallengeEntity>
@@ -100,4 +124,27 @@ interface UserChallengeDao {
 
     @Query("SELECT MAX(best_streak) FROM user_challenges WHERE user_id = :userId")
     suspend fun maxBestStreak(userId: String): Int?
+
+    // ============================================================
+    // Sync helpers (offline-first)
+    // ============================================================
+
+    /**
+     * Rows for this user that have been mutated locally since their last successful
+     * push. Includes soft-deleted rows (is_deleted=1) so deletions propagate.
+     */
+    @Query("""
+        SELECT * FROM user_challenges
+        WHERE user_id = :userId AND (synced_at IS NULL OR synced_at < updated_at)
+    """)
+    suspend fun getDirtyForUser(userId: String): List<UserChallengeEntity>
+
+    @Query("""
+        SELECT COUNT(*) FROM user_challenges
+        WHERE user_id = :userId AND (synced_at IS NULL OR synced_at < updated_at)
+    """)
+    suspend fun countDirtyForUser(userId: String): Int
+
+    @Query("UPDATE user_challenges SET synced_at = :syncedAt WHERE id = :id AND updated_at = :pushedUpdatedAt")
+    suspend fun markSynced(id: Int, pushedUpdatedAt: Long, syncedAt: Long)
 }

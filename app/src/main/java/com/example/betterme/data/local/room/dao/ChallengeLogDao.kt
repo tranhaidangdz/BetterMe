@@ -39,4 +39,32 @@ interface ChallengeLogDao {
         WHERE uc.user_id = :userId AND cl.status = 'DONE'
     """)
     suspend fun countTotalCheckInsByUser(userId: String): Int
+
+    // ============================================================
+    // Sync helpers (offline-first)
+    // ============================================================
+
+    /**
+     * Logs that belong to one of the user's challenges AND have not been pushed since
+     * their last local mutation. Joins through `user_challenges` so a remote row owned
+     * by a different user can never accidentally be uploaded under this user's tree.
+     */
+    @Query("""
+        SELECT cl.* FROM challenge_logs cl
+        INNER JOIN user_challenges uc ON cl.user_challenge_id = uc.id
+        WHERE uc.user_id = :userId
+          AND (cl.synced_at IS NULL OR cl.synced_at < cl.updated_at)
+    """)
+    suspend fun getDirtyLogs(userId: String): List<ChallengeLogEntity>
+
+    @Query("""
+        SELECT COUNT(*) FROM challenge_logs cl
+        INNER JOIN user_challenges uc ON cl.user_challenge_id = uc.id
+        WHERE uc.user_id = :userId
+          AND (cl.synced_at IS NULL OR cl.synced_at < cl.updated_at)
+    """)
+    suspend fun countDirtyLogs(userId: String): Int
+
+    @Query("UPDATE challenge_logs SET synced_at = :syncedAt WHERE id = :logId AND updated_at = :pushedUpdatedAt")
+    suspend fun markLogSynced(logId: Int, pushedUpdatedAt: Long, syncedAt: Long)
 }

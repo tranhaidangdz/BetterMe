@@ -45,5 +45,22 @@ data class UserChallengeEntity(
     val last_check_in_date: Long? = null,
     val progress_pct: Int = 0,
     val team_id: Int? = null,
-    val joined_at: Long = System.currentTimeMillis()
+    val joined_at: Long = System.currentTimeMillis(),
+    /**
+     * Wall-clock of the last local mutation. Drives last-write-wins reconciliation
+     * against `users/{uid}/user_challenges/{challengeId}` — whichever side has the
+     * larger `updated_at` wins. Stamped on every DAO write that mutates row state.
+     */
+    val updated_at: Long = System.currentTimeMillis(),
+    /**
+     * `updated_at` of the last successful push to Firestore. The row is "dirty"
+     * (pending upload) whenever `synced_at < updated_at` or `synced_at == null`.
+     */
+    val synced_at: Long? = null,
+    /**
+     * Soft-delete marker. Set instead of hard-deleting so the deletion can propagate
+     * to other devices via sync. The sync layer pushes the row with is_deleted=true
+     * to Firestore; downstream devices apply the same flag locally.
+     */
+    val is_deleted: Boolean = false
 )

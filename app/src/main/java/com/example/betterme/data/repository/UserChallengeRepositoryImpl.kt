@@ -31,24 +31,32 @@ class UserChallengeRepositoryImpl(
 
     override suspend fun delete(userChallenge: UserChallengeEntity) = dao.delete(userChallenge)
 
+    // All state mutations stamp `updated_at = now` and null `synced_at` via the DAO
+    // queries below. The sync layer's dirty-row query catches the change on the
+    // next pass.
+
     override suspend fun updateProgress(
         id: Int,
         currentStreak: Int,
         bestStreak: Int,
         progressPct: Int,
         lastCheckIn: Long
-    ) = dao.updateProgress(id, currentStreak, bestStreak, progressPct, lastCheckIn)
+    ) = dao.updateProgress(
+        id, currentStreak, bestStreak, progressPct, lastCheckIn,
+        updatedAt = System.currentTimeMillis()
+    )
 
     override suspend fun markCompleted(id: Int, endDate: Long): Boolean =
-        dao.markCompleted(id, endDate) > 0
+        dao.markCompleted(id, endDate, updatedAt = System.currentTimeMillis()) > 0
 
     override suspend fun markFailed(id: Int, endDate: Long): Boolean =
-        dao.markFailed(id, endDate) > 0
+        dao.markFailed(id, endDate, updatedAt = System.currentTimeMillis()) > 0
 
-    override suspend fun markAbandoned(id: Int, endDate: Long) = dao.markAbandoned(id, endDate)
+    override suspend fun markAbandoned(id: Int, endDate: Long) =
+        dao.markAbandoned(id, endDate, updatedAt = System.currentTimeMillis())
 
     override suspend fun updateTargetEndDate(id: Int, targetEndDate: Long) =
-        dao.updateTargetEndDate(id, targetEndDate)
+        dao.updateTargetEndDate(id, targetEndDate, updatedAt = System.currentTimeMillis())
 
     override suspend fun getAllActiveOrUpcoming() = dao.getAllActiveOrUpcoming()
 

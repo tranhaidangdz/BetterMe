@@ -7,18 +7,26 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.cloudinary.android.MediaManager
 import com.example.betterme.BuildConfig
 import com.example.betterme.data.receiver.HabitReminderReceiver
+import com.example.betterme.data.sync.ConnectivityObserver
 import com.example.betterme.data.worker.ChallengeReminderWorker
 import com.example.betterme.data.worker.MidnightCleanupWorker
+import com.example.betterme.data.worker.SyncWorker
 import com.example.betterme.domain.usecase.challenge.BackfillChallengeStatusesUseCase
 import com.google.firebase.FirebaseApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.GlobalContext
@@ -44,6 +52,53 @@ class KoinApp : Application() {
         scheduleDailyMidnightCleanup()
         initCloudinary()
         runChallengeStatusBackfill()
+        scheduleSync()
+    }
+
+    /**
+     * Wire the offline-first sync layer into the app lifecycle:
+     *
+     *  1. Periodic SyncWorker — every 30 minutes, network-required. Survives process
+     *     death; WorkManager handles backoff on failure.
+     *  2. One-shot SyncWorker on launch — flushes anything dirty from the previous
+     *     session (or marks rows as needing initial upload after the v12→v13 migration).
+     *  3. Connectivity callback — when the device comes back online after being
+     *     offline, enqueue a one-shot SyncWorker so queued writes flush within
+     *     seconds instead of waiting up to 30 minutes for the next periodic tick.
+     *
+     * KEEP_existing policy on the periodic request means re-running KoinApp.onCreate
+     * (e.g., process restart) doesn't reschedule duplicates.
+     */
+    private fun scheduleSync() {
+        val wm = WorkManager.getInstance(this)
+        wm.enqueueUniquePeriodicWork(
+            SyncWorker.PERIODIC_UNIQUE_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            SyncWorker.periodicRequest()
+        )
+        wm.enqueueUniqueWork(
+            SyncWorker.ONE_SHOT_UNIQUE_NAME,
+            ExistingWorkPolicy.KEEP,
+            SyncWorker.oneShotRequest()
+        )
+
+        // Connectivity-resume trigger. drop(1) skips the initial emission so the
+        // launch one-shot above isn't duplicated. filter { it } picks only the
+        // online edge.
+        val connectivity = GlobalContext.get().get<ConnectivityObserver>()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        connectivity.observe()
+            .drop(1)
+            .distinctUntilChanged()
+            .filter { online -> online }
+            .onEach {
+                wm.enqueueUniqueWork(
+                    SyncWorker.ONE_SHOT_UNIQUE_NAME,
+                    ExistingWorkPolicy.REPLACE,
+                    SyncWorker.oneShotRequest()
+                )
+            }
+            .launchIn(scope)
     }
 
     /**

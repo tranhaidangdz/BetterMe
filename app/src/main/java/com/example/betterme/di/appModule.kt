@@ -70,6 +70,12 @@ import com.example.betterme.data.leaderboard.MotivationalEventEngine
 import com.example.betterme.data.leaderboard.RankSnapshotStore
 import com.example.betterme.data.repository.AiCacheRepositoryImpl
 import com.example.betterme.data.share.ShareRepositoryImpl
+import com.example.betterme.data.sync.ChallengeLogSynchronizer
+import com.example.betterme.data.sync.ConnectivityObserver
+import com.example.betterme.data.sync.SyncCoordinator
+import com.example.betterme.data.sync.SyncStatusRepository
+import com.example.betterme.data.sync.UserChallengeSynchronizer
+import com.example.betterme.data.sync.UserProfileSynchronizer
 import com.example.betterme.domain.ai.AiCacheRepository
 import com.example.betterme.domain.ai.AiHabitInsightRepository
 import com.example.betterme.domain.ai.AiHomeSessionMemory
@@ -147,8 +153,14 @@ val appModule = module {
     // Firebase
     single { FirebaseAuth.getInstance() }
     single {
+        // Persistence ENABLED: Firestore's local SDK cache queues writes when
+        // offline and replays them on reconnect, and serves reads from the cached
+        // mirror so listeners stay responsive. This is the foundation of our
+        // offline-first sync — the SDK owns the actual write queue; our sync
+        // layer adds dirty-flag tracking, last-write-wins reconciliation across
+        // restarts, retry-on-startup, and visible sync status.
         val settings = FirebaseFirestoreSettings.Builder()
-            .setPersistenceEnabled(false)
+            .setPersistenceEnabled(true)
             .build()
 
         FirebaseFirestore.getInstance().apply {
@@ -164,6 +176,27 @@ val appModule = module {
 
     // App-wide deep-link bus (notification taps → MainScreen routing)
     single { DeepLinkBus() }
+
+    // ============================================================
+    // Offline-first sync layer
+    // ============================================================
+    single { ConnectivityObserver(get()) }
+    single { SyncStatusRepository(get()) }
+    single { UserProfileSynchronizer(get(), get()) }
+    single { UserChallengeSynchronizer(get(), get()) }
+    single { ChallengeLogSynchronizer(get(), get(), get()) }
+    single {
+        SyncCoordinator(
+            dataStoreManager = get(),
+            connectivity = get(),
+            syncStatusRepository = get(),
+            synchronizers = listOf(
+                get<UserProfileSynchronizer>(),
+                get<UserChallengeSynchronizer>(),
+                get<ChallengeLogSynchronizer>()
+            )
+        )
+    }
 }
 
 val roomModule = module {
