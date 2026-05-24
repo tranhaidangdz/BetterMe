@@ -69,6 +69,13 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
+
+    testOptions {
+        // Make `android.util.Log` (and other Android-stub classes) return defaults
+        // instead of throwing in JVM unit tests. Lets pure-logic tests cover code
+        // paths that touch Log.d / Log.w without requiring Robolectric.
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {

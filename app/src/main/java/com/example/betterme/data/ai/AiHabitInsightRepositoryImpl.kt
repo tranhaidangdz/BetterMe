@@ -85,7 +85,8 @@ import retrofit2.HttpException
  *   120-token reply still feels complete.
  */
 class AiHabitInsightRepositoryImpl(
-    private val api: OpenRouterApi
+    private val api: OpenRouterApi,
+    private val singleFlight: SingleFlight
 ) : AiHabitInsightRepository {
 
     /**
@@ -116,6 +117,14 @@ class AiHabitInsightRepositoryImpl(
      * [AiUnavailableException] — the only public failure surface.
      */
     private suspend fun <T> runChainAnalysis(
+        chainName: String,
+        dedupKey: String,
+        attempt: suspend (model: String) -> Result<T>
+    ): T = singleFlight.run("$chainName:$dedupKey") {
+        runChainAnalysisInner(chainName, attempt)
+    }
+
+    private suspend fun <T> runChainAnalysisInner(
         chainName: String,
         attempt: suspend (model: String) -> Result<T>
     ): T {
@@ -352,9 +361,10 @@ class AiHabitInsightRepositoryImpl(
             ChatMessage(role = "user", content = userPrompt)
         )
 
-        return runChainAnalysis(chainName = "schedule") { model ->
-            tryScheduleModel(model, messages)
-        }
+        return runChainAnalysis(
+            chainName = "schedule",
+            dedupKey = userPrompt.hashCode().toString()
+        ) { model -> tryScheduleModel(model, messages) }
     }
 
     private suspend fun tryScheduleModel(
@@ -524,14 +534,16 @@ class AiHabitInsightRepositoryImpl(
         lifestyle: UserLifestyleProfile?
     ): OnboardingSuggestion {
         val effectiveLifestyle = lifestyle ?: UserLifestyleProfile.Default
+        val userPrompt = buildOnboardingUserPrompt(profile, effectiveLifestyle)
         val messages = listOf(
             ChatMessage(role = "system", content = ONBOARDING_SYSTEM_PROMPT),
-            ChatMessage(role = "user", content = buildOnboardingUserPrompt(profile, effectiveLifestyle))
+            ChatMessage(role = "user", content = userPrompt)
         )
 
-        return runChainAnalysis(chainName = "onboarding") { model ->
-            tryOnboardingModel(model, messages)
-        }
+        return runChainAnalysis(
+            chainName = "onboarding",
+            dedupKey = userPrompt.hashCode().toString()
+        ) { model -> tryOnboardingModel(model, messages) }
     }
 
     private suspend fun tryOnboardingModel(
@@ -654,9 +666,10 @@ class AiHabitInsightRepositoryImpl(
             )
         )
 
-        return runChainAnalysis(chainName = "lifestyle") { model ->
-            tryLifestyleModel(model, messages)
-        }
+        return runChainAnalysis(
+            chainName = "lifestyle",
+            dedupKey = messages.joinToString("|") { it.content }.hashCode().toString()
+        ) { model -> tryLifestyleModel(model, messages) }
     }
 
     private suspend fun tryLifestyleModel(
@@ -777,14 +790,16 @@ class AiHabitInsightRepositoryImpl(
     // HABIT CREATION ASSISTANT
     // ============================================================
     override suspend fun analyzeHabitCreation(input: HabitCreationInput): HabitCreationAnalysis {
+        val userPrompt = buildHabitCreationUserPrompt(input)
         val messages = listOf(
             ChatMessage(role = "system", content = HABIT_CREATION_SYSTEM_PROMPT),
-            ChatMessage(role = "user", content = buildHabitCreationUserPrompt(input))
+            ChatMessage(role = "user", content = userPrompt)
         )
 
-        return runChainAnalysis(chainName = "habit-creation") { model ->
-            tryHabitCreationModel(model, messages)
-        }
+        return runChainAnalysis(
+            chainName = "habit-creation",
+            dedupKey = userPrompt.hashCode().toString()
+        ) { model -> tryHabitCreationModel(model, messages) }
     }
 
     private suspend fun tryHabitCreationModel(
@@ -915,14 +930,16 @@ class AiHabitInsightRepositoryImpl(
     // ADAPTIVE HABIT RECOVERY ENGINE
     // ============================================================
     override suspend fun analyzeHabitRecovery(input: HabitRecoveryInput): HabitRecoveryAnalysis {
+        val userPrompt = buildRecoveryUserPrompt(input)
         val messages = listOf(
             ChatMessage(role = "system", content = RECOVERY_SYSTEM_PROMPT),
-            ChatMessage(role = "user", content = buildRecoveryUserPrompt(input))
+            ChatMessage(role = "user", content = userPrompt)
         )
 
-        return runChainAnalysis(chainName = "recovery") { model ->
-            tryRecoveryModel(model, messages)
-        }
+        return runChainAnalysis(
+            chainName = "recovery",
+            dedupKey = userPrompt.hashCode().toString()
+        ) { model -> tryRecoveryModel(model, messages) }
     }
 
     private suspend fun tryRecoveryModel(
@@ -1046,14 +1063,16 @@ class AiHabitInsightRepositoryImpl(
     // SMART HABIT PROGRESSION ENGINE
     // ============================================================
     override suspend fun analyzeHabitProgression(input: HabitProgressionInput): HabitProgressionAnalysis {
+        val userPrompt = buildProgressionUserPrompt(input)
         val messages = listOf(
             ChatMessage(role = "system", content = PROGRESSION_SYSTEM_PROMPT),
-            ChatMessage(role = "user", content = buildProgressionUserPrompt(input))
+            ChatMessage(role = "user", content = userPrompt)
         )
 
-        return runChainAnalysis(chainName = "progression") { model ->
-            tryProgressionModel(model, messages)
-        }
+        return runChainAnalysis(
+            chainName = "progression",
+            dedupKey = userPrompt.hashCode().toString()
+        ) { model -> tryProgressionModel(model, messages) }
     }
 
     private suspend fun tryProgressionModel(

@@ -312,7 +312,8 @@ val repositoryModule = module {
     single<OpenRouterApi> {
         OpenRouterNetwork.create(apiKeyProvider = { BuildConfig.OPENROUTER_API_KEY })
     }
-    single<AiHabitInsightRepository> { AiHabitInsightRepositoryImpl(get()) }
+    single { com.example.betterme.data.ai.SingleFlight() }
+    single<AiHabitInsightRepository> { AiHabitInsightRepositoryImpl(get(), get()) }
     single<AiCacheRepository> { AiCacheRepositoryImpl(get()) }
     // Process-scoped throttle for Home AI surfaces — keeps Recovery /
     // Progression / Lifestyle cards from re-analyzing on every Home entry.
