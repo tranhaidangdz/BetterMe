@@ -121,11 +121,18 @@ class AiHabitInsightRepositoryImpl(
     ): T {
         val categories = mutableListOf<AiErrorCategory>()
         var lastDetail: String? = null
+        val chainStart = System.currentTimeMillis()
         for ((index, model) in FALLBACK_MODELS.withIndex()) {
+            val attemptStart = System.currentTimeMillis()
             Log.d(TAG, "[$chainName] attempt[$index] model=$model")
             val result = attempt(model)
+            val attemptMs = System.currentTimeMillis() - attemptStart
             if (result.isSuccess) {
-                Log.i(TAG, "[$chainName] success on model[$index]=$model")
+                val totalMs = System.currentTimeMillis() - chainStart
+                logChainMetric(
+                    "[$chainName] success model=$model attempts=${index + 1} " +
+                        "fallbacks=$index attemptMs=$attemptMs totalMs=$totalMs"
+                )
                 return result.getOrThrow()
             }
             val failure = result.exceptionOrNull()
@@ -134,15 +141,41 @@ class AiHabitInsightRepositoryImpl(
             val detail = af?.detail ?: failure?.message ?: "unknown"
             categories += category
             lastDetail = detail
-            Log.w(TAG, "[$chainName] model[$index]=$model failed: category=$category detail=$detail")
+            Log.w(
+                TAG,
+                "[$chainName] model[$index]=$model failed: category=$category " +
+                    "attemptMs=$attemptMs detail=$detail"
+            )
             // Fast-fail on terminal account issues — retrying with another model
             // won't help if the key itself is invalid or the account is out of credit.
             if (category == AiErrorCategory.INVALID_KEY || category == AiErrorCategory.QUOTA_EXCEEDED) {
                 Log.w(TAG, "[$chainName] terminal category $category — short-circuiting chain")
+                val totalMs = System.currentTimeMillis() - chainStart
+                logChainMetric(
+                    "[$chainName] short-circuit category=$category attempts=${index + 1} " +
+                        "totalMs=$totalMs"
+                )
                 exhausted(chainName, categories, detail)
             }
         }
+        val totalMs = System.currentTimeMillis() - chainStart
+        logChainMetric(
+            "[$chainName] exhausted attempts=${FALLBACK_MODELS.size} " +
+                "categories=$categories totalMs=$totalMs"
+        )
         exhausted(chainName, categories, lastDetail)
+    }
+
+    /**
+     * Single-line structured emission for every terminal chain outcome (success,
+     * short-circuit, exhaust). Goes to Logcat at INFO level under the `AiMetrics`
+     * tag so a developer can filter with `adb logcat -s AiMetrics` without seeing
+     * the noisier per-attempt DEBUG/WARN lines. Flip [METRICS_ENABLED] to false
+     * to silence in release without touching any other code.
+     */
+    private fun logChainMetric(line: String) {
+        if (!METRICS_ENABLED) return
+        Log.i(METRICS_TAG, line)
     }
 
     /** Wrap an arbitrary throwable into an [AiAttemptFailure] with the right category. */
@@ -1343,6 +1376,15 @@ class AiHabitInsightRepositoryImpl(
 
     private companion object {
         const val TAG = "AiHabitInsight"
+
+        /**
+         * Separate tag for the per-chain metric line so developers can filter
+         * just the timing/outcome summary with `adb logcat -s AiMetrics` without
+         * the per-attempt DEBUG/WARN noise. Set [METRICS_ENABLED] to false to
+         * suppress entirely (release builds, perf tests, etc.).
+         */
+        const val METRICS_TAG = "AiMetrics"
+        const val METRICS_ENABLED = true
 
         /**
          * OpenRouter free-tier model chain. Tried in order. Names drift as OpenRouter
