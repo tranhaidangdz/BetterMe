@@ -99,6 +99,16 @@ sealed class ChallengeDetailEvent : MviSingleEvent {
     data object LaunchCamera : ChallengeDetailEvent()
     data object FetchLocation : ChallengeDetailEvent()
     data class ShowMessage(val text: String) : ChallengeDetailEvent()
-    data class LaunchShareSheet(val message: String) : ChallengeDetailEvent()
+    /**
+     * Open the native share sheet with [message] and the user's check-in photos
+     * for this challenge in [imageSources]. The screen-level handler prepares
+     * (downloads + compresses + writes to FileProvider cache) before launching
+     * the chooser, so the VM stays Android-free and the heavy IO doesn't block
+     * the intent dispatcher.
+     */
+    data class LaunchShareSheet(
+        val message: String,
+        val imageSources: List<String> = emptyList()
+    ) : ChallengeDetailEvent()
     data object NavigateBack : ChallengeDetailEvent()
 }

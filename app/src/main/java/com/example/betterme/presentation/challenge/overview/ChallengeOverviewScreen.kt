@@ -59,12 +59,16 @@ fun ChallengeOverviewScreen(
             when (event) {
                 is ChallengeOverviewEvent.ShowMessage ->
                     Toast.makeText(context, event.text, Toast.LENGTH_SHORT).show()
-                is ChallengeOverviewEvent.LaunchShareSheet ->
-                    ShareUtils.shareChallengeCompletion(
+                is ChallengeOverviewEvent.LaunchShareSheet -> {
+                    val prep = com.example.betterme.utils.ChallengeShareImagePrep(context.applicationContext)
+                    val uris = prep.prepare(event.imageSources)
+                    ShareUtils.shareChallengeWithImages(
                         context = context,
                         message = event.text,
+                        imageUris = uris,
                         chooserTitle = "Chia sẻ tiến độ"
                     )
+                }
             }
         }
     }

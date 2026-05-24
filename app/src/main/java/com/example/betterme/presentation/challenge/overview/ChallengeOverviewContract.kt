@@ -33,5 +33,14 @@ sealed class ChallengeOverviewIntent : MviIntent {
 
 sealed class ChallengeOverviewEvent : MviSingleEvent {
     data class ShowMessage(val text: String) : ChallengeOverviewEvent()
-    data class LaunchShareSheet(val text: String) : ChallengeOverviewEvent()
+    /**
+     * Open the native share sheet. [imageSources] carries URLs/local paths for
+     * check-in photos across all the user's joined challenges, capped + sorted
+     * server-side. The screen-level handler stages them through
+     * [com.example.betterme.utils.ChallengeShareImagePrep] before launching.
+     */
+    data class LaunchShareSheet(
+        val text: String,
+        val imageSources: List<String> = emptyList()
+    ) : ChallengeOverviewEvent()
 }

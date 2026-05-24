@@ -54,6 +54,7 @@ import com.example.betterme.presentation.leaderboard.LeaderboardViewModel
 import com.example.betterme.presentation.leaderboard.components.LeaderboardSummaryCard
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
+import com.example.betterme.utils.ChallengeShareImagePrep
 import com.example.betterme.utils.ShareUtils
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -178,7 +179,16 @@ fun ChallengeDetailScreen(
                     // Fired alongside LaunchCamera; permission flow handles the actual call.
                 }
                 is ChallengeDetailEvent.LaunchShareSheet -> {
-                    ShareUtils.shareChallengeCompletion(context, event.message)
+                    // Stage + compress images on the IO dispatcher so the share
+                    // sheet doesn't open with a freeze; missing/unreachable
+                    // sources are silently dropped by the prep helper.
+                    val prep = ChallengeShareImagePrep(context.applicationContext)
+                    val uris = prep.prepare(event.imageSources)
+                    ShareUtils.shareChallengeWithImages(
+                        context = context,
+                        message = event.message,
+                        imageUris = uris
+                    )
                 }
                 ChallengeDetailEvent.NavigateBack -> onBackClick()
             }

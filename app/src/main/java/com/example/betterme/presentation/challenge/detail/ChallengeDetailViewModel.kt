@@ -89,37 +89,7 @@ class ChallengeDetailViewModel(
                 currentState.userChallengeId?.let { reloadActive(it) }
             }
             ChallengeDetailIntent.LeaveChallenge -> leave()
-            ChallengeDetailIntent.Share -> {
-                val s = currentState
-                // Build a richer payload than the legacy one-liner so the receiving
-                // app (Messenger / Zalo / Facebook / SMS) shows the progress in
-                // context, not just a brag line. Header line varies with the row's
-                // terminal state — completed vs in-progress vs failed.
-                val header = when (s.mode) {
-                    DetailMode.Completed ->
-                        "🏆 Mình vừa hoàn thành thử thách \"${s.title}\" trên BetterMe!"
-                    DetailMode.Failed ->
-                        "💪 Mình đang theo đuổi thử thách \"${s.title}\" trên BetterMe."
-                    else ->
-                        "🔥 Mình đang tham gia thử thách \"${s.title}\" trên BetterMe!"
-                }
-                val message = buildString {
-                    append(header).append("\n\n")
-                    append("📊 Tiến độ: ${s.currentStreak}/${s.targetStreak} ngày (${s.progressPct}%)\n")
-                    if (s.daysRemaining > 0 && s.mode == DetailMode.Active) {
-                        append("⏳ Còn lại: ${s.daysRemaining} ngày\n")
-                    }
-                    if (s.mode == DetailMode.Completed) {
-                        append("🪙 Phần thưởng: ${s.rewardCoins} xu")
-                        if (s.rewardBadgeName != null) {
-                            append(" + huy hiệu ${s.rewardBadgeName}")
-                        }
-                        append("\n")
-                    }
-                    append("\nCùng mình xây thói quen tốt trên BetterMe nhé!")
-                }
-                sendEvent(ChallengeDetailEvent.LaunchShareSheet(message))
-            }
+            ChallengeDetailIntent.Share -> share()
             ChallengeDetailIntent.Reset -> updateState { ChallengeDetailState() }
         }
     }
@@ -385,6 +355,60 @@ class ChallengeDetailViewModel(
         viewModelScope.launch {
             leaveChallengeUseCase(ucId)
             sendEvent(ChallengeDetailEvent.NavigateBack)
+        }
+    }
+
+    /**
+     * Build the share payload (Vietnamese caption + check-in image URLs) and
+     * dispatch the [ChallengeDetailEvent.LaunchShareSheet] event. The screen-level
+     * handler does the actual download+compress before opening the chooser.
+     *
+     * Image collection runs against the live ChallengeLog rows (most recent first)
+     * so post-fail history check-ins are still included — that's the point of
+     * keeping them visible. Rows with null/blank `image` columns are skipped at
+     * the SQL→list mapping step; missing/deleted remote files are skipped during
+     * the prepare phase per [ChallengeShareImagePrep]'s contract.
+     */
+    private fun share() {
+        val ucId = currentState.userChallengeId
+        viewModelScope.launch {
+            val imageSources = if (ucId != null) {
+                runCatching {
+                    challengeLogRepository.observeLogs(ucId).first()
+                        .filter { it.status == "DONE" && !it.image.isNullOrBlank() }
+                        .sortedByDescending { it.date }
+                        .mapNotNull { it.image }
+                }.getOrDefault(emptyList())
+            } else emptyList()
+
+            val s = currentState
+            val header = when (s.mode) {
+                DetailMode.Completed ->
+                    "🏆 Mình vừa hoàn thành thử thách \"${s.title}\" trên BetterMe!"
+                DetailMode.Failed ->
+                    "💪 Mình đang theo đuổi thử thách \"${s.title}\" trên BetterMe."
+                else ->
+                    "🔥 Mình đang tham gia thử thách \"${s.title}\" trên BetterMe!"
+            }
+            val message = buildString {
+                append(header).append("\n\n")
+                append("📊 Tiến độ: ${s.currentStreak}/${s.targetStreak} ngày (${s.progressPct}%)\n")
+                if (s.daysRemaining > 0 && s.mode == DetailMode.Active) {
+                    append("⏳ Còn lại: ${s.daysRemaining} ngày\n")
+                }
+                if (s.mode == DetailMode.Completed) {
+                    append("🪙 Phần thưởng: ${s.rewardCoins} xu")
+                    if (s.rewardBadgeName != null) {
+                        append(" + huy hiệu ${s.rewardBadgeName}")
+                    }
+                    append("\n")
+                }
+                if (imageSources.isNotEmpty()) {
+                    append("📸 ${imageSources.size} ảnh check-in đính kèm\n")
+                }
+                append("\nCùng mình xây thói quen tốt trên BetterMe nhé!")
+            }
+            sendEvent(ChallengeDetailEvent.LaunchShareSheet(message, imageSources))
         }
     }
 

@@ -6,4 +6,8 @@
          Exposed via FileProvider so ACTION_SEND can hand the URI to
          Messenger / Zalo / Facebook. -->
     <cache-path name="share_cards" path="share_cards/" />
+    <!-- Resized + compressed check-in photos staged for ACTION_SEND_MULTIPLE.
+         Written by ChallengeShareImagePrep on each share invocation; previous
+         files are overwritten so the cache stays bounded. -->
+    <cache-path name="share_images" path="share_images/" />
 </paths>

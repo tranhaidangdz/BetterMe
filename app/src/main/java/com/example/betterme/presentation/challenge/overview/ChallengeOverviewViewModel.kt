@@ -71,7 +71,21 @@ class ChallengeOverviewViewModel(
         viewModelScope.launch {
             val text = runCatching { buildChallengeProgressShareTextUseCase() }
                 .getOrDefault("Mình đang xây thói quen tốt trên BetterMe — cùng tham gia nhé!")
-            sendEvent(ChallengeOverviewEvent.LaunchShareSheet(text))
+            // Gather check-in photo URLs across the user's joined challenges.
+            // Caps + dedupe + ordering by most-recent happen inside
+            // ChallengeShareImagePrep; here we just sweep the rows.
+            val userId = dataStoreManager.getCurrentUserId().first().orEmpty()
+            val imageSources = if (userId.isBlank()) emptyList()
+            else runCatching {
+                userChallengeRepository.observeWithDetails(userId).first()
+                    .flatMap { details ->
+                        challengeLogRepository.observeLogs(details.userChallenge.id).first()
+                    }
+                    .filter { it.status == "DONE" && !it.image.isNullOrBlank() }
+                    .sortedByDescending { it.date }
+                    .mapNotNull { it.image }
+            }.getOrDefault(emptyList())
+            sendEvent(ChallengeOverviewEvent.LaunchShareSheet(text, imageSources))
         }
     }
 
