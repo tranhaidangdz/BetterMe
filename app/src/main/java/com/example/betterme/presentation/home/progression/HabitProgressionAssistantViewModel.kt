@@ -50,10 +50,11 @@ class HabitProgressionAssistantViewModel(
             updateState { copy(ui = HabitProgressionUi.Loading) }
             val result = runCatching {
                 analyzeHabitProgression(forceRefresh = forceRefresh)
-            }.getOrElse {
-                updateState {
-                    copy(ui = HabitProgressionUi.Error("Không thể phân tích lúc này. Thử lại sau."))
-                }
+            }.getOrElse { e ->
+                val message = (e as? com.example.betterme.domain.ai.AiUnavailableException)?.let {
+                    com.example.betterme.domain.ai.AiUnavailableException.userMessage(it.category, it.message)
+                } ?: "Không thể phân tích lúc này. Thử lại sau."
+                updateState { copy(ui = HabitProgressionUi.Error(message)) }
                 return@launch
             }
             sessionMemory.markAnalyzed(AiHomeSessionMemory.Surface.PROGRESSION)

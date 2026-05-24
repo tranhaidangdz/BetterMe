@@ -57,10 +57,12 @@ object OpenRouterNetwork {
         }
 
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            // HEADERS shows status line + headers (request + response) — enough to
-            // see "401 Unauthorized" in Logcat without printing the API key or
-            // dumping potentially long completion bodies.
-            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.HEADERS
+            // BODY-level in debug so the OpenRouter error envelope (`{"error":{"message":...,"code":401}}`)
+            // shows up in Logcat verbatim — the single biggest help when triaging "AI
+            // is failing" reports from users running debug builds. The API key is
+            // explicitly redacted; nothing else in the body is sensitive (system
+            // prompts + Vietnamese completions only). Release builds stay silent.
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
             else HttpLoggingInterceptor.Level.NONE
             redactHeader("Authorization")
         }

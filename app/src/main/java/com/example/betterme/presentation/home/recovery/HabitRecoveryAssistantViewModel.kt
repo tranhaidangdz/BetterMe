@@ -62,12 +62,11 @@ class HabitRecoveryAssistantViewModel(
             updateState { copy(ui = HabitRecoveryUi.Loading) }
             val result = runCatching {
                 analyzeHabitRecovery(forceRefresh = forceRefresh)
-            }.getOrElse {
-                // Repo's canned path should catch all known failures; if we
-                // land here something exotic leaked through.
-                updateState {
-                    copy(ui = HabitRecoveryUi.Error("Không thể phân tích lúc này. Thử lại sau."))
-                }
+            }.getOrElse { e ->
+                val message = (e as? com.example.betterme.domain.ai.AiUnavailableException)?.let {
+                    com.example.betterme.domain.ai.AiUnavailableException.userMessage(it.category, it.message)
+                } ?: "Không thể phân tích lúc này. Thử lại sau."
+                updateState { copy(ui = HabitRecoveryUi.Error(message)) }
                 return@launch
             }
             sessionMemory.markAnalyzed(AiHomeSessionMemory.Surface.RECOVERY)

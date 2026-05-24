@@ -3,6 +3,7 @@ package com.example.betterme.presentation.statistics.lifestyle
 import androidx.lifecycle.viewModelScope
 import com.example.betterme.base.BaseMviViewModel
 import com.example.betterme.domain.ai.AiHomeSessionMemory
+import com.example.betterme.domain.ai.AiUnavailableException
 import com.example.betterme.domain.usecase.ai.AnalyzeLifestyleUseCase
 import kotlinx.coroutines.launch
 
@@ -43,12 +44,13 @@ class LifestyleInsightViewModel(
             updateState { copy(ui = LifestyleInsightUi.Loading) }
             val result = runCatching {
                 analyzeLifestyle(forceRefresh = forceRefresh)
-            }.getOrElse {
-                // Repo already maps every known failure to a canned insight;
-                // landing here means something unexpected leaked through.
-                updateState {
-                    copy(ui = LifestyleInsightUi.Error("Không thể phân tích lúc này. Thử lại sau."))
-                }
+            }.getOrElse { e ->
+                // Surface the AI repo's category-specific Vietnamese message when
+                // available; fall back to a generic line for unexpected throwables.
+                val message = (e as? AiUnavailableException)?.let {
+                    AiUnavailableException.userMessage(it.category, it.message)
+                } ?: "Không thể phân tích lúc này. Thử lại sau."
+                updateState { copy(ui = LifestyleInsightUi.Error(message)) }
                 return@launch
             }
             sessionMemory.markAnalyzed(AiHomeSessionMemory.Surface.LIFESTYLE_INSIGHT)

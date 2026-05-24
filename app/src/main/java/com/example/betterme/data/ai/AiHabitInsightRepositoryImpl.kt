@@ -4,6 +4,7 @@ import android.util.Log
 import com.example.betterme.data.ai.dto.ChatMessage
 import com.example.betterme.data.ai.dto.ChatRequest
 import com.example.betterme.domain.ai.AiCoachPersonality
+import com.example.betterme.domain.ai.AiErrorCategory
 import com.example.betterme.domain.ai.AiHabitInsightRepository
 import com.example.betterme.domain.ai.AiHabitInsightRepository.AiResult
 import com.example.betterme.domain.ai.AiHabitInsightRepository.AiSuggestResult
@@ -86,6 +87,119 @@ import retrofit2.HttpException
 class AiHabitInsightRepositoryImpl(
     private val api: OpenRouterApi
 ) : AiHabitInsightRepository {
+
+    /**
+     * Centralized "every model in the chain failed" throw. Picks the most-actionable
+     * category across all collected attempts and throws [AiUnavailableException].
+     * Detailed logging happens at every step so Logcat shows exactly which model
+     * returned which code; the user-facing message is category-driven.
+     */
+    private fun exhausted(chainName: String, categories: List<AiErrorCategory>, lastDetail: String?): Nothing {
+        val worst = AiErrorCategorizer.pickWorst(categories)
+        val message = AiUnavailableException.userMessage(worst, lastDetail)
+        Log.w(
+            TAG,
+            "[$chainName] chain exhausted — categories=$categories worst=$worst detail=$lastDetail"
+        )
+        throw AiUnavailableException(category = worst, message = message)
+    }
+
+    /**
+     * Generic fallback-chain runner for the analyze* methods that return a typed
+     * analysis (schedule / onboarding / lifestyle / habit-creation / recovery /
+     * progression). Each iteration calls [attempt] with the current model; on
+     * [Result.success] returns immediately; on [Result.failure] expects the
+     * exception to be an [AiAttemptFailure] (or wraps it as UNKNOWN otherwise),
+     * collects the category, and continues to the next model.
+     *
+     * When the chain exhausts, [exhausted] picks the worst category and throws
+     * [AiUnavailableException] — the only public failure surface.
+     */
+    private suspend fun <T> runChainAnalysis(
+        chainName: String,
+        attempt: suspend (model: String) -> Result<T>
+    ): T {
+        val categories = mutableListOf<AiErrorCategory>()
+        var lastDetail: String? = null
+        for ((index, model) in FALLBACK_MODELS.withIndex()) {
+            Log.d(TAG, "[$chainName] attempt[$index] model=$model")
+            val result = attempt(model)
+            if (result.isSuccess) {
+                Log.i(TAG, "[$chainName] success on model[$index]=$model")
+                return result.getOrThrow()
+            }
+            val failure = result.exceptionOrNull()
+            val af = failure as? AiAttemptFailure
+            val category = af?.category ?: AiErrorCategorizer.categorize(failure ?: Exception("?"))
+            val detail = af?.detail ?: failure?.message ?: "unknown"
+            categories += category
+            lastDetail = detail
+            Log.w(TAG, "[$chainName] model[$index]=$model failed: category=$category detail=$detail")
+            // Fast-fail on terminal account issues — retrying with another model
+            // won't help if the key itself is invalid or the account is out of credit.
+            if (category == AiErrorCategory.INVALID_KEY || category == AiErrorCategory.QUOTA_EXCEEDED) {
+                Log.w(TAG, "[$chainName] terminal category $category — short-circuiting chain")
+                exhausted(chainName, categories, detail)
+            }
+        }
+        exhausted(chainName, categories, lastDetail)
+    }
+
+    /** Wrap an arbitrary throwable into an [AiAttemptFailure] with the right category. */
+    private fun toAttemptFailure(t: Throwable, detail: String? = null): AiAttemptFailure {
+        val category = AiErrorCategorizer.categorize(t)
+        return AiAttemptFailure(category, detail ?: t.message ?: t.javaClass.simpleName)
+    }
+
+    /**
+     * Shared HTTP attempt body for every analyze* path that returns a typed analysis.
+     * Executes the chat completion, strips ```json fences, and hands the cleaned
+     * content to [parser]. Catches every known exception type and converts to an
+     * [AiAttemptFailure] with the right category, so the chain walker can aggregate.
+     *
+     * The OpenRouter error envelope (`response.error.message`) is checked **before**
+     * the choices array — some 200 OK responses still carry a model-side error.
+     */
+    private suspend fun <T> runTypedAttempt(
+        model: String,
+        messages: List<ChatMessage>,
+        maxTokens: Int,
+        parser: (cleaned: String) -> T
+    ): Result<T> {
+        return try {
+            val response = api.chatCompletion(
+                ChatRequest(
+                    model = model,
+                    messages = messages,
+                    maxTokens = maxTokens,
+                    temperature = TEMPERATURE
+                )
+            )
+            if (response.error != null) {
+                val code = response.error.code ?: -1
+                val category = if (code in 100..599) AiErrorCategorizer.categorizeHttp(code) else AiErrorCategory.UNKNOWN
+                val detail = response.error.message ?: "AI từ chối yêu cầu"
+                Log.w(TAG, "Model=$model body-level error code=$code message=$detail")
+                return Result.failure(AiAttemptFailure(category, detail))
+            }
+            val content = response.choices.firstOrNull()?.message?.content?.trim()
+            if (content.isNullOrBlank()) {
+                Log.w(TAG, "Model=$model empty completion — categorizing as PARSE")
+                return Result.failure(AiAttemptFailure(AiErrorCategory.PARSE, "AI không trả lời"))
+            }
+            val cleaned = content
+                .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+            Result.success(parser(cleaned))
+        } catch (e: AiAttemptFailure) {
+            Result.failure(e)
+        } catch (e: HttpException) {
+            val msg = extractHttpErrorMessage(e)
+            Result.failure(AiAttemptFailure(AiErrorCategorizer.categorizeHttp(e.code()), msg))
+        } catch (e: Exception) {
+            Log.w(TAG, "Model=$model threw ${e.javaClass.simpleName}: ${e.message}")
+            Result.failure(toAttemptFailure(e))
+        }
+    }
 
     // ============================================================
     // REVIEW — group-aware, personality-signal-aware
@@ -205,68 +319,17 @@ class AiHabitInsightRepositoryImpl(
             ChatMessage(role = "user", content = userPrompt)
         )
 
-        var lastFailure: String? = null
-        for ((index, model) in FALLBACK_MODELS.withIndex()) {
-            // No retryOnTransient wrapper here: the existing `isTransientFailure`
-            // signature is tied to AiResult/AiSuggestResult sealed types and would
-            // be a no-op on Result<ScheduleAnalysis>. The 4-model chain itself
-            // already provides redundancy for transient 429/5xx — when one model
-            // throttles, the next probably has fresh quota.
-            val attempt = tryScheduleModel(model, messages)
-            attempt.onSuccess { return it }
-            lastFailure = attempt.exceptionOrNull()?.message
-            Log.w(TAG, "Schedule model[$index]=$model failed: $lastFailure")
+        return runChainAnalysis(chainName = "schedule") { model ->
+            tryScheduleModel(model, messages)
         }
-
-        Log.w(TAG, "All schedule models exhausted — throwing AiUnavailableException")
-        throw AiUnavailableException(lastFailure ?: "AI tạm thời không khả dụng. Hãy thử lại.")
     }
 
     private suspend fun tryScheduleModel(
         model: String,
         messages: List<ChatMessage>
-    ): Result<ScheduleAnalysis> {
-        Log.d(TAG, "Using model=$model")
-        return try {
-            val response = api.chatCompletion(
-                ChatRequest(
-                    model = model,
-                    messages = messages,
-                    // 300 tokens fits the bounded output: 3 conflicts × ~30 tokens
-                    // + 5 optimizations × ~10 tokens + summary + positiveFeedback +
-                    // top-level enums + scores. Headroom for occasional Vietnamese
-                    // multi-byte expansion.
-                    maxTokens = SCHEDULE_MAX_TOKENS,
-                    temperature = TEMPERATURE
-                )
-            )
-            if (response.error != null) {
-                return Result.failure(
-                    IllegalStateException(response.error.message ?: "AI từ chối yêu cầu")
-                )
-            }
-            val content = response.choices.firstOrNull()?.message?.content?.trim()
-            if (content.isNullOrBlank()) {
-                return Result.failure(IllegalStateException("AI không trả lời"))
-            }
-            val cleaned = content
-                .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
-            val parsed = parseScheduleAnalysis(cleaned)
-                ?: return Result.failure(IllegalStateException("AI trả về dữ liệu sai định dạng"))
-            Result.success(parsed)
-        } catch (e: java.net.SocketTimeoutException) {
-            Result.failure(IllegalStateException("Mạng chậm (504)"))
-        } catch (e: HttpException) {
-            // Reuse the existing HTTP error mapper for friendly Vietnamese reasons.
-            // Wrapped as IllegalStateException so the retry path sees it as a
-            // transient signal when the code is 429/5xx and a fatal signal otherwise.
-            Result.failure(IllegalStateException(extractHttpErrorMessage(e)))
-        } catch (e: java.io.IOException) {
-            Result.failure(IllegalStateException("Không thể kết nối đến AI"))
-        } catch (e: Exception) {
-            Log.e(TAG, "Schedule request threw", e)
-            Result.failure(e)
-        }
+    ): Result<ScheduleAnalysis> = runTypedAttempt(model, messages, SCHEDULE_MAX_TOKENS) { cleaned ->
+        parseScheduleAnalysis(cleaned)
+            ?: throw AiAttemptFailure(AiErrorCategory.PARSE, "AI trả về dữ liệu sai định dạng")
     }
 
     private fun buildScheduleUserPrompt(
@@ -433,59 +496,17 @@ class AiHabitInsightRepositoryImpl(
             ChatMessage(role = "user", content = buildOnboardingUserPrompt(profile, effectiveLifestyle))
         )
 
-        var lastFailure: String? = null
-        for ((index, model) in FALLBACK_MODELS.withIndex()) {
-            val attempt = tryOnboardingModel(model, messages)
-            attempt.onSuccess { return it }
-            lastFailure = attempt.exceptionOrNull()?.message
-            Log.w(TAG, "Onboarding model[$index]=$model failed: $lastFailure")
+        return runChainAnalysis(chainName = "onboarding") { model ->
+            tryOnboardingModel(model, messages)
         }
-
-        Log.w(TAG, "All onboarding models exhausted — throwing AiUnavailableException")
-        throw AiUnavailableException(lastFailure ?: "AI tạm thời không khả dụng. Hãy thử lại.")
     }
 
     private suspend fun tryOnboardingModel(
         model: String,
         messages: List<ChatMessage>
-    ): Result<OnboardingSuggestion> {
-        Log.d(TAG, "Using model=$model")
-        return try {
-            val response = api.chatCompletion(
-                ChatRequest(
-                    model = model,
-                    messages = messages,
-                    // 6 habits × ~50 tokens each + summary + recommendedFocus +
-                    // top-level fields ≈ 400 tokens. 500 leaves headroom for
-                    // Vietnamese multi-byte expansion.
-                    maxTokens = ONBOARDING_MAX_TOKENS,
-                    temperature = TEMPERATURE
-                )
-            )
-            if (response.error != null) {
-                return Result.failure(
-                    IllegalStateException(response.error.message ?: "AI từ chối yêu cầu")
-                )
-            }
-            val content = response.choices.firstOrNull()?.message?.content?.trim()
-            if (content.isNullOrBlank()) {
-                return Result.failure(IllegalStateException("AI không trả lời"))
-            }
-            val cleaned = content
-                .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
-            val parsed = parseOnboardingSuggestion(cleaned)
-                ?: return Result.failure(IllegalStateException("AI trả về dữ liệu sai định dạng"))
-            Result.success(parsed)
-        } catch (e: java.net.SocketTimeoutException) {
-            Result.failure(IllegalStateException("Mạng chậm (504)"))
-        } catch (e: HttpException) {
-            Result.failure(IllegalStateException(extractHttpErrorMessage(e)))
-        } catch (e: java.io.IOException) {
-            Result.failure(IllegalStateException("Không thể kết nối đến AI"))
-        } catch (e: Exception) {
-            Log.e(TAG, "Onboarding request threw", e)
-            Result.failure(e)
-        }
+    ): Result<OnboardingSuggestion> = runTypedAttempt(model, messages, ONBOARDING_MAX_TOKENS) { cleaned ->
+        parseOnboardingSuggestion(cleaned)
+            ?: throw AiAttemptFailure(AiErrorCategory.PARSE, "AI trả về dữ liệu sai định dạng")
     }
 
     private fun buildOnboardingUserPrompt(
@@ -600,56 +621,17 @@ class AiHabitInsightRepositoryImpl(
             )
         )
 
-        var lastFailure: String? = null
-        for ((index, model) in FALLBACK_MODELS.withIndex()) {
-            val attempt = tryLifestyleModel(model, messages)
-            attempt.onSuccess { return it }
-            lastFailure = attempt.exceptionOrNull()?.message
-            Log.w(TAG, "Lifestyle model[$index]=$model failed: $lastFailure")
+        return runChainAnalysis(chainName = "lifestyle") { model ->
+            tryLifestyleModel(model, messages)
         }
-
-        Log.w(TAG, "All lifestyle models exhausted — throwing AiUnavailableException")
-        throw AiUnavailableException(lastFailure ?: "AI tạm thời không khả dụng. Hãy thử lại.")
     }
 
     private suspend fun tryLifestyleModel(
         model: String,
         messages: List<ChatMessage>
-    ): Result<LifestyleInsight> {
-        Log.d(TAG, "Using model=$model")
-        return try {
-            val response = api.chatCompletion(
-                ChatRequest(
-                    model = model,
-                    messages = messages,
-                    maxTokens = LIFESTYLE_MAX_TOKENS,
-                    temperature = TEMPERATURE
-                )
-            )
-            if (response.error != null) {
-                return Result.failure(
-                    IllegalStateException(response.error.message ?: "AI từ chối yêu cầu")
-                )
-            }
-            val content = response.choices.firstOrNull()?.message?.content?.trim()
-            if (content.isNullOrBlank()) {
-                return Result.failure(IllegalStateException("AI không trả lời"))
-            }
-            val cleaned = content
-                .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
-            val parsed = parseLifestyleInsight(cleaned)
-                ?: return Result.failure(IllegalStateException("AI trả về dữ liệu sai định dạng"))
-            Result.success(parsed)
-        } catch (e: java.net.SocketTimeoutException) {
-            Result.failure(IllegalStateException("Mạng chậm (504)"))
-        } catch (e: HttpException) {
-            Result.failure(IllegalStateException(extractHttpErrorMessage(e)))
-        } catch (e: java.io.IOException) {
-            Result.failure(IllegalStateException("Không thể kết nối đến AI"))
-        } catch (e: Exception) {
-            Log.e(TAG, "Lifestyle request threw", e)
-            Result.failure(e)
-        }
+    ): Result<LifestyleInsight> = runTypedAttempt(model, messages, LIFESTYLE_MAX_TOKENS) { cleaned ->
+        parseLifestyleInsight(cleaned)
+            ?: throw AiAttemptFailure(AiErrorCategory.PARSE, "AI trả về dữ liệu sai định dạng")
     }
 
     private fun buildLifestyleUserPrompt(
@@ -767,56 +749,17 @@ class AiHabitInsightRepositoryImpl(
             ChatMessage(role = "user", content = buildHabitCreationUserPrompt(input))
         )
 
-        var lastFailure: String? = null
-        for ((index, model) in FALLBACK_MODELS.withIndex()) {
-            val attempt = tryHabitCreationModel(model, messages)
-            attempt.onSuccess { return it }
-            lastFailure = attempt.exceptionOrNull()?.message
-            Log.w(TAG, "HabitCreation model[$index]=$model failed: $lastFailure")
+        return runChainAnalysis(chainName = "habit-creation") { model ->
+            tryHabitCreationModel(model, messages)
         }
-
-        Log.w(TAG, "All habit-creation models exhausted — throwing AiUnavailableException")
-        throw AiUnavailableException(lastFailure ?: "AI tạm thời không khả dụng. Hãy thử lại.")
     }
 
     private suspend fun tryHabitCreationModel(
         model: String,
         messages: List<ChatMessage>
-    ): Result<HabitCreationAnalysis> {
-        Log.d(TAG, "Using model=$model")
-        return try {
-            val response = api.chatCompletion(
-                ChatRequest(
-                    model = model,
-                    messages = messages,
-                    maxTokens = HABIT_CREATION_MAX_TOKENS,
-                    temperature = TEMPERATURE
-                )
-            )
-            if (response.error != null) {
-                return Result.failure(
-                    IllegalStateException(response.error.message ?: "AI từ chối yêu cầu")
-                )
-            }
-            val content = response.choices.firstOrNull()?.message?.content?.trim()
-            if (content.isNullOrBlank()) {
-                return Result.failure(IllegalStateException("AI không trả lời"))
-            }
-            val cleaned = content
-                .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
-            val parsed = parseHabitCreationAnalysis(cleaned)
-                ?: return Result.failure(IllegalStateException("AI trả về dữ liệu sai định dạng"))
-            Result.success(parsed)
-        } catch (e: java.net.SocketTimeoutException) {
-            Result.failure(IllegalStateException("Mạng chậm (504)"))
-        } catch (e: HttpException) {
-            Result.failure(IllegalStateException(extractHttpErrorMessage(e)))
-        } catch (e: java.io.IOException) {
-            Result.failure(IllegalStateException("Không thể kết nối đến AI"))
-        } catch (e: Exception) {
-            Log.e(TAG, "HabitCreation request threw", e)
-            Result.failure(e)
-        }
+    ): Result<HabitCreationAnalysis> = runTypedAttempt(model, messages, HABIT_CREATION_MAX_TOKENS) { cleaned ->
+        parseHabitCreationAnalysis(cleaned)
+            ?: throw AiAttemptFailure(AiErrorCategory.PARSE, "AI trả về dữ liệu sai định dạng")
     }
 
     private fun buildHabitCreationUserPrompt(input: HabitCreationInput): String = buildString {
@@ -944,56 +887,17 @@ class AiHabitInsightRepositoryImpl(
             ChatMessage(role = "user", content = buildRecoveryUserPrompt(input))
         )
 
-        var lastFailure: String? = null
-        for ((index, model) in FALLBACK_MODELS.withIndex()) {
-            val attempt = tryRecoveryModel(model, messages)
-            attempt.onSuccess { return it }
-            lastFailure = attempt.exceptionOrNull()?.message
-            Log.w(TAG, "Recovery model[$index]=$model failed: $lastFailure")
+        return runChainAnalysis(chainName = "recovery") { model ->
+            tryRecoveryModel(model, messages)
         }
-
-        Log.w(TAG, "All recovery models exhausted — throwing AiUnavailableException")
-        throw AiUnavailableException(lastFailure ?: "AI tạm thời không khả dụng. Hãy thử lại.")
     }
 
     private suspend fun tryRecoveryModel(
         model: String,
         messages: List<ChatMessage>
-    ): Result<HabitRecoveryAnalysis> {
-        Log.d(TAG, "Using model=$model")
-        return try {
-            val response = api.chatCompletion(
-                ChatRequest(
-                    model = model,
-                    messages = messages,
-                    maxTokens = RECOVERY_MAX_TOKENS,
-                    temperature = TEMPERATURE
-                )
-            )
-            if (response.error != null) {
-                return Result.failure(
-                    IllegalStateException(response.error.message ?: "AI từ chối yêu cầu")
-                )
-            }
-            val content = response.choices.firstOrNull()?.message?.content?.trim()
-            if (content.isNullOrBlank()) {
-                return Result.failure(IllegalStateException("AI không trả lời"))
-            }
-            val cleaned = content
-                .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
-            val parsed = parseRecoveryAnalysis(cleaned)
-                ?: return Result.failure(IllegalStateException("AI trả về dữ liệu sai định dạng"))
-            Result.success(parsed)
-        } catch (e: java.net.SocketTimeoutException) {
-            Result.failure(IllegalStateException("Mạng chậm (504)"))
-        } catch (e: HttpException) {
-            Result.failure(IllegalStateException(extractHttpErrorMessage(e)))
-        } catch (e: java.io.IOException) {
-            Result.failure(IllegalStateException("Không thể kết nối đến AI"))
-        } catch (e: Exception) {
-            Log.e(TAG, "Recovery request threw", e)
-            Result.failure(e)
-        }
+    ): Result<HabitRecoveryAnalysis> = runTypedAttempt(model, messages, RECOVERY_MAX_TOKENS) { cleaned ->
+        parseRecoveryAnalysis(cleaned)
+            ?: throw AiAttemptFailure(AiErrorCategory.PARSE, "AI trả về dữ liệu sai định dạng")
     }
 
     private fun buildRecoveryUserPrompt(input: HabitRecoveryInput): String = buildString {
@@ -1114,56 +1018,17 @@ class AiHabitInsightRepositoryImpl(
             ChatMessage(role = "user", content = buildProgressionUserPrompt(input))
         )
 
-        var lastFailure: String? = null
-        for ((index, model) in FALLBACK_MODELS.withIndex()) {
-            val attempt = tryProgressionModel(model, messages)
-            attempt.onSuccess { return it }
-            lastFailure = attempt.exceptionOrNull()?.message
-            Log.w(TAG, "Progression model[$index]=$model failed: $lastFailure")
+        return runChainAnalysis(chainName = "progression") { model ->
+            tryProgressionModel(model, messages)
         }
-
-        Log.w(TAG, "All progression models exhausted — throwing AiUnavailableException")
-        throw AiUnavailableException(lastFailure ?: "AI tạm thời không khả dụng. Hãy thử lại.")
     }
 
     private suspend fun tryProgressionModel(
         model: String,
         messages: List<ChatMessage>
-    ): Result<HabitProgressionAnalysis> {
-        Log.d(TAG, "Using model=$model")
-        return try {
-            val response = api.chatCompletion(
-                ChatRequest(
-                    model = model,
-                    messages = messages,
-                    maxTokens = PROGRESSION_MAX_TOKENS,
-                    temperature = TEMPERATURE
-                )
-            )
-            if (response.error != null) {
-                return Result.failure(
-                    IllegalStateException(response.error.message ?: "AI từ chối yêu cầu")
-                )
-            }
-            val content = response.choices.firstOrNull()?.message?.content?.trim()
-            if (content.isNullOrBlank()) {
-                return Result.failure(IllegalStateException("AI không trả lời"))
-            }
-            val cleaned = content
-                .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
-            val parsed = parseProgressionAnalysis(cleaned)
-                ?: return Result.failure(IllegalStateException("AI trả về dữ liệu sai định dạng"))
-            Result.success(parsed)
-        } catch (e: java.net.SocketTimeoutException) {
-            Result.failure(IllegalStateException("Mạng chậm (504)"))
-        } catch (e: HttpException) {
-            Result.failure(IllegalStateException(extractHttpErrorMessage(e)))
-        } catch (e: java.io.IOException) {
-            Result.failure(IllegalStateException("Không thể kết nối đến AI"))
-        } catch (e: Exception) {
-            Log.e(TAG, "Progression request threw", e)
-            Result.failure(e)
-        }
+    ): Result<HabitProgressionAnalysis> = runTypedAttempt(model, messages, PROGRESSION_MAX_TOKENS) { cleaned ->
+        parseProgressionAnalysis(cleaned)
+            ?: throw AiAttemptFailure(AiErrorCategory.PARSE, "AI trả về dữ liệu sai định dạng")
     }
 
     private fun buildProgressionUserPrompt(input: HabitProgressionInput): String = buildString {
@@ -1483,11 +1348,24 @@ class AiHabitInsightRepositoryImpl(
          * Tried in order until one succeeds. New free models are added at the end
          * — the chain head is the model we expect to handle the steady-state load.
          */
+        /**
+         * OpenRouter free-tier model chain. Tried in order. Names drift as OpenRouter
+         * cycles their free catalog; when every entry returns 404 the failure surfaces
+         * as MODEL_UNAVAILABLE in the UI and Logcat shows exactly which names were
+         * tried. Refresh by visiting https://openrouter.ai/models?supported_parameters=tools&pricing=free
+         * and pasting the latest 4-6 ":free" model slugs.
+         *
+         * Order rationale (steady-state quality):
+         *  1. DeepSeek v3 — strongest free reasoning + good JSON adherence.
+         *  2. Llama 3.3 70B — solid fallback, separate quota pool.
+         *  3. Gemini 2.0 Flash — fast cold start, separate provider.
+         *  4. Mistral Small 3.2 — last-line option.
+         */
         val FALLBACK_MODELS = listOf(
-            "google/gemini-2.5-flash-preview:free",
-            "google/gemini-2.0-flash-exp:free",
+            "deepseek/deepseek-chat-v3-0324:free",
             "meta-llama/llama-3.3-70b-instruct:free",
-            "mistralai/mistral-small-3.1-24b-instruct:free"
+            "google/gemini-2.0-flash-exp:free",
+            "mistralai/mistral-small-3.2-24b-instruct:free"
         )
 
         const val MAX_TOKENS = 120

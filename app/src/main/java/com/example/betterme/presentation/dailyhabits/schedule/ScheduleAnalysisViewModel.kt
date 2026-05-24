@@ -44,13 +44,11 @@ class ScheduleAnalysisViewModel(
             updateState { copy(ui = ScheduleAnalysisUi.Loading, isApplying = false) }
             val analysis = runCatching {
                 analyzeSchedule(forceRefresh = forceRefresh)
-            }.getOrElse {
-                // The repo already maps every known failure to a canned analysis;
-                // landing here means something unexpected leaked through. Show a
-                // friendly Vietnamese line rather than the raw exception.
-                updateState {
-                    copy(ui = ScheduleAnalysisUi.Error("Không thể phân tích lịch trình lúc này. Thử lại sau."))
-                }
+            }.getOrElse { e ->
+                val message = (e as? com.example.betterme.domain.ai.AiUnavailableException)?.let {
+                    com.example.betterme.domain.ai.AiUnavailableException.userMessage(it.category, it.message)
+                } ?: "Không thể phân tích lịch trình lúc này. Thử lại sau."
+                updateState { copy(ui = ScheduleAnalysisUi.Error(message)) }
                 return@launch
             }
             updateState { copy(ui = ScheduleAnalysisUi.Success(analysis)) }

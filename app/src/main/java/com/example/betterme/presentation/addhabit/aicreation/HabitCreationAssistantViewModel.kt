@@ -63,14 +63,15 @@ class HabitCreationAssistantViewModel(
                     newFrequency = intent.frequency,
                     forceRefresh = intent.forceRefresh
                 )
-            }.getOrElse {
-                // Defensive: the repo already maps every failure to a canned
-                // analysis. Landing here means something unexpected leaked
-                // through. Show a friendly Vietnamese line so the user can
-                // still proceed via the error screen's "Vẫn tạo" path.
-                updateState {
-                    copy(ui = HabitCreationAssistantUi.Error("Không thể phân tích lúc này — bạn vẫn có thể tạo thói quen."))
-                }
+            }.getOrElse { e ->
+                // Show the AI repo's category-specific Vietnamese message when
+                // available. Habit-creation is advisory, so even on failure the
+                // user can still proceed via "Vẫn tạo" — the message just
+                // explains why no AI advisory shows up.
+                val message = (e as? com.example.betterme.domain.ai.AiUnavailableException)?.let {
+                    com.example.betterme.domain.ai.AiUnavailableException.userMessage(it.category, it.message)
+                } ?: "Không thể phân tích lúc này — bạn vẫn có thể tạo thói quen."
+                updateState { copy(ui = HabitCreationAssistantUi.Error(message)) }
                 return@launch
             }
             updateState { copy(ui = HabitCreationAssistantUi.Success(result)) }
