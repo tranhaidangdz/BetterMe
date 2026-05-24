@@ -7,6 +7,13 @@ interface HabitRepository {
 
     fun getHabits(userId: String): Flow<List<HabitEntity>>
 
+    /**
+     * Habits still in the user's active rotation: not soft-deleted, and either
+     * open-ended (`end_date == null`) or with an end_date in the future.
+     * Completion-by-streak is log-dependent and stays in the consumer.
+     */
+    fun getActiveHabits(userId: String): Flow<List<HabitEntity>>
+
     suspend fun getHabitById(id: Int): HabitEntity?
 
     suspend fun addHabit(habit: HabitEntity): Long

@@ -134,8 +134,13 @@ class HomeViewModel(
             //    phụ thuộc vào homeRefreshVersion + LaunchedEffect để biết có habit
             //    mới — một habit added từ AddHabit screen hoặc từ AI suggestion sẽ
             //    xuất hiện trên Home trong cùng một frame.
+            // Active habits only: data-layer filter already excludes soft-deleted
+            // (is_deleted = true, e.g., user abandoned or Firestore pushed a delete)
+            // and time-expired (end_date in the past). The Flow re-emits whenever
+            // the habits table changes — including remote sync mutations — so Home
+            // updates reactively as habits leave/enter the active set.
             kotlinx.coroutines.flow.combine(
-                habitRepository.getHabits(userId),
+                habitRepository.getActiveHabits(userId),
                 habitLogRepository.observeAllLogs(),
                 userChallengeRepository.observeByStatus(userId, "ACTIVE")
             ) { habits, _, activeChallenges ->
