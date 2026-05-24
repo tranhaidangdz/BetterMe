@@ -1345,27 +1345,36 @@ class AiHabitInsightRepositoryImpl(
         const val TAG = "AiHabitInsight"
 
         /**
-         * Tried in order until one succeeds. New free models are added at the end
-         * — the chain head is the model we expect to handle the steady-state load.
-         */
-        /**
          * OpenRouter free-tier model chain. Tried in order. Names drift as OpenRouter
          * cycles their free catalog; when every entry returns 404 the failure surfaces
          * as MODEL_UNAVAILABLE in the UI and Logcat shows exactly which names were
          * tried. Refresh by visiting https://openrouter.ai/models?supported_parameters=tools&pricing=free
-         * and pasting the latest 4-6 ":free" model slugs.
+         * and pasting the latest ":free" model slugs.
          *
-         * Order rationale (steady-state quality):
-         *  1. DeepSeek v3 — strongest free reasoning + good JSON adherence.
-         *  2. Llama 3.3 70B — solid fallback, separate quota pool.
-         *  3. Gemini 2.0 Flash — fast cold start, separate provider.
-         *  4. Mistral Small 3.2 — last-line option.
+         * Order is **latency-first** then **provider-diversified** so a single
+         * provider outage / rate-limit can never stall the whole chain:
+         *  1. Gemini 2.5 Flash       — fastest TTFT on the Google side.
+         *  2. DeepSeek v3            — strongest reasoning + JSON on a separate provider.
+         *  3. Qwen 2.5 72B           — Alibaba pool; independent quota.
+         *  4. Llama 3.3 70B          — Meta pool; another independent quota.
+         *  5. Gemma 2 9B IT          — small + fast Google secondary.
+         *  6. Mistral Small 3.2 24B  — separate provider once more.
+         *  7. Gemini 2.0 Flash Exp   — older Google option as last resort.
+         *
+         * Fast-fail behavior is unchanged from the prior chain:
+         *  - 401/403 (INVALID_KEY) and 402 (QUOTA_EXCEEDED) short-circuit the chain.
+         *  - 429 / 5xx / timeout fall through to the next model after one 800ms
+         *    transient retry on the current model — bounded latency, no infinite
+         *    waits.
          */
         val FALLBACK_MODELS = listOf(
+            "google/gemini-2.5-flash:free",
             "deepseek/deepseek-chat-v3-0324:free",
+            "qwen/qwen-2.5-72b-instruct:free",
             "meta-llama/llama-3.3-70b-instruct:free",
-            "google/gemini-2.0-flash-exp:free",
-            "mistralai/mistral-small-3.2-24b-instruct:free"
+            "google/gemma-2-9b-it:free",
+            "mistralai/mistral-small-3.2-24b-instruct:free",
+            "google/gemini-2.0-flash-exp:free"
         )
 
         const val MAX_TOKENS = 120

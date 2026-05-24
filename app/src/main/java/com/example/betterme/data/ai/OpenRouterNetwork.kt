@@ -19,8 +19,10 @@ import java.util.concurrent.TimeUnit
  * - OkHttp logging is **debug-build-only** at HEADERS level so we can inspect the
  *   request/response status without leaking the body. The Authorization header is
  *   explicitly redacted so a debug build never prints the API key.
- * - Read timeout bumped to 60s because some free-tier models (Llama 70B, Gemini
- *   Flash) take 20-30s on cold starts.
+ * - Read timeout 25s — long enough to absorb a Gemini Flash / Llama 70B cold start
+ *   (typically 5-15s) but tight enough that a dead/overloaded model fails fast and
+ *   the chain advances to the next. Worst-case latency across the 7-model chain
+ *   stays bounded to ~3 minutes instead of 7+ at 60s.
  *
  * The API key arrives at request time via a per-request `Authorization` interceptor
  * so a future settings screen can let users supply their own key without rebuilding
@@ -70,9 +72,9 @@ object OpenRouterNetwork {
         val client = OkHttpClient.Builder()
             .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(25, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
             .build()
 
         val retrofit = Retrofit.Builder()
