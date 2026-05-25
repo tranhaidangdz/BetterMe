@@ -304,14 +304,51 @@ val repositoryModule = module {
         UserSettingsRepositoryImpl(get())
     }
 
-    // AI / OpenRouter — single Retrofit instance with a key-provider lambda so a
-    // future settings screen can let users supply their own key without rebuilding
-    // the network stack. When BuildConfig.OPENROUTER_API_KEY is blank the API call
-    // will still go through but unauthenticated; OpenRouter returns 401 and the
-    // repo surfaces a clear error message.
-    single<OpenRouterApi> {
-        OpenRouterNetwork.create(apiKeyProvider = { BuildConfig.OPENROUTER_API_KEY })
+    // AI multi-provider stack ---------------------------------------------
+    //
+    // Both providers ship as Retrofit singletons with no baked-in API key — the
+    // key arrives per call from the rotating [ApiKeyPool]. Keys are sourced
+    // from local.properties at build time and surface as comma-separated lists
+    // in BuildConfig.GEMINI_API_KEYS / OPENROUTER_API_KEYS; pool will be empty
+    // (and the router will surface INVALID_KEY) when nothing is configured for
+    // a provider, which is the desired "build but fail fast" behavior.
+    single<OpenRouterApi> { OpenRouterNetwork.create() }
+    single<com.example.betterme.data.ai.GeminiApi> { com.example.betterme.data.ai.GeminiNetwork.create() }
+
+    // Key pools — split per provider so cooldowns / rotation don't cross.
+    // Each provider gets its own [ApiKeyPool] named with a qualifier so future
+    // settings UIs can rotate one pool without re-resolving the other.
+    single(qualifier = org.koin.core.qualifier.named("geminiKeys")) {
+        com.example.betterme.data.ai.ApiKeyPool(
+            keys = BuildConfig.GEMINI_API_KEYS.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        )
     }
+    single(qualifier = org.koin.core.qualifier.named("openrouterKeys")) {
+        com.example.betterme.data.ai.ApiKeyPool(
+            keys = BuildConfig.OPENROUTER_API_KEYS.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        )
+    }
+
+    // Router glues transports + pools. The repo only ever talks to this; it
+    // never imports OpenRouterApi or GeminiApi directly, so adding Together /
+    // Groq / etc. tomorrow is a 1-file change to AiProvider + appModule.
+    single<com.example.betterme.data.ai.AiChatRouter> {
+        com.example.betterme.data.ai.AiChatRouter(
+            transports = mapOf(
+                com.example.betterme.data.ai.AiProvider.GEMINI to
+                    com.example.betterme.data.ai.GeminiChatTransport(get()),
+                com.example.betterme.data.ai.AiProvider.OPENROUTER to
+                    com.example.betterme.data.ai.OpenRouterChatTransport(get())
+            ),
+            pools = mapOf(
+                com.example.betterme.data.ai.AiProvider.GEMINI to
+                    get(qualifier = org.koin.core.qualifier.named("geminiKeys")),
+                com.example.betterme.data.ai.AiProvider.OPENROUTER to
+                    get(qualifier = org.koin.core.qualifier.named("openrouterKeys"))
+            )
+        )
+    }
+
     single { com.example.betterme.data.ai.SingleFlight() }
     single<AiHabitInsightRepository> { AiHabitInsightRepositoryImpl(get(), get()) }
     single<AiCacheRepository> { AiCacheRepositoryImpl(get()) }

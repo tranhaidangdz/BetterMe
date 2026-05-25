@@ -12,7 +12,7 @@ enum class AiErrorCategory {
     /** Device has no internet (DNS / IOException). User should connect WiFi or mobile data. */
     NO_NETWORK,
 
-    /** HTTP 401 — `OPENROUTER_API_KEY` is missing / wrong / revoked. Build-time issue. */
+    /** HTTP 401/403 — every key in the pool is missing / wrong / revoked. Build-time issue. */
     INVALID_KEY,
 
     /** HTTP 402 (payment required) — account credit exhausted. */

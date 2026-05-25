@@ -2,7 +2,6 @@ package com.example.betterme.data.ai
 
 import android.util.Log
 import com.example.betterme.data.ai.dto.ChatMessage
-import com.example.betterme.data.ai.dto.ChatRequest
 import com.example.betterme.domain.ai.AiCoachPersonality
 import com.example.betterme.domain.ai.AiErrorCategory
 import com.example.betterme.domain.ai.AiHabitInsightRepository
@@ -85,7 +84,7 @@ import retrofit2.HttpException
  *   120-token reply still feels complete.
  */
 class AiHabitInsightRepositoryImpl(
-    private val api: OpenRouterApi,
+    private val router: AiChatRouter,
     private val singleFlight: SingleFlight
 ) : AiHabitInsightRepository {
 
@@ -209,13 +208,11 @@ class AiHabitInsightRepositoryImpl(
         parser: (cleaned: String) -> T
     ): Result<T> {
         return try {
-            val response = api.chatCompletion(
-                ChatRequest(
-                    model = model,
-                    messages = messages,
-                    maxTokens = maxTokens,
-                    temperature = TEMPERATURE
-                )
+            val response = router.chat(
+                model = model,
+                messages = messages,
+                maxTokens = maxTokens,
+                temperature = TEMPERATURE
             )
             if (response.error != null) {
                 val code = response.error.code ?: -1
@@ -1221,13 +1218,11 @@ class AiHabitInsightRepositoryImpl(
     ): AiResult {
         Log.d(TAG, "Using model=$model")
         return try {
-            val response = api.chatCompletion(
-                ChatRequest(
-                    model = model,
-                    messages = messages,
-                    maxTokens = MAX_TOKENS,
-                    temperature = TEMPERATURE
-                )
+            val response = router.chat(
+                model = model,
+                messages = messages,
+                maxTokens = MAX_TOKENS,
+                temperature = TEMPERATURE
             )
             if (response.error != null) {
                 return AiResult.Failure(
@@ -1261,13 +1256,11 @@ class AiHabitInsightRepositoryImpl(
     ): AiSuggestResult {
         Log.d(TAG, "Using model=$model")
         return try {
-            val response = api.chatCompletion(
-                ChatRequest(
-                    model = model,
-                    messages = messages,
-                    maxTokens = MAX_TOKENS,
-                    temperature = TEMPERATURE
-                )
+            val response = router.chat(
+                model = model,
+                messages = messages,
+                maxTokens = MAX_TOKENS,
+                temperature = TEMPERATURE
             )
             if (response.error != null) {
                 return AiSuggestResult.Failure(
@@ -1349,7 +1342,7 @@ class AiHabitInsightRepositoryImpl(
         val detail = parsed?.takeIf { it.isNotBlank() } ?: rawBody.take(160)
 
         return when (code) {
-            401 -> "Khóa AI không hợp lệ (401). Kiểm tra OPENROUTER_API_KEY trong local.properties và build lại."
+            401 -> "Khóa AI không hợp lệ (401). Kiểm tra GEMINI_API_KEYS / OPENROUTER_API_KEYS trong local.properties và build lại."
             402 -> "Tài khoản OpenRouter cần nạp credit (402)${if (detail.isNotBlank()) ": $detail" else ""}"
             403 -> "OpenRouter từ chối yêu cầu (403)${if (detail.isNotBlank()) ": $detail" else ""}"
             404 -> "Model không tồn tại hoặc không truy cập được (404)${if (detail.isNotBlank()) ": $detail" else ""}"
@@ -1428,15 +1421,13 @@ class AiHabitInsightRepositoryImpl(
          *    transient retry on the current model — bounded latency, no infinite
          *    waits.
          */
-        val FALLBACK_MODELS = listOf(
-            "google/gemini-2.5-flash:free",
-            "deepseek/deepseek-chat-v3-0324:free",
-            "qwen/qwen-2.5-72b-instruct:free",
-            "meta-llama/llama-3.3-70b-instruct:free",
-            "google/gemma-2-9b-it:free",
-            "mistralai/mistral-small-3.2-24b-instruct:free",
-            "google/gemini-2.0-flash-exp:free"
-        )
+        /**
+         * Sourced from [AiProvider.FALLBACK_MODELS] so the routing layer owns
+         * the canonical "Gemini native first, OpenRouter aggregator fallback"
+         * order. Adding a model in [AiProvider] automatically extends the
+         * chain here; the repo no longer hard-codes the list.
+         */
+        val FALLBACK_MODELS: List<String> = AiProvider.FALLBACK_MODELS
 
         const val MAX_TOKENS = 120
         const val TEMPERATURE = 0.6

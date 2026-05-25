@@ -4,7 +4,6 @@ import android.util.Log
 import com.example.betterme.BuildConfig
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
-import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -16,66 +15,45 @@ import java.util.concurrent.TimeUnit
  *
  * - JSON converter is configured with `ignoreUnknownKeys = true` so the OpenRouter
  *   response can grow new fields without breaking us.
- * - OkHttp logging is **debug-build-only** at HEADERS level so we can inspect the
- *   request/response status without leaking the body. The Authorization header is
- *   explicitly redacted so a debug build never prints the API key.
+ * - OkHttp logging is **debug-build-only** at BODY level so the per-attempt error
+ *   envelope (`{"error":{"message":...,"code":401}}`) is visible during triage.
+ *   The Authorization header is explicitly redacted.
  * - Read timeout 25s — long enough to absorb a Gemini Flash / Llama 70B cold start
  *   (typically 5-15s) but tight enough that a dead/overloaded model fails fast and
- *   the chain advances to the next. Worst-case latency across the 7-model chain
- *   stays bounded to ~3 minutes instead of 7+ at 60s.
+ *   the chain advances to the next.
  *
- * The API key arrives at request time via a per-request `Authorization` interceptor
- * so a future settings screen can let users supply their own key without rebuilding
- * the Retrofit instance.
+ * No auth interceptor: the Bearer token rotates per call via the `@Header` parameter
+ * on [OpenRouterApi.chatCompletion], so a single Retrofit instance can serve every
+ * key in the pool without being rebuilt.
  */
 object OpenRouterNetwork {
 
     private const val BASE_URL = "https://openrouter.ai/api/v1/"
     private const val TAG = "OpenRouterNetwork"
 
-    fun create(apiKeyProvider: () -> String): OpenRouterApi {
-        // One-time diagnostic so "I added the key but it's not working" is answerable
-        // from Logcat alone. Masked — only length + first 10 chars surface.
-        if (BuildConfig.DEBUG) {
-            val key = apiKeyProvider()
-            val masked = if (key.length > 10) "${key.take(10)}…" else "(short or blank)"
-            Log.d(TAG, "OpenRouter key loaded: present=${key.isNotBlank()} length=${key.length} prefix=$masked")
-        }
-
+    fun create(): OpenRouterApi {
         val json = Json {
             ignoreUnknownKeys = true
             isLenient = true
             encodeDefaults = true
         }
 
-        val authInterceptor = Interceptor { chain ->
-            val key = apiKeyProvider().trim()
-            val request = chain.request().newBuilder().apply {
-                if (key.isNotBlank()) {
-                    header("Authorization", "Bearer $key")
-                }
-            }.build()
-            chain.proceed(request)
-        }
-
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            // BODY-level in debug so the OpenRouter error envelope (`{"error":{"message":...,"code":401}}`)
-            // shows up in Logcat verbatim — the single biggest help when triaging "AI
-            // is failing" reports from users running debug builds. The API key is
-            // explicitly redacted; nothing else in the body is sensitive (system
-            // prompts + Vietnamese completions only). Release builds stay silent.
             level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
             else HttpLoggingInterceptor.Level.NONE
             redactHeader("Authorization")
         }
 
         val client = OkHttpClient.Builder()
-            .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(25, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
             .build()
+
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "OpenRouter Retrofit ready @ $BASE_URL")
+        }
 
         val retrofit = Retrofit.Builder()
             .baseUrl(BASE_URL)

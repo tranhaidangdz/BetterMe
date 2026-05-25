@@ -22,14 +22,30 @@ val cloudinaryProps: Properties = Properties().apply {
 val cloudinaryCloudName: String = cloudinaryProps.getProperty("CLOUDINARY_CLOUD_NAME", "")
 val cloudinaryUploadPreset: String = cloudinaryProps.getProperty("CLOUDINARY_UPLOAD_PRESET", "")
 
-// OpenRouter API key, also from local.properties (gitignored). Falls back to empty
-// string so the app builds without it — AI features then no-op with a clear toast.
-//   OPENROUTER_API_KEY=sk-or-v1-...
-// .trim() — a stray newline or space in local.properties would silently produce
-// an invalid Bearer token at runtime. Properties.load() already strips trailing
-// whitespace per spec, but trimming again costs nothing and removes one class of
-// "I added the key but it still 401s" failures.
-val openrouterApiKey: String = cloudinaryProps.getProperty("OPENROUTER_API_KEY", "").trim()
+// AI provider keys from local.properties (gitignored). Comma-separated lists let
+// the runtime ApiKeyPool rotate across multiple keys from different Google /
+// OpenRouter accounts — one expired or rate-limited key never stalls the chain.
+//
+//   GEMINI_API_KEYS=AIza...key1,AIza...key2
+//   OPENROUTER_API_KEYS=sk-or-v1-key1,sk-or-v1-key2
+//
+// Backward compatibility: the legacy single `OPENROUTER_API_KEY=...` form is
+// still accepted as a 1-element list when `OPENROUTER_API_KEYS` is absent. Both
+// fields fall back to empty strings so the app still builds without secrets —
+// AI features then surface a clear error category at runtime.
+//
+// .trim() on each entry catches stray whitespace that would silently produce an
+// invalid Bearer token.
+fun csv(raw: String): String =
+    raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }.joinToString(",")
+
+val geminiApiKeysCsv: String = csv(cloudinaryProps.getProperty("GEMINI_API_KEYS", ""))
+
+val openrouterApiKeysCsv: String = run {
+    val multi = csv(cloudinaryProps.getProperty("OPENROUTER_API_KEYS", ""))
+    if (multi.isNotEmpty()) multi
+    else csv(cloudinaryProps.getProperty("OPENROUTER_API_KEY", "")) // legacy single-key form
+}
 
 android {
     namespace = "com.example.betterme"
@@ -46,7 +62,8 @@ android {
 
         buildConfigField("String", "CLOUDINARY_CLOUD_NAME", "\"$cloudinaryCloudName\"")
         buildConfigField("String", "CLOUDINARY_UPLOAD_PRESET", "\"$cloudinaryUploadPreset\"")
-        buildConfigField("String", "OPENROUTER_API_KEY", "\"$openrouterApiKey\"")
+        buildConfigField("String", "GEMINI_API_KEYS", "\"$geminiApiKeysCsv\"")
+        buildConfigField("String", "OPENROUTER_API_KEYS", "\"$openrouterApiKeysCsv\"")
     }
 
     buildTypes {
