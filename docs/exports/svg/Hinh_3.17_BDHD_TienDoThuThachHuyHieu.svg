@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="827" height="1169" viewBox="0 0 827 1169" font-family="Arial, Helvetica, sans-serif">
+<rect x="0" y="0" width="827" height="1169" fill="#FFFFFF" stroke="none"/>
+<text x="413.5" y="28" text-anchor="middle" font-size="16" font-weight="bold" fill="#000000">Hình 3.17 — BĐHĐ Theo dõi tiến độ thử thách &amp; nhận huy hiệu</text>
+<defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#000000"/>
+    </marker>
+    <marker id="oar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#000000" stroke-width="1.2"/>
+    </marker>
+    <marker id="oarG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#666666" stroke-width="1.2"/>
+    </marker>
+  </defs>
+<rect x="40" y="60" width="747" height="36" rx="0" ry="0" fill="#F0F0F0" stroke="#000000" stroke-width="1.5" /><line x1="413.5" y1="60" x2="413.5" y2="96" stroke="#000000" stroke-width="1.5"  /><text x="226.75" y="83" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">Người dùng</text><text x="600.25" y="83" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">Hệ thống</text><rect x="40" y="60" width="747" height="1059" rx="0" ry="0" fill="none" stroke="#000000" stroke-width="1.5" /><line x1="413.5" y1="96" x2="413.5" y2="1119" stroke="#000000" stroke-width="1.5"  /><circle cx="226.75" cy="130" r="9" fill="#000000" stroke="#000000"/><rect x="116.75" y="177" width="220" height="46" rx="14" ry="14" fill="none" stroke="#000000" stroke-width="1.5" />
+<text x="226.75" y="204" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Mở chi tiết thử thách đang tham gia</text><rect x="490.25" y="257" width="220" height="46" rx="14" ry="14" fill="none" stroke="#000000" stroke-width="1.5" />
+<text x="600.25" y="284" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">EvaluateChallengeStatusUseCase</text><rect x="490.25" y="337" width="220" height="46" rx="14" ry="14" fill="none" stroke="#000000" stroke-width="1.5" />
+<text x="600.25" y="364" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Truy vấn challenge_logs + habit_logs</text><rect x="490.25" y="417" width="220" height="46" rx="14" ry="14" fill="none" stroke="#000000" stroke-width="1.5" />
+<text x="600.25" y="444" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Tính số ngày đạt strict-daily</text><polygon points="600.25,505 660.25,540 600.25,575 540.25,540" fill="none" stroke="#000000" stroke-width="1.5"/>
+<text x="600.25" y="544" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Đạt 100%?</text><rect x="490.25" y="627" width="220" height="46" rx="14" ry="14" fill="none" stroke="#000000" stroke-width="1.5" />
+<text x="600.25" y="654" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Hiển thị tiến độ</text><rect x="490.25" y="627" width="220" height="46" rx="14" ry="14" fill="none" stroke="#000000" stroke-width="1.5" />
+<text x="600.25" y="654" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Trao huy hiệu (user_achievements)</text><rect x="490.25" y="717" width="220" height="46" rx="14" ry="14" fill="none" stroke="#000000" stroke-width="1.5" />
+<text x="600.25" y="744" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Popup + cho phép share ảnh</text><circle cx="600.25" cy="830" r="11" fill="none" stroke="#000000" stroke-width="1.5"/><circle cx="600.25" cy="830" r="6" fill="#000000"/><line x1="226.75" y1="139" x2="226.75" y2="175" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/>
+<polyline points="326.75,200 413.5,200 413.5,280 500.25,280" fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/><line x1="600.25" y1="305" x2="600.25" y2="335" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/>
+<line x1="600.25" y1="385" x2="600.25" y2="415" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/>
+<line x1="600.25" y1="465" x2="600.25" y2="515" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/>
+<line x1="600.25" y1="565" x2="600.25" y2="625" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/>
+<text x="608.25" y="595" text-anchor="start" font-size="10" font-weight="normal" font-style="normal" fill="#000000">chưa</text><line x1="600.25" y1="565" x2="600.25" y2="625" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/>
+<text x="608.25" y="595" text-anchor="start" font-size="10" font-weight="normal" font-style="normal" fill="#000000">rồi</text><line x1="600.25" y1="675" x2="600.25" y2="715" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/>
+<line x1="600.25" y1="765" x2="600.25" y2="819" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/>
+<line x1="600.25" y1="675" x2="600.25" y2="819" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/>
+</svg>

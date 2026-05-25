@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1654" height="1169" viewBox="0 0 1654 1169" font-family="Arial, Helvetica, sans-serif">
+<rect x="0" y="0" width="1654" height="1169" fill="#FFFFFF" stroke="none"/>
+<text x="827" y="28" text-anchor="middle" font-size="16" font-weight="bold" fill="#000000">Hình 2.1 — Sơ đồ Use Case tổng quát hệ thống BetterMe</text>
+<defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#000000"/>
+    </marker>
+    <marker id="oar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#000000" stroke-width="1.2"/>
+    </marker>
+    <marker id="oarG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#666666" stroke-width="1.2"/>
+    </marker>
+  </defs>
+<rect x="380" y="90" width="900" height="970" rx="0" ry="0" fill="none" stroke="#000000" stroke-width="2" /><text x="830" y="115" text-anchor="middle" font-size="14" font-weight="bold" font-style="normal" fill="#000000">Hệ thống BetterMe</text><circle cx="180" cy="540" r="10" fill="none" stroke="#000000" stroke-width="1.5"/>
+<line x1="180" y1="550" x2="180" y2="585" stroke="#000000" stroke-width="1.5"/>
+<line x1="165" y1="562" x2="195" y2="562" stroke="#000000" stroke-width="1.5"/>
+<line x1="180" y1="585" x2="168" y2="608" stroke="#000000" stroke-width="1.5"/>
+<line x1="180" y1="585" x2="192" y2="608" stroke="#000000" stroke-width="1.5"/>
+<text x="180" y="625" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">Người dùng</text><circle cx="1480" cy="200" r="10" fill="none" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="210" x2="1480" y2="245" stroke="#000000" stroke-width="1.5"/>
+<line x1="1465" y1="222" x2="1495" y2="222" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="245" x2="1468" y2="268" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="245" x2="1492" y2="268" stroke="#000000" stroke-width="1.5"/>
+<text x="1480" y="285" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">Firebase Auth</text><circle cx="1480" cy="360" r="10" fill="none" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="370" x2="1480" y2="405" stroke="#000000" stroke-width="1.5"/>
+<line x1="1465" y1="382" x2="1495" y2="382" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="405" x2="1468" y2="428" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="405" x2="1492" y2="428" stroke="#000000" stroke-width="1.5"/>
+<text x="1480" y="445" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">Firestore</text><circle cx="1480" cy="520" r="10" fill="none" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="530" x2="1480" y2="565" stroke="#000000" stroke-width="1.5"/>
+<line x1="1465" y1="542" x2="1495" y2="542" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="565" x2="1468" y2="588" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="565" x2="1492" y2="588" stroke="#000000" stroke-width="1.5"/>
+<text x="1480" y="605" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">OpenRouter API</text><circle cx="1480" cy="680" r="10" fill="none" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="690" x2="1480" y2="725" stroke="#000000" stroke-width="1.5"/>
+<line x1="1465" y1="702" x2="1495" y2="702" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="725" x2="1468" y2="748" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="725" x2="1492" y2="748" stroke="#000000" stroke-width="1.5"/>
+<text x="1480" y="765" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">Gemini API</text><circle cx="1480" cy="840" r="10" fill="none" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="850" x2="1480" y2="885" stroke="#000000" stroke-width="1.5"/>
+<line x1="1465" y1="862" x2="1495" y2="862" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="885" x2="1468" y2="908" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="885" x2="1492" y2="908" stroke="#000000" stroke-width="1.5"/>
+<text x="1480" y="925" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">WorkManager</text><circle cx="1480" cy="1000" r="10" fill="none" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="1010" x2="1480" y2="1045" stroke="#000000" stroke-width="1.5"/>
+<line x1="1465" y1="1022" x2="1495" y2="1022" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="1045" x2="1468" y2="1068" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="1045" x2="1492" y2="1068" stroke="#000000" stroke-width="1.5"/>
+<text x="1480" y="1085" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">AlarmManager</text><ellipse cx="560" cy="200" rx="150" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="204" text-anchor="middle" font-size="12" font-weight="normal" font-style="normal" fill="#000000">Đăng nhập / Xác thực</text><line x1="225" y1="555" x2="410" y2="200" stroke="#000000" stroke-width="1.5"  marker-end="url(#arr)"/><ellipse cx="560" cy="290" rx="150" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="294" text-anchor="middle" font-size="12" font-weight="normal" font-style="normal" fill="#000000">Onboarding &amp; chọn nhóm</text><line x1="225" y1="555" x2="410" y2="290" stroke="#000000" stroke-width="1.5"  marker-end="url(#arr)"/><ellipse cx="560" cy="380" rx="150" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="384" text-anchor="middle" font-size="12" font-weight="normal" font-style="normal" fill="#000000">Quản lý thói quen</text><line x1="225" y1="555" x2="410" y2="380" stroke="#000000" stroke-width="1.5"  marker-end="url(#arr)"/><ellipse cx="560" cy="470" rx="150" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="474" text-anchor="middle" font-size="12" font-weight="normal" font-style="normal" fill="#000000">Check-in &amp; ảnh</text><line x1="225" y1="555" x2="410" y2="470" stroke="#000000" stroke-width="1.5"  marker-end="url(#arr)"/><ellipse cx="560" cy="560" rx="150" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="564" text-anchor="middle" font-size="12" font-weight="normal" font-style="normal" fill="#000000">Nhận thông báo nhắc</text><line x1="225" y1="555" x2="410" y2="560" stroke="#000000" stroke-width="1.5"  marker-end="url(#arr)"/><ellipse cx="560" cy="650" rx="150" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="654" text-anchor="middle" font-size="12" font-weight="normal" font-style="normal" fill="#000000">Trò chuyện AI</text><line x1="225" y1="555" x2="410" y2="650" stroke="#000000" stroke-width="1.5"  marker-end="url(#arr)"/><ellipse cx="560" cy="740" rx="150" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="744" text-anchor="middle" font-size="12" font-weight="normal" font-style="normal" fill="#000000">Phân tích &amp; gợi ý AI</text><line x1="225" y1="555" x2="410" y2="740" stroke="#000000" stroke-width="1.5"  marker-end="url(#arr)"/><ellipse cx="560" cy="830" rx="150" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="834" text-anchor="middle" font-size="12" font-weight="normal" font-style="normal" fill="#000000">Xem biểu đồ thống kê</text><line x1="225" y1="555" x2="410" y2="830" stroke="#000000" stroke-width="1.5"  marker-end="url(#arr)"/><ellipse cx="560" cy="920" rx="150" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="924" text-anchor="middle" font-size="12" font-weight="normal" font-style="normal" fill="#000000">Tham gia thử thách</text><line x1="225" y1="555" x2="410" y2="920" stroke="#000000" stroke-width="1.5"  marker-end="url(#arr)"/><ellipse cx="560" cy="1010" rx="150" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="1014" text-anchor="middle" font-size="12" font-weight="normal" font-style="normal" fill="#000000">Nhận huy hiệu thành tích</text><line x1="225" y1="555" x2="410" y2="1010" stroke="#000000" stroke-width="1.5"  marker-end="url(#arr)"/><line x1="710" y1="200" x2="1440" y2="200" stroke="#666666" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#oar)"/><text x="1075" y="195" text-anchor="middle" font-size="10" font-weight="normal" font-style="italic" fill="#666666">«include»</text><line x1="710" y1="380" x2="1440" y2="360" stroke="#666666" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#oar)"/><line x1="710" y1="470" x2="1440" y2="360" stroke="#666666" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#oar)"/><line x1="710" y1="650" x2="1440" y2="520" stroke="#666666" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#oar)"/><line x1="710" y1="740" x2="1440" y2="680" stroke="#666666" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#oar)"/><line x1="710" y1="560" x2="1440" y2="1000" stroke="#666666" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#oar)"/><line x1="710" y1="920" x2="1440" y2="840" stroke="#666666" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#oar)"/></svg>

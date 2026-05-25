@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1654" height="1169" viewBox="0 0 1654 1169" font-family="Arial, Helvetica, sans-serif">
+<rect x="0" y="0" width="1654" height="1169" fill="#FFFFFF" stroke="none"/>
+<text x="827" y="28" text-anchor="middle" font-size="16" font-weight="bold" fill="#000000">Hình 2.3 — Sơ đồ Use Case hệ thống / AI / dịch vụ ngoài</text>
+<defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#000000"/>
+    </marker>
+    <marker id="oar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#000000" stroke-width="1.2"/>
+    </marker>
+    <marker id="oarG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#666666" stroke-width="1.2"/>
+    </marker>
+  </defs>
+<rect x="380" y="90" width="900" height="970" rx="0" ry="0" fill="none" stroke="#000000" stroke-width="2" /><text x="830" y="115" text-anchor="middle" font-size="14" font-weight="bold" font-style="normal" fill="#000000">Hệ thống nền (background + AI)</text><ellipse cx="560" cy="200" rx="160" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="204" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Đồng bộ Firestore (SyncWorker)</text><ellipse cx="560" cy="290" rx="160" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="294" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Dọn dẹp dữ liệu (MidnightCleanup)</text><ellipse cx="560" cy="380" rx="160" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="384" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Nhắc thử thách (ChallengeReminder)</text><ellipse cx="560" cy="470" rx="160" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="474" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Đặt lịch alarm (AlarmManager)</text><ellipse cx="560" cy="560" rx="160" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="564" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Khôi phục alarm sau reboot</text><ellipse cx="560" cy="650" rx="160" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="654" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Gọi AI Gemini (native)</text><ellipse cx="560" cy="740" rx="160" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="744" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Gọi AI OpenRouter (7-model)</text><ellipse cx="560" cy="830" rx="160" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="834" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Cache AI (12-24h)</text><ellipse cx="560" cy="920" rx="160" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="924" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Dedup single-flight</text><ellipse cx="560" cy="1010" rx="160" ry="30" fill="none" stroke="#000000" stroke-width="1.5"/><text x="560" y="1014" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Đánh giá strict-daily thử thách</text><circle cx="1480" cy="180" r="10" fill="none" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="190" x2="1480" y2="225" stroke="#000000" stroke-width="1.5"/>
+<line x1="1465" y1="202" x2="1495" y2="202" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="225" x2="1468" y2="248" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="225" x2="1492" y2="248" stroke="#000000" stroke-width="1.5"/>
+<text x="1480" y="265" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">Firebase Auth</text><text x="1480" y="165" text-anchor="middle" font-size="9" font-weight="normal" font-style="italic" fill="#666666">«external»</text><circle cx="1480" cy="320" r="10" fill="none" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="330" x2="1480" y2="365" stroke="#000000" stroke-width="1.5"/>
+<line x1="1465" y1="342" x2="1495" y2="342" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="365" x2="1468" y2="388" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="365" x2="1492" y2="388" stroke="#000000" stroke-width="1.5"/>
+<text x="1480" y="405" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">Firestore</text><text x="1480" y="305" text-anchor="middle" font-size="9" font-weight="normal" font-style="italic" fill="#666666">«external»</text><circle cx="1480" cy="470" r="10" fill="none" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="480" x2="1480" y2="515" stroke="#000000" stroke-width="1.5"/>
+<line x1="1465" y1="492" x2="1495" y2="492" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="515" x2="1468" y2="538" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="515" x2="1492" y2="538" stroke="#000000" stroke-width="1.5"/>
+<text x="1480" y="555" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">OpenRouter API</text><text x="1480" y="455" text-anchor="middle" font-size="9" font-weight="normal" font-style="italic" fill="#666666">«external»</text><circle cx="1480" cy="620" r="10" fill="none" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="630" x2="1480" y2="665" stroke="#000000" stroke-width="1.5"/>
+<line x1="1465" y1="642" x2="1495" y2="642" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="665" x2="1468" y2="688" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="665" x2="1492" y2="688" stroke="#000000" stroke-width="1.5"/>
+<text x="1480" y="705" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">Gemini API</text><text x="1480" y="605" text-anchor="middle" font-size="9" font-weight="normal" font-style="italic" fill="#666666">«external»</text><circle cx="1480" cy="770" r="10" fill="none" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="780" x2="1480" y2="815" stroke="#000000" stroke-width="1.5"/>
+<line x1="1465" y1="792" x2="1495" y2="792" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="815" x2="1468" y2="838" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="815" x2="1492" y2="838" stroke="#000000" stroke-width="1.5"/>
+<text x="1480" y="855" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">WorkManager</text><text x="1480" y="755" text-anchor="middle" font-size="9" font-weight="normal" font-style="italic" fill="#666666">«external»</text><circle cx="1480" cy="920" r="10" fill="none" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="930" x2="1480" y2="965" stroke="#000000" stroke-width="1.5"/>
+<line x1="1465" y1="942" x2="1495" y2="942" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="965" x2="1468" y2="988" stroke="#000000" stroke-width="1.5"/>
+<line x1="1480" y1="965" x2="1492" y2="988" stroke="#000000" stroke-width="1.5"/>
+<text x="1480" y="1005" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">AlarmManager</text><text x="1480" y="905" text-anchor="middle" font-size="9" font-weight="normal" font-style="italic" fill="#666666">«external»</text><circle cx="180" cy="540" r="10" fill="none" stroke="#000000" stroke-width="1.5"/>
+<line x1="180" y1="550" x2="180" y2="585" stroke="#000000" stroke-width="1.5"/>
+<line x1="165" y1="562" x2="195" y2="562" stroke="#000000" stroke-width="1.5"/>
+<line x1="180" y1="585" x2="168" y2="608" stroke="#000000" stroke-width="1.5"/>
+<line x1="180" y1="585" x2="192" y2="608" stroke="#000000" stroke-width="1.5"/>
+<text x="180" y="625" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">Người dùng</text><line x1="225" y1="555" x2="400" y2="200" stroke="#000000" stroke-width="1.5"  marker-end="url(#arr)"/><line x1="225" y1="555" x2="400" y2="650" stroke="#000000" stroke-width="1.5"  marker-end="url(#arr)"/><line x1="225" y1="555" x2="400" y2="740" stroke="#000000" stroke-width="1.5"  marker-end="url(#arr)"/><line x1="225" y1="555" x2="400" y2="1010" stroke="#000000" stroke-width="1.5"  marker-end="url(#arr)"/><line x1="1440" y1="320" x2="710" y2="200" stroke="#666666" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#oar)"/><line x1="1440" y1="320" x2="710" y2="290" stroke="#666666" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#oar)"/><line x1="1440" y1="770" x2="710" y2="290" stroke="#666666" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#oar)"/><line x1="1440" y1="770" x2="710" y2="380" stroke="#666666" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#oar)"/><line x1="1440" y1="920" x2="710" y2="470" stroke="#666666" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#oar)"/><line x1="1440" y1="920" x2="710" y2="560" stroke="#666666" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#oar)"/><line x1="1440" y1="620" x2="710" y2="650" stroke="#666666" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#oar)"/><line x1="1440" y1="470" x2="710" y2="740" stroke="#666666" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#oar)"/></svg>

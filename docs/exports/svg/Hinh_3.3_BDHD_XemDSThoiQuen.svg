@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="827" height="1169" viewBox="0 0 827 1169" font-family="Arial, Helvetica, sans-serif">
+<rect x="0" y="0" width="827" height="1169" fill="#FFFFFF" stroke="none"/>
+<text x="413.5" y="28" text-anchor="middle" font-size="16" font-weight="bold" fill="#000000">Hình 3.3 — BĐHĐ Xem danh sách thói quen</text>
+<defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#000000"/>
+    </marker>
+    <marker id="oar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#000000" stroke-width="1.2"/>
+    </marker>
+    <marker id="oarG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#666666" stroke-width="1.2"/>
+    </marker>
+  </defs>
+<rect x="40" y="60" width="747" height="36" rx="0" ry="0" fill="#F0F0F0" stroke="#000000" stroke-width="1.5" /><line x1="413.5" y1="60" x2="413.5" y2="96" stroke="#000000" stroke-width="1.5"  /><text x="226.75" y="83" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">Người dùng</text><text x="600.25" y="83" text-anchor="middle" font-size="12" font-weight="bold" font-style="normal" fill="#000000">Hệ thống</text><rect x="40" y="60" width="747" height="1059" rx="0" ry="0" fill="none" stroke="#000000" stroke-width="1.5" /><line x1="413.5" y1="96" x2="413.5" y2="1119" stroke="#000000" stroke-width="1.5"  /><circle cx="226.75" cy="130" r="9" fill="#000000" stroke="#000000"/><rect x="116.75" y="177" width="220" height="46" rx="14" ry="14" fill="none" stroke="#000000" stroke-width="1.5" />
+<text x="226.75" y="204" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Vào tab "Thói quen"</text><rect x="490.25" y="257" width="220" height="46" rx="14" ry="14" fill="none" stroke="#000000" stroke-width="1.5" />
+<text x="600.25" y="284" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">HabitsViewModel load danh sách</text><rect x="490.25" y="337" width="220" height="46" rx="14" ry="14" fill="none" stroke="#000000" stroke-width="1.5" />
+<text x="600.25" y="357" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Truy vấn Room</text>
+<text x="600.25" y="371" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">(habits + habit_logs hôm nay)</text><polygon points="600.25,425 660.25,460 600.25,495 540.25,460" fill="none" stroke="#000000" stroke-width="1.5"/>
+<text x="600.25" y="464" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Rỗng?</text><rect x="490.25" y="547" width="220" height="46" rx="14" ry="14" fill="none" stroke="#000000" stroke-width="1.5" />
+<text x="600.25" y="574" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Hiển thị empty state</text><rect x="490.25" y="547" width="220" height="46" rx="14" ry="14" fill="none" stroke="#000000" stroke-width="1.5" />
+<text x="600.25" y="574" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Render LazyColumn các thói quen</text><rect x="116.75" y="647" width="220" height="46" rx="14" ry="14" fill="none" stroke="#000000" stroke-width="1.5" />
+<text x="226.75" y="674" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Cuộn / lọc theo nhóm</text><rect x="490.25" y="737" width="220" height="46" rx="14" ry="14" fill="none" stroke="#000000" stroke-width="1.5" />
+<text x="600.25" y="764" text-anchor="middle" font-size="11" font-weight="normal" font-style="normal" fill="#000000">Cập nhật trạng thái UI</text><circle cx="600.25" cy="850" r="11" fill="none" stroke="#000000" stroke-width="1.5"/><circle cx="600.25" cy="850" r="6" fill="#000000"/><line x1="226.75" y1="139" x2="226.75" y2="175" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/>
+<polyline points="326.75,200 413.5,200 413.5,280 500.25,280" fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/><line x1="600.25" y1="305" x2="600.25" y2="335" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/>
+<line x1="600.25" y1="385" x2="600.25" y2="435" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/>
+<line x1="600.25" y1="485" x2="600.25" y2="545" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/>
+<text x="608.25" y="515" text-anchor="start" font-size="10" font-weight="normal" font-style="normal" fill="#000000">có</text><line x1="600.25" y1="485" x2="600.25" y2="545" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/>
+<text x="608.25" y="515" text-anchor="start" font-size="10" font-weight="normal" font-style="normal" fill="#000000">không</text><polyline points="500.25,570 413.5,570 413.5,670 326.75,670" fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/><polyline points="326.75,670 413.5,670 413.5,760 500.25,760" fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/><line x1="600.25" y1="785" x2="600.25" y2="839" stroke="#000000" stroke-width="1.4" marker-end="url(#arr)"/>
+</svg>
