@@ -88,20 +88,28 @@ class ChallengeReminderWorker(
         val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(NOTIFICATION_ID_BASE + targetId, builder.build())
 
-        // 2. In-app inbox row (Home notification center)
+        // 2. In-app inbox row (Home notification center).
+        //
+        // The system push at step 1 is the user-visible part and already fired —
+        // failing the worker here would re-enqueue via WorkManager backoff and
+        // re-fire the same system notification on retry. Wrap the inbox write in
+        // runCatching so a transient Room/Firestore hiccup never produces a
+        // duplicate notification. Mirrors the HabitReminderReceiver pattern.
         val userId = dataStoreManager.getCurrentUserId().first().orEmpty()
         if (userId.isNotBlank()) {
-            notificationRepository.insert(
-                NotificationEntity(
-                    user_id = userId,
-                    title = title,
-                    message = text,
-                    type = type,
-                    challenge_id = challengeId,
-                    user_challenge_id = deeplinkId,
-                    reminder_time_label = reminderTimeLabel
+            runCatching {
+                notificationRepository.insert(
+                    NotificationEntity(
+                        user_id = userId,
+                        title = title,
+                        message = text,
+                        type = type,
+                        challenge_id = challengeId,
+                        user_challenge_id = deeplinkId,
+                        reminder_time_label = reminderTimeLabel
+                    )
                 )
-            )
+            }
         }
 
         return Result.success()
