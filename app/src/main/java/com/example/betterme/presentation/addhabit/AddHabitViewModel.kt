@@ -148,6 +148,14 @@ class AddHabitViewModel(
     private fun submitHabit() {
         val state = currentState
 
+        // Re-entrancy guard. The submit button isn't disabled at the UI layer
+        // during the in-flight insert, so a fast double-tap would queue a second
+        // viewModelScope coroutine and write the habit twice (and arm two alarms).
+        // isLoading is flipped to true inside the coroutine below, so checking it
+        // here costs nothing on the cold path and short-circuits the duplicate
+        // path before any IO work happens.
+        if (state.isLoading) return
+
         // Validation
         if (state.title.isBlank()) {
             updateState { copy(titleError = "Vui lòng nhập tên thói quen") }
