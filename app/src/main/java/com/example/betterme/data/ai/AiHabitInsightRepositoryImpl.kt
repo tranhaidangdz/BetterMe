@@ -54,7 +54,9 @@ import com.example.betterme.domain.ai.schedule.OptimizedHabitTime
 import com.example.betterme.domain.ai.schedule.ScheduleAnalysis
 import com.example.betterme.domain.ai.schedule.ScheduleConflict
 import com.example.betterme.domain.ai.schedule.UserLifestyleProfile
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import retrofit2.HttpException
@@ -120,7 +122,20 @@ class AiHabitInsightRepositoryImpl(
         dedupKey: String,
         attempt: suspend (model: String) -> Result<T>
     ): T = singleFlight.run("$chainName:$dedupKey") {
-        runChainAnalysisInner(chainName, attempt)
+        // Wall-clock cap. The per-attempt timeout inside [AiChatRouter] already
+        // keeps any single model honest, but a full 9-model parade of slow 503s
+        // could still rack up ~3 minutes of waiting. CHAIN_TIMEOUT_MS bounds the
+        // total experience to one snappy spinner cycle so the user always gets
+        // *some* response within the budget — either an analysis or a clean
+        // error state — without ever spinning past 45 s.
+        try {
+            withTimeout(CHAIN_TIMEOUT_MS) {
+                runChainAnalysisInner(chainName, attempt)
+            }
+        } catch (e: TimeoutCancellationException) {
+            Log.w(TAG, "[$chainName] CHAIN_TIMEOUT_MS=${CHAIN_TIMEOUT_MS}ms exceeded — surfacing TIMEOUT")
+            exhausted(chainName, listOf(AiErrorCategory.TIMEOUT), "Chain timed out after ${CHAIN_TIMEOUT_MS}ms")
+        }
     }
 
     private suspend fun <T> runChainAnalysisInner(
@@ -255,16 +270,22 @@ class AiHabitInsightRepositoryImpl(
             ChatMessage(role = "user", content = userPrompt)
         )
 
-        var lastFailure: AiResult.Failure? = null
-        for ((index, model) in FALLBACK_MODELS.withIndex()) {
-            val result = retryOnTransient { tryModel(model, messages) }
-            if (result is AiResult.Success) return result
-            lastFailure = result as AiResult.Failure
-            Log.w(TAG, "Review model[$index]=$model failed: ${lastFailure.message}")
+        return try {
+            withTimeout(CHAIN_TIMEOUT_MS) {
+                var lastFailure: AiResult.Failure? = null
+                for ((index, model) in FALLBACK_MODELS.withIndex()) {
+                    val result = retryOnTransient { tryModel(model, messages) }
+                    if (result is AiResult.Success) return@withTimeout result
+                    lastFailure = result as AiResult.Failure
+                    Log.w(TAG, "Review model[$index]=$model failed: ${lastFailure.message}")
+                }
+                Log.w(TAG, "All review models exhausted — surfacing failure to UI")
+                lastFailure ?: AiResult.Failure("AI tạm thời không khả dụng. Hãy thử lại.")
+            }
+        } catch (e: TimeoutCancellationException) {
+            Log.w(TAG, "Review chain timed out after ${CHAIN_TIMEOUT_MS}ms")
+            AiResult.Failure("AI phản hồi quá chậm — hãy thử lại sau.")
         }
-
-        Log.w(TAG, "All review models exhausted — surfacing failure to UI")
-        return lastFailure ?: AiResult.Failure("AI tạm thời không khả dụng. Hãy thử lại.")
     }
 
     private fun buildReviewUserPrompt(c: GroupInsightContext): String = buildString {
@@ -299,16 +320,22 @@ class AiHabitInsightRepositoryImpl(
             ChatMessage(role = "user", content = userPrompt)
         )
 
-        var lastFailure: AiSuggestResult.Failure? = null
-        for ((index, model) in FALLBACK_MODELS.withIndex()) {
-            val result = retryOnTransient { tryModelJson(model, messages) }
-            if (result is AiSuggestResult.Success) return result
-            lastFailure = result as AiSuggestResult.Failure
-            Log.w(TAG, "Suggest model[$index]=$model failed: ${lastFailure.message}")
+        return try {
+            withTimeout(CHAIN_TIMEOUT_MS) {
+                var lastFailure: AiSuggestResult.Failure? = null
+                for ((index, model) in FALLBACK_MODELS.withIndex()) {
+                    val result = retryOnTransient { tryModelJson(model, messages) }
+                    if (result is AiSuggestResult.Success) return@withTimeout result
+                    lastFailure = result as AiSuggestResult.Failure
+                    Log.w(TAG, "Suggest model[$index]=$model failed: ${lastFailure.message}")
+                }
+                Log.w(TAG, "All suggest models exhausted — surfacing failure to UI")
+                lastFailure ?: AiSuggestResult.Failure("AI tạm thời không khả dụng. Hãy thử lại.")
+            }
+        } catch (e: TimeoutCancellationException) {
+            Log.w(TAG, "Suggest chain timed out after ${CHAIN_TIMEOUT_MS}ms")
+            AiSuggestResult.Failure("AI phản hồi quá chậm — hãy thử lại sau.")
         }
-
-        Log.w(TAG, "All suggest models exhausted — surfacing failure to UI")
-        return lastFailure ?: AiSuggestResult.Failure("AI tạm thời không khả dụng. Hãy thử lại.")
     }
 
     private fun buildSuggestUserPrompt(c: SuggestionContext): String = buildString {
@@ -1235,6 +1262,12 @@ class AiHabitInsightRepositoryImpl(
             } else {
                 AiResult.Success(content)
             }
+        } catch (e: AiAttemptFailure) {
+            // The router threw a categorized failure (e.g. TIMEOUT from the new
+            // per-attempt withTimeout, or QUOTA_EXCEEDED when all keys cooled).
+            // Map straight to the Vietnamese user-facing copy so retryOnTransient
+            // can still react to "(429)" inside the message.
+            AiResult.Failure(AiUnavailableException.userMessage(e.category, e.detail))
         } catch (e: java.net.SocketTimeoutException) {
             AiResult.Failure("Mạng chậm — AI hết thời gian chờ")
         } catch (e: HttpException) {
@@ -1276,6 +1309,8 @@ class AiHabitInsightRepositoryImpl(
             val cleaned = content
                 .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
             parseSuggestions(cleaned)
+        } catch (e: AiAttemptFailure) {
+            AiSuggestResult.Failure(AiUnavailableException.userMessage(e.category, e.detail))
         } catch (e: java.net.SocketTimeoutException) {
             AiSuggestResult.Failure("Mạng chậm — AI hết thời gian chờ")
         } catch (e: HttpException) {
@@ -1460,6 +1495,16 @@ class AiHabitInsightRepositoryImpl(
         const val PROGRESSION_MAX_TOKENS = 500
 
         const val RETRY_DELAY_MS = 800L
+
+        /**
+         * Hard wall-clock cap on the entire fallback chain — every analyze*
+         * path runs through this. 45 s is room enough for 2-3 cold-start
+         * misses before the user gives up, while keeping the spinner from
+         * looking abandoned. Lower than the worst-case OkHttp budget
+         * (`models * read_timeout`) so the structured timeout is the one
+         * that fires.
+         */
+        const val CHAIN_TIMEOUT_MS = 45_000L
 
         /** Strict "HH:mm" 24-hour validator used everywhere a schedule string
          *  enters the pipeline (input filtering AND parsing the model's output). */

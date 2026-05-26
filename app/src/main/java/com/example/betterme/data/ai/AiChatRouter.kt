@@ -5,6 +5,8 @@ import com.example.betterme.BuildConfig
 import com.example.betterme.data.ai.dto.ChatMessage
 import com.example.betterme.data.ai.dto.ChatResponse
 import com.example.betterme.domain.ai.AiErrorCategory
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import retrofit2.HttpException
 
 /**
@@ -37,7 +39,16 @@ class AiChatRouter(
     private val transports: Map<AiProvider, ChatTransport>,
     private val pools: Map<AiProvider, ApiKeyPool>,
     private val rateLimitCooldownMs: Long = DEFAULT_RATE_LIMIT_COOLDOWN_MS,
-    private val authQuotaCooldownMs: Long = DEFAULT_AUTH_QUOTA_COOLDOWN_MS
+    private val authQuotaCooldownMs: Long = DEFAULT_AUTH_QUOTA_COOLDOWN_MS,
+    /**
+     * Wall-clock cap for a single per-key attempt. Independent of OkHttp's read
+     * timeout — defends against a transport that hangs in connect, in TLS, in
+     * the suspension between read chunks, etc. Lower than the OkHttp read
+     * timeout (25 s) so the structured timeout fires first and stays the
+     * authoritative one the chain walker categorizes against.
+     */
+    private val perAttemptTimeoutMs: Long = DEFAULT_PER_ATTEMPT_TIMEOUT_MS,
+    private val healthTracker: AiProviderHealth? = null
 ) {
 
     /**
@@ -84,15 +95,33 @@ class AiChatRouter(
                     Log.d(
                         TAG,
                         "→ $provider model=$model attempt=${attemptIdx + 1}/$keyCap " +
-                            "key=${ApiKeyPool.mask(key)}"
+                            "key=${ApiKeyPool.mask(key)} budgetMs=$perAttemptTimeoutMs"
                     )
                 }
-                return transport.chat(model, key, messages, maxTokens, temperature)
+                val response = withTimeout(perAttemptTimeoutMs) {
+                    transport.chat(model, key, messages, maxTokens, temperature)
+                }
+                healthTracker?.recordSuccess(provider, model)
+                return response
+            } catch (e: TimeoutCancellationException) {
+                // Structured timeout — don't cool the key (the problem is the
+                // model / network, not the credential). Rethrow as TIMEOUT so
+                // the chain walker advances to the next model fast.
+                healthTracker?.recordFailure(provider, AiErrorCategory.TIMEOUT)
+                Log.w(
+                    TAG,
+                    "× $provider model=$model timed out after ${perAttemptTimeoutMs}ms — advancing chain"
+                )
+                throw AiAttemptFailure(
+                    AiErrorCategory.TIMEOUT,
+                    "AI hết thời gian chờ (${perAttemptTimeoutMs}ms)"
+                )
             } catch (e: HttpException) {
                 val category = AiErrorCategorizer.categorizeHttp(e.code())
                 val cooldown = cooldownFor(category)
                 if (cooldown > 0L) {
                     pool.cooldown(key, cooldown)
+                    healthTracker?.recordFailure(provider, category)
                     Log.w(
                         TAG,
                         "× $provider model=$model key=${ApiKeyPool.mask(key)} " +
@@ -103,6 +132,7 @@ class AiChatRouter(
                 } else {
                     // Not a credential issue — let the chain walker decide
                     // whether to advance to the next model.
+                    healthTracker?.recordFailure(provider, category)
                     throw e
                 }
             }
@@ -128,5 +158,13 @@ class AiChatRouter(
 
         /** 10 minutes — likely a longer outage (revoked key, daily quota). */
         const val DEFAULT_AUTH_QUOTA_COOLDOWN_MS: Long = 600_000L
+
+        /**
+         * 20 s — tight enough that a hung model can't burn the chain budget,
+         * loose enough to absorb a Gemini Flash cold start (typically 3-12 s).
+         * OkHttp's read timeout (25 s) is intentionally larger so the
+         * structured `withTimeout` fires first and stays authoritative.
+         */
+        const val DEFAULT_PER_ATTEMPT_TIMEOUT_MS: Long = 20_000L
     }
 }

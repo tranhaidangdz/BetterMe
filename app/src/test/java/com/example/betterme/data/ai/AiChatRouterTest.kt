@@ -3,12 +3,14 @@ package com.example.betterme.data.ai
 import com.example.betterme.data.ai.dto.ChatMessage
 import com.example.betterme.data.ai.dto.ChatResponse
 import com.example.betterme.domain.ai.AiErrorCategory
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -359,6 +361,133 @@ class AiChatRouterTest {
                 null -> error("no scripted outcome for key=$apiKey")
             }
         }
+    }
+
+    // -----------------------------------------------------------------
+    // 11. Per-attempt withTimeout — a hung transport is aborted at the
+    //     configured budget and surfaces as AiAttemptFailure(TIMEOUT) so
+    //     the chain walker can advance instead of waiting forever.
+    // -----------------------------------------------------------------
+    @Test
+    fun `per-attempt timeout fires AiAttemptFailure with TIMEOUT category`() = runBlocking {
+        val pool = ApiKeyPool(keys = listOf("k1"))
+        val transport = object : ChatTransport {
+            override suspend fun chat(
+                model: String,
+                apiKey: String,
+                messages: List<ChatMessage>,
+                maxTokens: Int,
+                temperature: Double
+            ): ChatResponse {
+                // Suspend forever — the router's withTimeout must cut us off.
+                awaitCancellation()
+            }
+        }
+        val router = AiChatRouter(
+            transports = mapOf(AiProvider.GEMINI to transport),
+            pools = mapOf(AiProvider.GEMINI to pool),
+            perAttemptTimeoutMs = 50L
+        )
+        try {
+            router.chat("gemini-2.5-flash", messages, 100, 0.6)
+            fail("expected TIMEOUT")
+        } catch (e: AiAttemptFailure) {
+            assertEquals(AiErrorCategory.TIMEOUT, e.category)
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // 12. Per-attempt timeout does NOT cool the key — the credential is
+    //     fine, the latency is the model's fault. Other keys must remain
+    //     eligible so the router can rotate without burning the pool.
+    // -----------------------------------------------------------------
+    @Test
+    fun `per-attempt timeout does not cool the key`() = runBlocking {
+        val pool = ApiKeyPool(keys = listOf("k1", "k2"))
+        val transport = object : ChatTransport {
+            override suspend fun chat(
+                model: String,
+                apiKey: String,
+                messages: List<ChatMessage>,
+                maxTokens: Int,
+                temperature: Double
+            ): ChatResponse = awaitCancellation()
+        }
+        val router = AiChatRouter(
+            transports = mapOf(AiProvider.GEMINI to transport),
+            pools = mapOf(AiProvider.GEMINI to pool),
+            perAttemptTimeoutMs = 30L
+        )
+        try {
+            router.chat("gemini-2.5-flash", messages, 100, 0.6)
+            fail("expected timeout failure")
+        } catch (_: AiAttemptFailure) {
+            // expected
+        }
+        // Neither key should be cooled — a timeout categorizes as transient,
+        // not credential-related. allCooled() must stay false.
+        assertFalse("timeout should not cool any key", pool.allCooled())
+    }
+
+    // -----------------------------------------------------------------
+    // 13. Health tracker records the last success per provider — used for
+    //     diagnostics logging in Logcat.
+    // -----------------------------------------------------------------
+    @Test
+    fun `health tracker records success and failure per provider`() = runBlocking {
+        val health = AiProviderHealth(nowProvider = { 5_000L })
+        val pool = ApiKeyPool(keys = listOf("k1", "k2"))
+        val transport = RecordingTransport(
+            scripted = mapOf(
+                "k1" to TransportOutcome.Error(429),
+                "k2" to TransportOutcome.Ok("ok")
+            )
+        )
+        val router = AiChatRouter(
+            transports = mapOf(AiProvider.GEMINI to transport),
+            pools = mapOf(AiProvider.GEMINI to pool),
+            healthTracker = health
+        )
+        router.chat("gemini-2.5-flash", messages, 100, 0.6)
+        val snap = health.snapshot()[AiProvider.GEMINI]!!
+        assertEquals(5_000L, snap.lastSuccessAt)
+        assertEquals("gemini-2.5-flash", snap.lastSuccessModel)
+        // The 429 on k1 was recorded as a failure before the success on k2.
+        assertEquals(AiErrorCategory.RATE_LIMITED, snap.lastFailureCategory)
+    }
+
+    // -----------------------------------------------------------------
+    // 14. Health tracker is optional — when null, router still works.
+    // -----------------------------------------------------------------
+    @Test
+    fun `null health tracker is a no-op — router still answers`() = runBlocking {
+        val pool = ApiKeyPool(keys = listOf("k1"))
+        val transport = RecordingTransport(
+            scripted = mapOf("k1" to TransportOutcome.Ok("ok"))
+        )
+        val router = AiChatRouter(
+            transports = mapOf(AiProvider.GEMINI to transport),
+            pools = mapOf(AiProvider.GEMINI to pool),
+            healthTracker = null
+        )
+        val resp = router.chat("gemini-2.5-flash", messages, 100, 0.6)
+        assertEquals("ok", resp.choices.first().message?.content)
+    }
+
+    // -----------------------------------------------------------------
+    // 15. Provider health tracker debugStatusLine never returns null.
+    // -----------------------------------------------------------------
+    @Test
+    fun `provider health debug status line shape`() {
+        val h = AiProviderHealth(nowProvider = { 10_000L })
+        // Empty — well-formed sentinel.
+        assertEquals("AiProviderHealth(empty)", h.debugStatusLine())
+        h.recordSuccess(AiProvider.GEMINI, "gemini-2.5-flash")
+        val line = h.debugStatusLine()
+        assertTrue(line.contains("GEMINI"))
+        assertTrue(line.contains("gemini-2.5-flash"))
+        // The untouched OpenRouter provider must still appear in the line.
+        assertTrue(line.contains("OPENROUTER"))
     }
 
     @Test
