@@ -36,7 +36,20 @@ object GeminiNetwork {
         val json = Json {
             ignoreUnknownKeys = true
             isLenient = true
+            // `encodeDefaults` keeps non-null defaults in the wire payload — we
+            // want `temperature` / `maxOutputTokens` etc to ship even when the
+            // caller left them at the data-class default.
             encodeDefaults = true
+            // CRITICAL for Gemini: drop fields whose value is literally `null`.
+            // The Gemini REST API rejects requests like
+            //   {"contents": [...], "systemInstruction": null}
+            // because every documented field that is *present* must have a
+            // valid value — null isn't valid. Same applies to per-content
+            // `role` on the systemInstruction (which has no role at all). With
+            // explicitNulls = true (kotlinx default), kotlinx-serialization
+            // would emit those nulls; flipping to false omits them entirely,
+            // which is what Google's request validator expects.
+            explicitNulls = false
         }
 
         val loggingInterceptor = HttpLoggingInterceptor().apply {

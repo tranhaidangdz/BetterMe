@@ -314,10 +314,21 @@ val repositoryModule = module {
 
     // Single-provider key pool. Named-qualifier kept so a future second
     // provider can be added without resolver collisions.
+    //
+    // Startup diagnostic: emits one masked line to Logcat under `AiStartup` so
+    // a developer can confirm BuildConfig.GEMINI_API_KEYS was actually populated
+    // from local.properties at build time. Empty pool here is the #1 cause of
+    // "AI never works" reports — and the log line is the fastest way to spot it
+    // (`adb logcat -s AiStartup`).
     single(qualifier = org.koin.core.qualifier.named("geminiKeys")) {
-        com.example.betterme.data.ai.ApiKeyPool(
-            keys = BuildConfig.GEMINI_API_KEYS.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        val raw = BuildConfig.GEMINI_API_KEYS.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        val masked = raw.joinToString(", ") { com.example.betterme.data.ai.ApiKeyPool.mask(it) }
+        android.util.Log.i(
+            "AiStartup",
+            "Gemini key pool: count=${raw.size} keys=[$masked] " +
+                "buildConfig.len=${BuildConfig.GEMINI_API_KEYS.length}"
         )
+        com.example.betterme.data.ai.ApiKeyPool(keys = raw)
     }
 
     // Process-scoped per-provider health snapshot. Optional dependency of the

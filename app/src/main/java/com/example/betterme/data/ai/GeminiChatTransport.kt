@@ -1,5 +1,7 @@
 package com.example.betterme.data.ai
 
+import android.util.Log
+import com.example.betterme.BuildConfig
 import com.example.betterme.data.ai.dto.ChatChoice
 import com.example.betterme.data.ai.dto.ChatError
 import com.example.betterme.data.ai.dto.ChatMessage
@@ -8,6 +10,7 @@ import com.example.betterme.data.ai.dto.GeminiContent
 import com.example.betterme.data.ai.dto.GeminiGenerateRequest
 import com.example.betterme.data.ai.dto.GeminiGenerationConfig
 import com.example.betterme.data.ai.dto.GeminiPart
+import retrofit2.HttpException
 
 /**
  * [ChatTransport] backed by Google's native Gemini REST endpoint. Translates the
@@ -62,11 +65,34 @@ class GeminiChatTransport(
             )
         )
 
-        val response = api.generateContent(
-            model = model,
-            apiKey = apiKey,
-            body = request
-        )
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                TAG,
+                "POST /v1beta/models/$model:generateContent " +
+                    "contents=${contents.size} sysInstr=${systemInstruction != null} " +
+                    "maxTokens=$maxTokens temp=$temperature " +
+                    "key=${ApiKeyPool.mask(apiKey)}"
+            )
+        }
+
+        val response = try {
+            api.generateContent(
+                model = model,
+                apiKey = apiKey,
+                body = request
+            )
+        } catch (e: HttpException) {
+            // Read the body ONCE here so we always see Google's error envelope in
+            // Logcat — `extractHttpErrorMessage` reads it again on the repo side
+            // for user-facing copy, but at this layer we want the raw payload so
+            // bad-request shape issues are immediately obvious during demo / triage.
+            val body = try { e.response()?.errorBody()?.string().orEmpty() } catch (_: Throwable) { "" }
+            Log.w(TAG, "Gemini HTTP ${e.code()} model=$model body=$body")
+            throw e
+        } catch (e: Throwable) {
+            Log.w(TAG, "Gemini transport threw ${e.javaClass.simpleName}: ${e.message}", e)
+            throw e
+        }
 
         // Normalize → ChatResponse. Concatenate every part on the first
         // candidate; Gemini occasionally splits a single reply across multiple
@@ -100,6 +126,7 @@ class GeminiChatTransport(
     }
 
     private companion object {
+        const val TAG = "GeminiTransport"
         const val ROLE_SYSTEM = "system"
         const val ROLE_USER = "user"
         const val ROLE_ASSISTANT = "assistant"
