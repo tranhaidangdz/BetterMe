@@ -10,6 +10,7 @@ import com.example.betterme.data.ai.dto.GeminiContent
 import com.example.betterme.data.ai.dto.GeminiGenerateRequest
 import com.example.betterme.data.ai.dto.GeminiGenerationConfig
 import com.example.betterme.data.ai.dto.GeminiPart
+import com.example.betterme.data.ai.dto.GeminiThinkingConfig
 import retrofit2.HttpException
 
 /**
@@ -61,7 +62,15 @@ class GeminiChatTransport(
             systemInstruction = systemInstruction,
             generationConfig = GeminiGenerationConfig(
                 temperature = temperature,
-                maxOutputTokens = maxTokens
+                maxOutputTokens = maxTokens,
+                // Disable Gemini 2.5's internal "thinking" pass. Default
+                // behaviour burns ~70 thinking tokens before any visible
+                // output — with our 120-500 max-output budgets that
+                // truncates the answer and surfaces `finishReason =
+                // MAX_TOKENS` with a near-empty body. BetterMe prompts are
+                // schema-shaped (strict JSON) or markdown-section-shaped, so
+                // the deeper reasoning step gives no measurable quality win.
+                thinkingConfig = GeminiThinkingConfig(thinkingBudget = 0)
             )
         )
 

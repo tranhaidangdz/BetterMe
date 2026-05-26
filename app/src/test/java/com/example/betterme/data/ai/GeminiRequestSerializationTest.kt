@@ -4,6 +4,7 @@ import com.example.betterme.data.ai.dto.GeminiContent
 import com.example.betterme.data.ai.dto.GeminiGenerateRequest
 import com.example.betterme.data.ai.dto.GeminiGenerationConfig
 import com.example.betterme.data.ai.dto.GeminiPart
+import com.example.betterme.data.ai.dto.GeminiThinkingConfig
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -76,6 +77,23 @@ class GeminiRequestSerializationTest {
     }
 
     @Test
+    fun `thinkingConfig with budget 0 serializes correctly`() {
+        // Critical: Gemini 2.5 Flash defaults to thinking-enabled which burns
+        // ~70 tokens of internal reasoning. With our 120-500 output budgets
+        // that truncates the visible reply (finishReason=MAX_TOKENS, near-empty
+        // text). The transport sends thinkingBudget=0 to disable thinking
+        // entirely. This test pins that field's presence + correct serialization.
+        val cfg = GeminiGenerationConfig(
+            temperature = 0.6,
+            maxOutputTokens = 120,
+            thinkingConfig = GeminiThinkingConfig(thinkingBudget = 0)
+        )
+        val out = json.encodeToString(GeminiGenerationConfig.serializer(), cfg)
+        assertTrue("thinkingConfig must be present: $out", out.contains("\"thinkingConfig\""))
+        assertTrue("thinkingBudget=0 must be in payload: $out", out.contains("\"thinkingBudget\":0"))
+    }
+
+    @Test
     fun `no null token anywhere in the request payload`() {
         // Final integration check on a realistic request — system prompt + 2-turn
         // conversation + standard gen config. This mirrors what [GeminiChatTransport]
@@ -93,11 +111,14 @@ class GeminiRequestSerializationTest {
             generationConfig = GeminiGenerationConfig(
                 temperature = 0.6,
                 maxOutputTokens = 300,
-                responseMimeType = null
+                responseMimeType = null,
+                thinkingConfig = GeminiThinkingConfig(thinkingBudget = 0)
             )
         )
         val out = json.encodeToString(GeminiGenerateRequest.serializer(), req)
         assertFalse("payload must not contain :null anywhere: $out", out.contains(":null"))
         assertFalse("payload must not contain : null anywhere: $out", out.contains(": null"))
+        // The end-to-end payload must still carry thinkingBudget=0.
+        assertTrue("end-to-end payload must include thinkingBudget=0: $out", out.contains("\"thinkingBudget\":0"))
     }
 }

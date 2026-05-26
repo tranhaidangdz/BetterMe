@@ -41,7 +41,32 @@ data class GeminiPart(
 data class GeminiGenerationConfig(
     val temperature: Double? = null,
     @SerialName("maxOutputTokens") val maxOutputTokens: Int? = null,
-    @SerialName("responseMimeType") val responseMimeType: String? = null
+    @SerialName("responseMimeType") val responseMimeType: String? = null,
+    /**
+     * Disables Gemini 2.5's internal "thinking" pass when set to a
+     * [GeminiThinkingConfig] with `thinkingBudget = 0`. Critical for our
+     * coach use cases: with default thinking enabled, the model burns ~70
+     * tokens of internal reasoning before producing visible output, and
+     * with our typical maxOutputTokens budgets (120-500) the user sees
+     * truncated / empty responses with `finishReason = MAX_TOKENS`.
+     *
+     * Our prompts already supply a tightly-structured JSON schema or
+     * markdown layout, so the deeper reasoning pass gives no quality win
+     * for the latency / token cost.
+     */
+    @SerialName("thinkingConfig") val thinkingConfig: GeminiThinkingConfig? = null
+)
+
+@Serializable
+data class GeminiThinkingConfig(
+    /**
+     * 0 = disable thinking entirely. Positive values cap the thinking-token
+     * budget. We pass 0 from [com.example.betterme.data.ai.GeminiChatTransport]
+     * across every chain because every BetterMe AI surface is JSON-schema or
+     * markdown-shape driven — Gemini 2.5 thinking adds no quality but eats
+     * the visible output budget.
+     */
+    @SerialName("thinkingBudget") val thinkingBudget: Int? = null
 )
 
 @Serializable
