@@ -30,6 +30,14 @@ interface ChatTransport {
         apiKey: String,
         messages: List<ChatMessage>,
         maxTokens: Int,
-        temperature: Double
+        temperature: Double,
+        /**
+         * When non-null, asks the provider to constrain the response MIME type.
+         * Gemini accepts `"application/json"` here and will refuse to emit
+         * markdown / ```json fences / commentary — which is exactly what every
+         * JSON-shaped analyze* surface in the repo needs. Plain-text surfaces
+         * (review card) pass null and let the model speak in markdown.
+         */
+        responseMimeType: String? = null
     ): ChatResponse
 }

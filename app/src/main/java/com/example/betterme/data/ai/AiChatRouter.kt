@@ -61,7 +61,8 @@ class AiChatRouter(
         model: String,
         messages: List<ChatMessage>,
         maxTokens: Int,
-        temperature: Double
+        temperature: Double,
+        responseMimeType: String? = null
     ): ChatResponse {
         val provider = AiProvider.providerFor(model)
         val pool = pools[provider]
@@ -99,7 +100,7 @@ class AiChatRouter(
                     )
                 }
                 val response = withTimeout(perAttemptTimeoutMs) {
-                    transport.chat(model, key, messages, maxTokens, temperature)
+                    transport.chat(model, key, messages, maxTokens, temperature, responseMimeType)
                 }
                 healthTracker?.recordSuccess(provider, model)
                 return response

@@ -228,7 +228,12 @@ class AiHabitInsightRepositoryImpl(
                 model = model,
                 messages = messages,
                 maxTokens = maxTokens,
-                temperature = TEMPERATURE
+                temperature = TEMPERATURE,
+                // Every analyze* surface returns strict JSON — ask Gemini to
+                // refuse markdown fences / commentary up-front so parsing is
+                // bullet-proof. The fence-strip below stays as belt-and-
+                // suspenders for any pre-mime-type cached entries.
+                responseMimeType = MIME_JSON
             )
             if (response.error != null) {
                 val code = response.error.code ?: -1
@@ -1249,7 +1254,7 @@ class AiHabitInsightRepositoryImpl(
             val response = router.chat(
                 model = model,
                 messages = messages,
-                maxTokens = MAX_TOKENS,
+                maxTokens = REVIEW_MAX_TOKENS,
                 temperature = TEMPERATURE
             )
             if (response.error != null) {
@@ -1293,8 +1298,9 @@ class AiHabitInsightRepositoryImpl(
             val response = router.chat(
                 model = model,
                 messages = messages,
-                maxTokens = MAX_TOKENS,
-                temperature = TEMPERATURE
+                maxTokens = SUGGEST_MAX_TOKENS,
+                temperature = TEMPERATURE,
+                responseMimeType = MIME_JSON
             )
             if (response.error != null) {
                 return AiSuggestResult.Failure(
@@ -1451,35 +1457,74 @@ class AiHabitInsightRepositoryImpl(
          */
         val FALLBACK_MODELS: List<String> = AiProvider.FALLBACK_MODELS
 
-        const val MAX_TOKENS = 120
         const val TEMPERATURE = 0.6
 
+        /**
+         * Gemini-recognized strict-JSON mime type. Passed via
+         * `generationConfig.responseMimeType` on every JSON-shaped chain so
+         * Gemini refuses to wrap the payload in markdown fences or chatty
+         * commentary. The repository's defensive fence-strip stays as a
+         * belt-and-suspenders for any older cached entries.
+         */
+        const val MIME_JSON = "application/json"
+
+        /**
+         * Group Habit screen — Review card (plain text rendered by AiRichText).
+         * The prompt mandates three markdown sections (**Điểm sáng** / **Cần chú ý** /
+         * **Bước tiếp theo**) of 80-110 Vietnamese words with bullet points. That
+         * comfortably exceeds 200 tokens in Vietnamese once `**bold**` markers and
+         * line breaks are counted, so 350 leaves headroom for the inevitable
+         * paraphrase. Old shared budget of 120 was the root cause of truncated /
+         * empty review cards on the Group Habit screen after the prompt rewrite.
+         */
+        const val REVIEW_MAX_TOKENS = 350
+
+        /**
+         * Group Habit screen — Suggestions card (strict JSON).
+         * 3-4 items × {title, emoji, description, difficulty, estimatedImpact,
+         * streakBenefit} in Vietnamese ≈ 350-450 tokens. 500 covers the full
+         * envelope with comfortable margin so the JSON never gets cut mid-string
+         * (parsing fails with PARSE category when that happens).
+         */
+        const val SUGGEST_MAX_TOKENS = 500
+
         /** Schedule analyzer needs more headroom: 3 conflicts + 5 optimizations +
-         *  summary + positiveFeedback + enum/scores. 300 covers Vietnamese text. */
-        const val SCHEDULE_MAX_TOKENS = 300
+         *  summary + positiveFeedback + enum/scores. 400 covers Vietnamese text. */
+        const val SCHEDULE_MAX_TOKENS = 400
 
         /** Onboarding suggester: 6 habits × ~50 tokens + summary + recommendedFocus
-         *  + top-level fields ≈ 400. 500 leaves Vietnamese expansion headroom. */
-        const val ONBOARDING_MAX_TOKENS = 500
+         *  + top-level fields ≈ 400. 600 leaves Vietnamese expansion headroom. */
+        const val ONBOARDING_MAX_TOKENS = 600
 
-        /** Lifestyle insight: 4 suggestions × ~40 tokens + primaryInsight +
-         *  coachingMessage + enum/score top-level ≈ 250. 400 covers Vietnamese
-         *  expansion. */
-        const val LIFESTYLE_MAX_TOKENS = 400
+        /**
+         * Statistics screen — Lifestyle insight (strict JSON).
+         * 4 suggestions × {type, title, reason, suggestion} + primaryInsight +
+         * coachingMessage + enum/score top-level. In Vietnamese the body lands
+         * around 450-550 tokens once personalization quotes specific numbers and
+         * habit names. Old 400 budget caused the JSON to truncate mid-string
+         * → PARSE failure → "AI trả về dữ liệu sai định dạng" error card.
+         */
+        const val LIFESTYLE_MAX_TOKENS = 700
 
-        /** Habit-creation analysis: 3 warnings + 3 suggestions × ~30 tokens
-         *  each + encouragement + risk/shouldWarn ≈ 220. 300 leaves room. */
-        const val HABIT_CREATION_MAX_TOKENS = 300
+        /**
+         * Add Habit screen — Habit-creation advisory (strict JSON).
+         * 3 warnings + 3 suggestions × {message + up to 7 structured fields} +
+         * encouragement + risk envelope. Each suggestion can carry suggestedTitle
+         * + suggestedReplacementHabit + suggestedReminderTime + etc., easily
+         * pushing the JSON to 350-450 tokens in Vietnamese. Old 300 budget made
+         * the advisory routinely truncate on richer suggestions.
+         */
+        const val HABIT_CREATION_MAX_TOKENS = 500
 
         /** Recovery engine: up to 5 struggling rows + 4 actions × ~40 tokens
-         *  each + coaching + tone/triggers ≈ 380. 500 covers Vietnamese
-         *  expansion comfortably. */
-        const val RECOVERY_MAX_TOKENS = 500
+         *  each + coaching + tone/triggers ≈ 380. 600 covers Vietnamese
+         *  expansion + personalized number quoting. */
+        const val RECOVERY_MAX_TOKENS = 600
 
         /** Progression engine: same shape as recovery (5 vibrant rows + 4
          *  actions), same budget. The coaching message is constrained to
-         *  ≤2 sentences so 500 is comfortably generous. */
-        const val PROGRESSION_MAX_TOKENS = 500
+         *  ≤2 sentences but per-row readinessReason now quotes specific stats. */
+        const val PROGRESSION_MAX_TOKENS = 600
 
         const val RETRY_DELAY_MS = 800L
 

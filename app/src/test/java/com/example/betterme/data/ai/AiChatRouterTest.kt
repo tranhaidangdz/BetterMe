@@ -290,7 +290,8 @@ class AiChatRouterTest {
             apiKey: String,
             messages: List<ChatMessage>,
             maxTokens: Int,
-            temperature: Double
+            temperature: Double,
+            responseMimeType: String?
         ): ChatResponse {
             calls += Call(model, apiKey)
             return when (val outcome = scripted[apiKey]) {
@@ -329,7 +330,8 @@ class AiChatRouterTest {
                 apiKey: String,
                 messages: List<ChatMessage>,
                 maxTokens: Int,
-                temperature: Double
+                temperature: Double,
+                responseMimeType: String?
             ): ChatResponse {
                 // Suspend forever — the router's withTimeout must cut us off.
                 awaitCancellation()
@@ -362,7 +364,8 @@ class AiChatRouterTest {
                 apiKey: String,
                 messages: List<ChatMessage>,
                 maxTokens: Int,
-                temperature: Double
+                temperature: Double,
+                responseMimeType: String?
             ): ChatResponse = awaitCancellation()
         }
         val router = AiChatRouter(

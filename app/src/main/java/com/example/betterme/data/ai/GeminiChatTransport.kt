@@ -38,7 +38,8 @@ class GeminiChatTransport(
         apiKey: String,
         messages: List<ChatMessage>,
         maxTokens: Int,
-        temperature: Double
+        temperature: Double,
+        responseMimeType: String?
     ): ChatResponse {
         val systemText = messages.firstOrNull { it.role == ROLE_SYSTEM }?.content
         val conversation = messages.filter { it.role != ROLE_SYSTEM }
@@ -63,6 +64,12 @@ class GeminiChatTransport(
             generationConfig = GeminiGenerationConfig(
                 temperature = temperature,
                 maxOutputTokens = maxTokens,
+                // When the caller asks for JSON, pin the response MIME type so
+                // Gemini refuses to wrap the JSON in ```json fences or chatty
+                // commentary — both of which break our serializer. Plain-text
+                // surfaces (review card) pass null and let the model emit
+                // markdown.
+                responseMimeType = responseMimeType,
                 // Disable Gemini 2.5's internal "thinking" pass. Default
                 // behaviour burns ~70 thinking tokens before any visible
                 // output — with our 120-500 max-output budgets that
@@ -80,6 +87,7 @@ class GeminiChatTransport(
                 "POST /v1beta/models/$model:generateContent " +
                     "contents=${contents.size} sysInstr=${systemInstruction != null} " +
                     "maxTokens=$maxTokens temp=$temperature " +
+                    "mime=${responseMimeType ?: "(text)"} " +
                     "key=${ApiKeyPool.mask(apiKey)}"
             )
         }
