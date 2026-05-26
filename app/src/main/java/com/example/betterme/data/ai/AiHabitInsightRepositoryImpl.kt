@@ -1503,18 +1503,34 @@ class AiHabitInsightRepositoryImpl(
          * (per-habit lines, signals, trend label) these stop the model from
          * defaulting to generic coaching text that reads the same for every
          * group.
+         *
+         * Output is rendered by [com.example.betterme.presentation.categorydetail.components.AiRichText]
+         * which parses **bold**, blank-line paragraph breaks, and bullets
+         * (`- ` / `• `). The prompt mandates that structure so every review
+         * lands as three readable sections, not a wall of prose.
          */
         val REVIEW_SYSTEM_PROMPT_RULES = """
-            Trả lời bằng tiếng Việt, 3-4 câu súc tích, đúng tone đã chọn.
+            Trả lời bằng tiếng Việt, theo ĐÚNG ba khối dưới đây — mỗi khối cách nhau bằng một dòng trống.
+            Tổng độ dài 80–110 từ. Đúng tone đã chọn. KHÔNG mở đầu bằng lời chào, KHÔNG kết thúc bằng câu chốt thừa.
 
-            BẮT BUỘC:
-            - Nhắc tên ít nhất MỘT thói quen cụ thể từ danh sách "Chi tiết từng thói quen" (đặt trong dấu ngoặc kép).
-            - Coaching phải đúng với loại nhóm: vận động → tránh quá tải / phục hồi; học tập → tránh học khuya / quá tải nhận thức; ngủ → giờ đi ngủ cố định / giảm màn hình; tinh thần → ổn định, giảm căng thẳng; dinh dưỡng → bữa ăn / nước; tài chính → tiết kiệm / theo dõi; quan hệ → kết nối ngắn / đều.
-            - Nếu có tín hiệu "overloaded" hoặc "recovery_needing" → ưu tiên giảm tải, KHÔNG đẩy thêm cường độ.
-            - Nếu có tín hiệu "steady_improver" → khen tiến bộ cụ thể, đề xuất bước nhỏ tiếp theo.
-            - Nếu có tín hiệu "night_owl" và xu hướng "drifting" → đề xuất dời sớm hơn.
-            - KHÔNG dùng câu chung chung như "hãy nhất quán hơn". Phải cụ thể.
-            - KHÔNG bịa số. Chỉ dùng số có trong dữ liệu.
+            **Điểm sáng**
+            - 1–2 gạch đầu dòng. Mỗi dòng nêu MỘT con số cụ thể từ dữ liệu (vd: "đạt 86%", "chuỗi 12 ngày", "hoàn thành 4/5"), và NHẮC TÊN ít nhất một thói quen trong "Chi tiết từng thói quen" — đặt trong dấu ngoặc kép.
+
+            **Cần chú ý**
+            - 1–2 gạch đầu dòng. Mỗi dòng nêu MỘT vấn đề quan sát được từ dữ liệu — KHÔNG đoán mò, KHÔNG bịa số.
+            - Nếu có tín hiệu "overloaded" / "recovery_needing" → tập trung vào giảm tải, KHÔNG yêu cầu thêm cường độ.
+            - Nếu có "night_owl" + xu hướng "drifting" → đề xuất dời sớm hơn, kèm khung giờ cụ thể.
+            - Nếu có "steady_improver" → ghi nhận tiến bộ bằng số trước khi đề xuất bước tiếp.
+
+            **Bước tiếp theo**
+            - Đúng MỘT câu, đúng MỘT hành động nhỏ, đo được, làm trong 24 giờ tới.
+            - Hành động phải khớp loại nhóm: vận động → tập / phục hồi; học tập → ôn / tránh học khuya; ngủ → giờ đi ngủ / giảm màn hình; tinh thần → thở / biết ơn; dinh dưỡng → bữa / nước; tài chính → ghi chi tiêu / tiết kiệm; quan hệ → kết nối ngắn / gọi điện.
+
+            TUYỆT ĐỐI KHÔNG:
+            - Câu chung như "hãy nhất quán hơn", "cố gắng hơn nhé", "bạn làm tốt lắm".
+            - Số không có trong dữ liệu.
+            - Hơn 3 emoji trong cả phản hồi.
+            - Bất kỳ markdown nào ngoài **bold** và bullet `- `.
         """.trimIndent()
 
         /**
@@ -1523,16 +1539,32 @@ class AiHabitInsightRepositoryImpl(
          * has rather than producing the same 4 generic ideas every time.
          */
         val SUGGEST_SYSTEM_PROMPT_RULES = """
-            Trả về JSON: {"suggestions":[{"title":"","emoji":"","description":"","difficulty":"EASY|MEDIUM|HARD","estimatedImpact":"","streakBenefit":""}]}
-            3-4 mục, tiếng Việt rất ngắn. Không kèm chữ ngoài JSON.
+            Trả về JSON DUY NHẤT theo schema:
+            {"suggestions":[{"title":"","emoji":"","description":"","difficulty":"EASY|MEDIUM|HARD","estimatedImpact":"","streakBenefit":""}]}
+            Đúng 3-4 mục. Tiếng Việt ngắn, mỗi chuỗi ≤ 12 từ. Không kèm chữ nào ngoài JSON, không ```json fence.
 
-            BẮT BUỘC:
-            - KHÔNG đề xuất bất kỳ thói quen nào trùng tên hoặc trùng ý định với danh sách "Đã có trong nhóm này" hoặc "Thói quen ở nhóm khác".
-            - Đề xuất phải PHÙ HỢP với loại nhóm: vận động → tập luyện / phục hồi; học tập → kỹ năng / ôn tập; ngủ → giờ đi ngủ / màn hình; tinh thần → thở / biết ơn; dinh dưỡng → bữa ăn / nước; tài chính → ghi chi tiêu / tiết kiệm; quan hệ → kết nối / gọi điện.
-            - Nếu có tín hiệu "overloaded" hoặc "recovery_needing" → đề xuất phục hồi / giảm tải / ngủ / thở. TUYỆT ĐỐI KHÔNG đề xuất thêm thói quen nặng (cardio, HARD, > 30 phút).
-            - Nếu user đã có nhóm "vận động" rồi → đừng đề xuất thêm cardio. Thay bằng giãn cơ / phục hồi.
-            - Tránh nhắc lại 4 thói quen kinh điển (đi bộ, uống nước, đọc sách, thiền) khi user đã có chúng.
-            - difficulty phải đúng nghĩa: thói quen 5 phút = EASY; 30 phút = MEDIUM; > 30 phút hoặc cường độ cao = HARD.
+            CHỐNG TRÙNG LẶP (bắt buộc tuyệt đối):
+            - KHÔNG được trùng tên hay trùng ý định với bất kỳ mục nào trong "Đã có trong nhóm này" / "Thói quen ở nhóm khác".
+            - Tránh 4 ý kinh điển (đi bộ, uống nước, đọc sách, thiền) khi user đã có chúng.
+            - Mỗi suggestion phải KHÁC NHAU rõ ràng — không phải 4 biến thể của cùng một ý.
+
+            CÁ NHÂN HOÁ (bắt buộc):
+            - Phù hợp loại nhóm: vận động → tập / phục hồi; học tập → kỹ năng / ôn; ngủ → giờ đi ngủ / màn hình; tinh thần → thở / biết ơn; dinh dưỡng → bữa / nước; tài chính → ghi chi tiêu / tiết kiệm; quan hệ → kết nối / gọi điện.
+            - Nếu có "overloaded" / "recovery_needing" → CHỈ đề xuất phục hồi / giảm tải / ngủ / thở. KHÔNG đề xuất thói quen nặng (cardio, HARD, > 30 phút).
+            - Nếu nhóm "vận động" đã đầy → thay cardio bằng giãn cơ / phục hồi.
+            - Mỗi mục phải mang lại lợi ích KHÁC nhau (sức bền, năng lượng, tập trung, phục hồi, kết nối...).
+
+            ĐỘ KHÓ (chuẩn xác):
+            - ≤ 5 phút hoặc không gắng sức = EASY
+            - 5–30 phút, gắng sức trung bình = MEDIUM
+            - > 30 phút hoặc cường độ cao = HARD
+
+            CHẤT LƯỢNG TỪNG TRƯỜNG:
+            - title: cụ thể, hành động (vd: "Đi bộ 15 phút sau bữa trưa" — KHÔNG "Tập thể dục").
+            - description: 1 câu nêu CÁCH thực hiện, không lặp lại title.
+            - estimatedImpact: tác động cảm nhận được (vd: "tăng năng lượng buổi chiều").
+            - streakBenefit: lợi ích khi duy trì 14 ngày (vd: "ngủ sâu hơn, ít thức đêm").
+            - emoji: đúng 1 ký tự, không spam.
         """.trimIndent()
 
         /**
@@ -1745,6 +1777,16 @@ class AiHabitInsightRepositoryImpl(
             - primaryInsight ≤ 1 sentence; coachingMessage ≤ 2 sentences; each adaptiveSuggestions field ≤ 1 sentence.
             - adaptiveSuggestions: 1–4 items. Never return an empty array.
             - If the user is fully stable and no adjustment is needed, return exactly one suggestion of type MAINTAIN_STABILITY.
+
+            PERSONALIZATION (mandatory):
+            - primaryInsight MUST quote at least ONE concrete number or pattern from the input
+              (e.g. "Tỷ lệ hoàn thành 14 ngày đạt 72%", "3 lần bỏ lỡ thói quen tối liên tiếp",
+              "Chuỗi 12 ngày của \"Đọc sách\""). Generic openings like "Bạn đang làm rất tốt" alone are NOT allowed.
+            - Each adaptiveSuggestions.reason MUST tie the suggestion to specific data
+              (a missed-habit pattern, a completion rate, a late-night failure, a sleep
+              deviation). Never produce a reason that would read the same for any other user.
+            - When the user has named habits in the input, prefer naming the habit(s)
+              this suggestion targets — keeps the advice feel directed, not horoscope.
 
             ENUMS (must match exactly):
             - overallTrend:   IMPROVING | STABLE | DECLINING
@@ -1994,6 +2036,14 @@ class AiHabitInsightRepositoryImpl(
             - action.suggestedValue is concrete (e.g. "20 phút", "3 lần/tuần", "07:00",
               "Đi bộ 15 phút") or empty when no specific value applies.
 
+            PERSONALIZATION (mandatory):
+            - coachingMessage MUST quote ONE concrete number or pattern from the input
+              (e.g. "Đã 4 ngày liên tiếp chưa hoàn thành \"Tập gym\"", "Tỷ lệ 7 ngày chỉ còn 32%",
+              "Các thói quen tối liên tục bị bỏ"). No generic openings like "Bạn đang gặp khó khăn".
+            - Each struggling.recoveryReason MUST cite the specific signal that flagged that
+              habit — a number, a streak, a time-of-day pattern. Generic reasons are rejected.
+            - action.description must reference the targetHabit by name when targetHabit is set.
+
             ENUMS (must match exactly):
             - overallTone: LIGHT | MODERATE | AGGRESSIVE
             - triggerReasons[]: LOW_COMPLETION | SKIP_STREAK | CONSECUTIVE_FAILS
@@ -2121,6 +2171,15 @@ class AiHabitInsightRepositoryImpl(
               habits list, OR null for ADD_COMPLEMENTARY_HABIT / CONSISTENCY_REWARD.
             - action.suggestedValue is concrete (e.g. "+5 phút", "+1 lần/tuần",
               "Đi bộ nhẹ 20 phút") or empty when no specific value applies.
+
+            PERSONALIZATION (mandatory):
+            - coachingMessage MUST celebrate ONE concrete number — typically the streak
+              or the 14-day completion rate of a named vibrant habit (e.g.
+              "Chuỗi 18 ngày của \"Đọc sách\" rất ấn tượng", "Tỷ lệ 14 ngày đạt 92%").
+              No generic openings like "Bạn đang làm rất tốt".
+            - Each vibrant.readinessReason MUST cite the specific stat that made
+              it ready (rate, streak, trend). Generic reasons are rejected.
+            - action.description must name the targetHabit when targetHabit is set.
 
             ENUMS (must match exactly):
             - overallPace: GENTLE | STEADY
