@@ -11,9 +11,9 @@ import retrofit2.HttpException
 
 /**
  * Per-call provider + key dispatcher. The repository's chain walker iterates
- * model slugs in [AiProvider.FALLBACK_MODELS] (Gemini first, OpenRouter
- * fallback) and asks the router to execute each one; the router resolves the
- * owning provider, picks a healthy key from its pool, and either:
+ * model slugs in [AiProvider.FALLBACK_MODELS] (Gemini 2.5 Flash then
+ * 2.0 Flash) and asks the router to execute each one; the router resolves
+ * the owning provider, picks a healthy key from its pool, and either:
  *
  *  - returns a normalized [ChatResponse] on success, or
  *  - cools the key and rotates to the next one when the failure was credential-

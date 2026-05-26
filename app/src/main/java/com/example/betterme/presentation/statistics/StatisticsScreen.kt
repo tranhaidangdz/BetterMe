@@ -36,7 +36,7 @@ fun StatisticsScreen(
 
     // Auto-load the coach insight once per screen entry. The VM short-circuits
     // while Loading and the use case reads from the 24h cache when fresh, so a
-    // tab toggle / back-and-forth doesn't fire repeat OpenRouter calls.
+    // tab toggle / back-and-forth doesn't fire repeat Gemini calls.
     LaunchedEffect(Unit) {
         lifestyleVm.processIntent(
             com.example.betterme.presentation.statistics.lifestyle.LifestyleInsightIntent.Analyze()

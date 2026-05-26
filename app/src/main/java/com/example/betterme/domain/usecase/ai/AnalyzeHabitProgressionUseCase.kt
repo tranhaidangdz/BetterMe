@@ -36,7 +36,7 @@ import kotlinx.serialization.json.Json
  *       - hardHabitCount ≤ 1 (never push to ≥2 HARD).
  *       - No recovery triggers fire (mutual exclusion with Recovery Engine).
  *     If any gate fails → short-circuit to baseline `shouldProgress = false`
- *     WITHOUT calling OpenRouter.
+ *     WITHOUT calling Gemini.
  *  3. Cache-first read keyed by the fingerprint of progression signals.
  *     24h TTL. When all AI models fail the repo throws
  *     [com.example.betterme.domain.ai.AiUnavailableException] — the VM

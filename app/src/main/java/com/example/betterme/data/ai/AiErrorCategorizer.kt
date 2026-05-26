@@ -36,7 +36,7 @@ internal object AiErrorCategorizer {
     fun categorizeHttp(code: Int): AiErrorCategory = when (code) {
         401 -> AiErrorCategory.INVALID_KEY
         402 -> AiErrorCategory.QUOTA_EXCEEDED
-        403 -> AiErrorCategory.INVALID_KEY // OpenRouter returns 403 for forbidden / disabled keys
+        403 -> AiErrorCategory.INVALID_KEY // Gemini returns 403 for forbidden / disabled keys
         404, 400 -> AiErrorCategory.MODEL_UNAVAILABLE
         429 -> AiErrorCategory.RATE_LIMITED
         in 500..599 -> AiErrorCategory.SERVER_ERROR

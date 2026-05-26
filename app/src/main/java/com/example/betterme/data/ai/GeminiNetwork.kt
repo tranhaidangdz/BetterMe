@@ -13,14 +13,14 @@ import java.util.concurrent.TimeUnit
 /**
  * Constructs the singleton [GeminiApi] used by the AI module's Gemini transport.
  *
- * Mirrors [OpenRouterNetwork] in style:
+ * Mirrors [GeminiNetwork] in style:
  * - `ignoreUnknownKeys = true` on the JSON converter so a Google response can
  *   grow new fields (safetyRatings, citationMetadata, etc.) without breaking us.
  * - OkHttp logging is debug-build-only at BODY level so the per-attempt error
  *   envelope (`{"error":{"code":429,"message":"…","status":"RESOURCE_EXHAUSTED"}}`)
  *   is visible during triage. The `x-goog-api-key` header is redacted so a
  *   debug build never prints the secret.
- * - Read timeout 25 s — matches the OpenRouter transport so the router's
+ * - Read timeout 25 s — matches the Gemini transport so the router's
  *   bounded retry budget is symmetric.
  *
  * No auth interceptor here: the API key arrives as a per-call header from the

@@ -54,7 +54,7 @@ class SuggestOnboardingHabitsUseCase(
     /**
      * Fetch (or read from cache) a starter-habit suggestion bundle for the
      * given profile. Always returns an [OnboardingSuggestion] — canned local
-     * fallback is served by the repo when every OpenRouter model fails.
+     * fallback is served by the repo when every Gemini model fails.
      */
     suspend operator fun invoke(
         profile: OnboardingProfile,

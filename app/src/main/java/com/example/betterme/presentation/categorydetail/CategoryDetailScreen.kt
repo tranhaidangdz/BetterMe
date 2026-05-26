@@ -54,12 +54,12 @@ fun CategoryDetailScreen(
     onHabitClick: (Int) -> Unit = {},
     /** First tap on the "AI nhận xét" action — cache-first. */
     onAiReviewClick: () -> Unit,
-    /** "Tạo lại" inside the review card — forces a fresh OpenRouter call. */
+    /** "Tạo lại" inside the review card — forces a fresh Gemini call. */
     onAiReviewRegenerate: () -> Unit = onAiReviewClick,
     onAddHabitClick: () -> Unit,
     /** First tap on the "AI gợi ý" action — cache-first. */
     onAiSuggestClick: () -> Unit,
-    /** "Tạo lại" inside the suggestions card — forces a fresh OpenRouter call. */
+    /** "Tạo lại" inside the suggestions card — forces a fresh Gemini call. */
     onAiSuggestRegenerate: () -> Unit = onAiSuggestClick,
     onDismissAiReview: () -> Unit = {},
     onDismissAiSuggestions: () -> Unit = {},

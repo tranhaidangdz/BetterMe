@@ -62,28 +62,29 @@ import kotlinx.serialization.json.Json
 import retrofit2.HttpException
 
 /**
- * OpenRouter-backed implementation.
+ * Gemini-backed implementation.
  *
  * Model chain (tried in order)
- * 1. google/gemini-2.5-flash-preview:free  — fastest free model, strongest JSON.
- * 2. google/gemini-2.0-flash-exp:free      — previous-gen Gemini, separate quota.
- * 3. meta-llama/llama-3.3-70b-instruct:free — strong reasoning, slower.
- * 4. mistralai/mistral-small-3.1-24b-instruct:free — last-line free option.
+ * 1. gemini-2.5-flash — primary. Fastest TTFT on the free tier, strongest JSON.
+ * 2. gemini-2.0-flash — in-provider fallback for 2.5 outages.
  *
  * Per-model behaviour
  * - One retry on 429/500/502/503/504 with 800ms backoff. Anything else fails
  *   fast — retrying 401/403/404 just burns time.
  * - On any failure, the chain advances to the next model. The user never sees
- *   intermediate failures unless EVERY model is exhausted.
+ *   intermediate failures unless every model is exhausted.
+ * - Per-attempt timeout (20 s) and per-chain wall-clock cap (45 s) keep the
+ *   UI snappy even under repeated cold starts; both surface as TIMEOUT.
  *
  * Failure surface
- * - When all 4 models fail, the analyze* methods throw [AiUnavailableException]
+ * - When the chain is exhausted, analyze* methods throw [AiUnavailableException]
  *   (or return AiResult.Failure for review/suggest). Callers must render a
  *   retry-able error state — there is no canned fallback any more.
  *
  * Output shaping
- * - max_tokens = 120 across the board. Prompts are deliberately terse so a
- *   120-token reply still feels complete.
+ * - max_tokens per concern tuned to the JSON payload's typical Vietnamese
+ *   expansion. Prompts mandate structured sections so the AI feels intentional,
+ *   not chatbot-y.
  */
 class AiHabitInsightRepositoryImpl(
     private val router: AiChatRouter,
@@ -213,7 +214,7 @@ class AiHabitInsightRepositoryImpl(
      * content to [parser]. Catches every known exception type and converts to an
      * [AiAttemptFailure] with the right category, so the chain walker can aggregate.
      *
-     * The OpenRouter error envelope (`response.error.message`) is checked **before**
+     * The body-level error envelope (`response.error.message`) is checked **before**
      * the choices array — some 200 OK responses still carry a model-side error.
      */
     private suspend fun <T> runTypedAttempt(
@@ -1355,11 +1356,11 @@ class AiHabitInsightRepositoryImpl(
     // ERROR MAPPING
     // ============================================================
     /**
-     * Pulls the OpenRouter error JSON out of an [HttpException] and returns a
+     * Pulls the provider error JSON out of an [HttpException] and returns a
      * Vietnamese reason mapped per status code.
      *
-     * OpenRouter error body shape (per docs):
-     * `{ "error": { "message": "No auth credentials found", "code": 401 } }`
+     * Gemini error body shape:
+     * `{ "error": { "code": 401, "message": "API key not valid", "status": "UNAUTHENTICATED" } }`
      */
     private fun extractHttpErrorMessage(e: HttpException): String {
         val code = e.code()
@@ -1368,7 +1369,7 @@ class AiHabitInsightRepositoryImpl(
         } catch (_: Throwable) {
             ""
         }
-        Log.w(TAG, "OpenRouter HTTP $code body=$rawBody")
+        Log.w(TAG, "Gemini HTTP $code body=$rawBody")
 
         val parsed = runCatching {
             jsonParser.decodeFromString(ErrorEnvelope.serializer(), rawBody).error?.message
@@ -1377,15 +1378,15 @@ class AiHabitInsightRepositoryImpl(
         val detail = parsed?.takeIf { it.isNotBlank() } ?: rawBody.take(160)
 
         return when (code) {
-            401 -> "Khóa AI không hợp lệ (401). Kiểm tra GEMINI_API_KEYS / OPENROUTER_API_KEYS trong local.properties và build lại."
-            402 -> "Tài khoản OpenRouter cần nạp credit (402)${if (detail.isNotBlank()) ": $detail" else ""}"
-            403 -> "OpenRouter từ chối yêu cầu (403)${if (detail.isNotBlank()) ": $detail" else ""}"
+            401 -> "Khóa AI không hợp lệ (401). Kiểm tra GEMINI_API_KEY trong local.properties và build lại."
+            402 -> "Tài khoản Gemini đã hết quota (402)${if (detail.isNotBlank()) ": $detail" else ""}"
+            403 -> "Gemini từ chối yêu cầu (403)${if (detail.isNotBlank()) ": $detail" else ""}"
             404 -> "Model không tồn tại hoặc không truy cập được (404)${if (detail.isNotBlank()) ": $detail" else ""}"
             // Friendly 429: phrased as a passing moment rather than a hard fail.
             // The chain walker will keep trying the next model anyway, so this
             // string mostly surfaces in Logcat unless every model 429s.
             429 -> "AI đang hơi quá tải ✨ Đang thử model khác... (429)"
-            in 500..599 -> "OpenRouter đang gặp sự cố ($code) — thử lại sau"
+            in 500..599 -> "Gemini đang gặp sự cố ($code) — thử lại sau"
             else -> "Lỗi AI ($code)${if (detail.isNotBlank()) ": $detail" else ""}"
         }
     }
@@ -1434,33 +1435,19 @@ class AiHabitInsightRepositoryImpl(
         const val METRICS_ENABLED = true
 
         /**
-         * OpenRouter free-tier model chain. Tried in order. Names drift as OpenRouter
-         * cycles their free catalog; when every entry returns 404 the failure surfaces
-         * as MODEL_UNAVAILABLE in the UI and Logcat shows exactly which names were
-         * tried. Refresh by visiting https://openrouter.ai/models?supported_parameters=tools&pricing=free
-         * and pasting the latest ":free" model slugs.
+         * Gemini model chain. Tried in order:
+         *  1. gemini-2.5-flash — primary. Fastest TTFT, strongest JSON.
+         *  2. gemini-2.0-flash — in-provider fallback for 2.5 outages.
          *
-         * Order is **latency-first** then **provider-diversified** so a single
-         * provider outage / rate-limit can never stall the whole chain:
-         *  1. Gemini 2.5 Flash       — fastest TTFT on the Google side.
-         *  2. DeepSeek v3            — strongest reasoning + JSON on a separate provider.
-         *  3. Qwen 2.5 72B           — Alibaba pool; independent quota.
-         *  4. Llama 3.3 70B          — Meta pool; another independent quota.
-         *  5. Gemma 2 9B IT          — small + fast Google secondary.
-         *  6. Mistral Small 3.2 24B  — separate provider once more.
-         *  7. Gemini 2.0 Flash Exp   — older Google option as last resort.
-         *
-         * Fast-fail behavior is unchanged from the prior chain:
+         * Fast-fail behavior:
          *  - 401/403 (INVALID_KEY) and 402 (QUOTA_EXCEEDED) short-circuit the chain.
-         *  - 429 / 5xx / timeout fall through to the next model after one 800ms
+         *  - 429 / 5xx / timeout fall through to the next model after one 800 ms
          *    transient retry on the current model — bounded latency, no infinite
          *    waits.
-         */
-        /**
+         *
          * Sourced from [AiProvider.FALLBACK_MODELS] so the routing layer owns
-         * the canonical "Gemini native first, OpenRouter aggregator fallback"
-         * order. Adding a model in [AiProvider] automatically extends the
-         * chain here; the repo no longer hard-codes the list.
+         * the canonical order. Adding a model in [AiProvider] automatically
+         * extends the chain here; the repo no longer hard-codes the list.
          */
         val FALLBACK_MODELS: List<String> = AiProvider.FALLBACK_MODELS
 

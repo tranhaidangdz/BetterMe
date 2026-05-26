@@ -8,7 +8,7 @@ import androidx.room.PrimaryKey
  * Persisted AI response cache. Backs the cache-first strategy for AI features:
  *
  * - Group review: one entry per `(categoryId, REVIEW)` — cheap repeat reads without
- *   burning OpenRouter free-tier tokens, plus survives screen rotation / app restart.
+ *   burning Gemini free-tier tokens, plus survives screen rotation / app restart.
  * - Suggestions: one entry per `(categoryId, SUGGESTIONS)`. Stored as JSON so the
  *   repository can decode back into [com.example.betterme.domain.ai.SuggestedHabit].
  *

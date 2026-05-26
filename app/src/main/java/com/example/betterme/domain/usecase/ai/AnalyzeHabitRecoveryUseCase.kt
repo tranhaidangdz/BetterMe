@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit
  *  2. Runs deterministic trigger detection against those stats (the same
  *     thresholds the spec lists: 14d < 40%, miss streak ≥ 3, HARD failing,
  *     late-night failures, > 8 active habits). When NO trigger fires,
- *     short-circuits to a baseline analysis WITHOUT calling OpenRouter —
+ *     short-circuits to a baseline analysis WITHOUT calling Gemini —
  *     healthy users never burn quota.
  *  3. Cache-first read keyed by the fingerprint of struggle signals (which
  *     habits, which triggers, which stats). 24h TTL. Skips cache.save when

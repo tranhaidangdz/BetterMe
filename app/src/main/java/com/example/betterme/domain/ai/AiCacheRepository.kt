@@ -5,7 +5,7 @@ package com.example.betterme.domain.ai
  * [AiCacheRepository.TTL_MS] are treated as misses so the next call refreshes.
  *
  * Why this lives in the domain layer: use cases need to consult the cache before
- * hitting OpenRouter — having a domain interface keeps the use case clean of
+ * hitting Gemini — having a domain interface keeps the use case clean of
  * Room types and makes it trivial to swap in an in-memory test double.
  *
  * Type discriminator strings are kept here as constants so the repo and the use

@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
  * BetterMe actually reads: contents + generationConfig in, candidates[0].text out,
  * plus a top-level error envelope for non-2xx replies that still parse as JSON.
  *
- * Two structural differences from OpenAI / OpenRouter that matter here:
+ * Two structural differences from OpenAI / Gemini that matter here:
  * 1. There is no `messages: [{role, content}]` array. Chat history goes in
  *    `contents` as a list of {role, parts:[{text}]}; the "system" message goes
  *    in a separate top-level `systemInstruction` field.

@@ -4,8 +4,8 @@ import com.example.betterme.data.ai.dto.ChatMessage
 import com.example.betterme.data.ai.dto.ChatResponse
 
 /**
- * Provider-agnostic chat call. Each provider (OpenRouter, Gemini, future Together /
- * Groq / Fireworks / DeepInfra) implements this once and returns a normalized
+ * Provider-agnostic chat call. Each provider (Gemini today, future Claude /
+ * Together / Groq / Fireworks / DeepInfra) implements this once and returns a normalized
  * [ChatResponse] so the repository's chain walker and parser never branch on
  * provider type.
  *

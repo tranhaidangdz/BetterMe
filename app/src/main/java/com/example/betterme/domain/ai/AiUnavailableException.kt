@@ -25,19 +25,19 @@ enum class AiErrorCategory {
     RATE_LIMITED,
 
     /**
-     * HTTP 404 / 400 — the requested model is unknown to OpenRouter or doesn't accept
-     * our request shape. Most common cause: the model name in [FALLBACK_MODELS] was
-     * deprecated and removed from the free tier; the fix is to refresh the list.
+     * HTTP 404 / 400 — the requested model is unknown to Gemini or doesn't accept
+     * our request shape. Most common cause: the model name in [FALLBACK_MODELS]
+     * was deprecated; the fix is to refresh the list.
      */
     MODEL_UNAVAILABLE,
 
-    /** SocketTimeoutException after one retry — free models on cold start are slow. */
+    /** SocketTimeoutException or structured withTimeout — Gemini cold starts can be slow. */
     TIMEOUT,
 
     /** Response body wasn't valid JSON / didn't match the expected schema. */
     PARSE,
 
-    /** HTTP 5xx — OpenRouter / upstream provider is down. */
+    /** HTTP 5xx — Gemini backend is down. */
     SERVER_ERROR,
 
     /** Anything else (genuinely unexpected). */
@@ -45,7 +45,7 @@ enum class AiErrorCategory {
 }
 
 /**
- * Thrown by the AI repo when every model in the OpenRouter fallback chain fails.
+ * Thrown by the AI repo when every model in the Gemini fallback chain fails.
  *
  * [category] is the machine-readable failure bucket; [message] is a Vietnamese
  * user-facing string. ViewModels prefer category-aware UI but can fall through to
@@ -68,7 +68,7 @@ class AiUnavailableException(
             AiErrorCategory.INVALID_KEY ->
                 "Khóa AI không hợp lệ. Vui lòng liên hệ nhà phát triển."
             AiErrorCategory.QUOTA_EXCEEDED ->
-                "Hạn mức AI đã hết. Hãy thử lại sau hoặc nâng cấp tài khoản OpenRouter."
+                "Hạn mức Gemini đã hết. Hãy thử lại sau hoặc nâng cấp gói Google AI Studio."
             AiErrorCategory.RATE_LIMITED ->
                 "AI đang quá tải. Vui lòng đợi vài phút rồi thử lại."
             AiErrorCategory.MODEL_UNAVAILABLE ->

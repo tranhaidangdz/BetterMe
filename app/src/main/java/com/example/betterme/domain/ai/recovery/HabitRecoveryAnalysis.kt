@@ -6,7 +6,7 @@ package com.example.betterme.domain.ai.recovery
  * The engine is proactive coaching for users who are struggling — short
  * windows of low completion, growing miss streaks, late-night failures. When
  * no struggle signals fire, the use case short-circuits to a `shouldRecover
- * = false` baseline analysis WITHOUT calling OpenRouter (saves quota on
+ * = false` baseline analysis WITHOUT calling Gemini (saves quota on
  * healthy users; the Home card simply doesn't mount).
  */
 data class HabitRecoveryAnalysis(

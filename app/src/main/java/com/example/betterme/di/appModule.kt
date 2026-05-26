@@ -59,8 +59,6 @@ import com.example.betterme.domain.usecase.habit.CancelHabitReminderUseCase
 import com.example.betterme.domain.usecase.habit.RescheduleAllHabitRemindersUseCase
 import com.example.betterme.domain.usecase.habit.ScheduleHabitReminderUseCase
 import com.example.betterme.data.ai.AiHabitInsightRepositoryImpl
-import com.example.betterme.data.ai.OpenRouterApi
-import com.example.betterme.data.ai.OpenRouterNetwork
 import com.example.betterme.data.leaderboard.ChallengeLeaderboardRepositoryImpl
 import com.example.betterme.data.leaderboard.FirebaseChallengeLeaderboardDataSource
 import com.example.betterme.data.leaderboard.FirebaseGlobalLeaderboardDataSource
@@ -304,28 +302,21 @@ val repositoryModule = module {
         UserSettingsRepositoryImpl(get())
     }
 
-    // AI multi-provider stack ---------------------------------------------
+    // AI stack — Gemini only ----------------------------------------------
     //
-    // Both providers ship as Retrofit singletons with no baked-in API key — the
-    // key arrives per call from the rotating [ApiKeyPool]. Keys are sourced
-    // from local.properties at build time and surface as comma-separated lists
-    // in BuildConfig.GEMINI_API_KEYS / OPENROUTER_API_KEYS; pool will be empty
-    // (and the router will surface INVALID_KEY) when nothing is configured for
-    // a provider, which is the desired "build but fail fast" behavior.
-    single<OpenRouterApi> { OpenRouterNetwork.create() }
+    // GeminiApi ships as a Retrofit singleton with no baked-in key — the key
+    // arrives per call from the rotating [ApiKeyPool]. Keys are sourced from
+    // local.properties at build time and surface as a comma-separated list in
+    // BuildConfig.GEMINI_API_KEYS; pool will be empty (and the router will
+    // surface INVALID_KEY) when nothing is configured, which is the desired
+    // "build but fail fast" behavior.
     single<com.example.betterme.data.ai.GeminiApi> { com.example.betterme.data.ai.GeminiNetwork.create() }
 
-    // Key pools — split per provider so cooldowns / rotation don't cross.
-    // Each provider gets its own [ApiKeyPool] named with a qualifier so future
-    // settings UIs can rotate one pool without re-resolving the other.
+    // Single-provider key pool. Named-qualifier kept so a future second
+    // provider can be added without resolver collisions.
     single(qualifier = org.koin.core.qualifier.named("geminiKeys")) {
         com.example.betterme.data.ai.ApiKeyPool(
             keys = BuildConfig.GEMINI_API_KEYS.split(',').map { it.trim() }.filter { it.isNotEmpty() }
-        )
-    }
-    single(qualifier = org.koin.core.qualifier.named("openrouterKeys")) {
-        com.example.betterme.data.ai.ApiKeyPool(
-            keys = BuildConfig.OPENROUTER_API_KEYS.split(',').map { it.trim() }.filter { it.isNotEmpty() }
         )
     }
 
@@ -334,21 +325,17 @@ val repositoryModule = module {
     single { com.example.betterme.data.ai.AiProviderHealth() }
 
     // Router glues transports + pools. The repo only ever talks to this; it
-    // never imports OpenRouterApi or GeminiApi directly, so adding Together /
-    // Groq / etc. tomorrow is a 1-file change to AiProvider + appModule.
+    // never imports GeminiApi directly. Adding a second provider tomorrow is
+    // a 1-file change to AiProvider + this map.
     single<com.example.betterme.data.ai.AiChatRouter> {
         com.example.betterme.data.ai.AiChatRouter(
             transports = mapOf(
                 com.example.betterme.data.ai.AiProvider.GEMINI to
-                    com.example.betterme.data.ai.GeminiChatTransport(get()),
-                com.example.betterme.data.ai.AiProvider.OPENROUTER to
-                    com.example.betterme.data.ai.OpenRouterChatTransport(get())
+                    com.example.betterme.data.ai.GeminiChatTransport(get())
             ),
             pools = mapOf(
                 com.example.betterme.data.ai.AiProvider.GEMINI to
-                    get(qualifier = org.koin.core.qualifier.named("geminiKeys")),
-                com.example.betterme.data.ai.AiProvider.OPENROUTER to
-                    get(qualifier = org.koin.core.qualifier.named("openrouterKeys"))
+                    get(qualifier = org.koin.core.qualifier.named("geminiKeys"))
             ),
             healthTracker = get()
         )

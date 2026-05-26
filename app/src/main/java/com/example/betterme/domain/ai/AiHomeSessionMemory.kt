@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap
  * flashing the loading skeleton.
  *
  * The 24h repo-level [AiCacheRepository] already short-circuits the actual
- * OpenRouter call when the input fingerprint hasn't changed. This memory
+ * Gemini call when the input fingerprint hasn't changed. This memory
  * sits one layer *above* that — it stops the VM from even firing
  * `Analyze()` on routine navigation, so the user sees their last result
  * instantly without a Loading flash.

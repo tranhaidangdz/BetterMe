@@ -22,23 +22,21 @@ val cloudinaryProps: Properties = Properties().apply {
 val cloudinaryCloudName: String = cloudinaryProps.getProperty("CLOUDINARY_CLOUD_NAME", "")
 val cloudinaryUploadPreset: String = cloudinaryProps.getProperty("CLOUDINARY_UPLOAD_PRESET", "")
 
-// AI provider keys from local.properties (gitignored). Comma-separated lists let
-// the runtime ApiKeyPool rotate across multiple keys from different Google /
-// OpenRouter accounts — one expired or rate-limited key never stalls the chain.
+// AI provider keys from local.properties (gitignored). Comma-separated list lets
+// the runtime ApiKeyPool rotate across multiple keys from different Google
+// projects — one expired or rate-limited key never stalls the chain.
 //
 //   GEMINI_API_KEYS=AIza...key1,AIza...key2
-//   OPENROUTER_API_KEYS=sk-or-v1-key1,sk-or-v1-key2
 //
-// Backward compatibility: the legacy single-key forms
-// `GEMINI_API_KEY=...` and `OPENROUTER_API_KEY=...` are still accepted as a
-// 1-element list when the plural form is absent — onboarding users who paste a
-// single key from Google AI Studio shouldn't have to learn the pluralized name
-// to get a working build. Both fields fall back to empty strings so the app
-// still builds without secrets — AI features then surface a clear error
+// Backward compatibility: the legacy single-key form `GEMINI_API_KEY=...` is
+// still accepted as a 1-element list when the plural form is absent —
+// onboarding users who paste a single key from Google AI Studio shouldn't have
+// to learn the pluralized name to get a working build. Falls back to empty so
+// the app still builds without secrets; AI features then surface a clear error
 // category at runtime.
 //
 // .trim() on each entry catches stray whitespace that would silently produce an
-// invalid Bearer token.
+// invalid request.
 fun csv(raw: String): String =
     raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }.joinToString(",")
 
@@ -46,12 +44,6 @@ val geminiApiKeysCsv: String = run {
     val multi = csv(cloudinaryProps.getProperty("GEMINI_API_KEYS", ""))
     if (multi.isNotEmpty()) multi
     else csv(cloudinaryProps.getProperty("GEMINI_API_KEY", "")) // legacy single-key form
-}
-
-val openrouterApiKeysCsv: String = run {
-    val multi = csv(cloudinaryProps.getProperty("OPENROUTER_API_KEYS", ""))
-    if (multi.isNotEmpty()) multi
-    else csv(cloudinaryProps.getProperty("OPENROUTER_API_KEY", "")) // legacy single-key form
 }
 
 android {
@@ -70,7 +62,6 @@ android {
         buildConfigField("String", "CLOUDINARY_CLOUD_NAME", "\"$cloudinaryCloudName\"")
         buildConfigField("String", "CLOUDINARY_UPLOAD_PRESET", "\"$cloudinaryUploadPreset\"")
         buildConfigField("String", "GEMINI_API_KEYS", "\"$geminiApiKeysCsv\"")
-        buildConfigField("String", "OPENROUTER_API_KEYS", "\"$openrouterApiKeysCsv\"")
     }
 
     buildTypes {

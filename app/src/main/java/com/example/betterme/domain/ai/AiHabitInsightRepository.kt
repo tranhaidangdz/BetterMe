@@ -26,7 +26,7 @@ import com.example.betterme.domain.ai.schedule.UserLifestyleProfile
  * - Error normalization (network errors / rate-limits / empty responses all
  *   surface as `AiResult.Failure(message)` so call sites stay simple)
  *
- * Methods are suspend — caller awaits the full response. The OpenRouter free-tier
+ * Methods are suspend — caller awaits the full response. The Gemini free-tier
  * endpoint typically responds in 5-15s; the UI should show a loading state.
  */
 interface AiHabitInsightRepository {
@@ -43,7 +43,7 @@ interface AiHabitInsightRepository {
      * routine — per-habit completion lines, derived personality signals,
      * the category's coaching kind, and trend label. The repo embeds the
      * fields directly into the user prompt and uses them to pick a canned
-     * template when every OpenRouter model fails, so even offline users
+     * template when every Gemini model fails, so even offline users
      * see meaningfully different copy across groups.
      */
     suspend fun reviewHabitGroup(

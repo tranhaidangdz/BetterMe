@@ -29,9 +29,7 @@ import retrofit2.Response
  *  4. Every key cooled        → router throws AiAttemptFailure(QUOTA_EXCEEDED).
  *  5. Empty pool              → throws AiAttemptFailure(INVALID_KEY) without calling transport.
  *  6. Server error (500)      → bubbles up as HttpException; key NOT cooled (problem upstream of key).
- *  7. Provider failover       → outer chain walker advances to OpenRouter once Gemini's
- *                               keys are cooled; new pool + new transport take over.
- *  8. Bounded retry           → at most pool.size attempts per chat() call. No infinite loop.
+ *  7. Bounded retry           → at most pool.size attempts per chat() call. No infinite loop.
  */
 class AiChatRouterTest {
 
@@ -203,52 +201,6 @@ class AiChatRouterTest {
     }
 
     // -----------------------------------------------------------------
-    // 7. End-to-end provider failover: Gemini all cooled → caller routes
-    //    the next model through OpenRouter pool/transport (separate maps).
-    // -----------------------------------------------------------------
-    @Test
-    fun `provider failover — Gemini exhausted then OpenRouter answers`() = runBlocking {
-        // Two cool-able failures on Gemini's single key.
-        val geminiPool = ApiKeyPool(keys = listOf("g1"))
-        val geminiTransport = RecordingTransport(
-            scripted = mapOf("g1" to TransportOutcome.Error(401))
-        )
-        // OpenRouter answers.
-        val openrouterPool = ApiKeyPool(keys = listOf("o1"))
-        val openrouterTransport = RecordingTransport(
-            scripted = mapOf("o1" to TransportOutcome.Ok("openrouter-ok"))
-        )
-
-        val router = AiChatRouter(
-            transports = mapOf(
-                AiProvider.GEMINI to geminiTransport,
-                AiProvider.OPENROUTER to openrouterTransport
-            ),
-            pools = mapOf(
-                AiProvider.GEMINI to geminiPool,
-                AiProvider.OPENROUTER to openrouterPool
-            )
-        )
-
-        // Step 1: caller (chain walker) tries a Gemini model → exhausts Gemini pool.
-        try {
-            router.chat("gemini-2.5-flash", messages, 100, 0.6)
-            fail("expected AiAttemptFailure when Gemini pool exhausted")
-        } catch (e: AiAttemptFailure) {
-            assertEquals(AiErrorCategory.QUOTA_EXCEEDED, e.category)
-        }
-
-        // Step 2: caller advances to an OpenRouter model — different pool, different transport.
-        val resp = router.chat("google/gemini-2.5-flash:free", messages, 100, 0.6)
-        assertNotNull(resp.choices.first().message)
-        assertEquals("openrouter-ok", resp.choices.first().message?.content)
-
-        // Gemini was tried exactly once (its only key) before failover.
-        assertEquals(1, geminiTransport.calls.size)
-        assertEquals(1, openrouterTransport.calls.size)
-    }
-
-    // -----------------------------------------------------------------
     // 8. Bounded retry guard — even with pool=10 keys, only 10 attempts.
     //    Combined with the chain walker's at-most-one pass, the total
     //    work is finite. (Implicitly tested in #4; here we make it explicit
@@ -276,21 +228,21 @@ class AiChatRouterTest {
     }
 
     // -----------------------------------------------------------------
-    // 9. Unknown model defaults to OpenRouter — protects against a stale
-    //    model list shipping in a release.
+    // 8. Unknown model defaults to GEMINI — protects against a stale model
+    //    list shipping in a release.
     // -----------------------------------------------------------------
     @Test
-    fun `unknown model routes through OpenRouter provider`() = runBlocking {
-        val openrouterTransport = RecordingTransport(
-            scripted = mapOf("o1" to TransportOutcome.Ok("fallback-ok"))
+    fun `unknown model routes through Gemini provider`() = runBlocking {
+        val transport = RecordingTransport(
+            scripted = mapOf("g1" to TransportOutcome.Ok("fallback-ok"))
         )
         val router = AiChatRouter(
-            transports = mapOf(AiProvider.OPENROUTER to openrouterTransport),
-            pools = mapOf(AiProvider.OPENROUTER to ApiKeyPool(keys = listOf("o1")))
+            transports = mapOf(AiProvider.GEMINI to transport),
+            pools = mapOf(AiProvider.GEMINI to ApiKeyPool(keys = listOf("g1")))
         )
         val resp = router.chat("nobody/never-heard-of-this", messages, 100, 0.6)
         assertEquals("fallback-ok", resp.choices.first().message?.content)
-        assertEquals(1, openrouterTransport.calls.size)
+        assertEquals(1, transport.calls.size)
     }
 
     // -----------------------------------------------------------------
@@ -486,8 +438,6 @@ class AiChatRouterTest {
         val line = h.debugStatusLine()
         assertTrue(line.contains("GEMINI"))
         assertTrue(line.contains("gemini-2.5-flash"))
-        // The untouched OpenRouter provider must still appear in the line.
-        assertTrue(line.contains("OPENROUTER"))
     }
 
     @Test

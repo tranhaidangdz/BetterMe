@@ -36,7 +36,7 @@ import kotlinx.serialization.json.Json
  *    user is already a runner, recovery picks when the user is
  *    overloaded, etc.
  *  - select a category-aware canned pool with rotation when every
- *    OpenRouter model fails.
+ *    Gemini model fails.
  */
 class SuggestHabitsForCategoryUseCase(
     private val dataStoreManager: DataStoreManager,
