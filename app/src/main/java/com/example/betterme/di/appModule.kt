@@ -329,6 +329,10 @@ val repositoryModule = module {
         )
     }
 
+    // Process-scoped per-provider health snapshot. Optional dependency of the
+    // router — feeds Logcat-only diagnostics, never load-bearing.
+    single { com.example.betterme.data.ai.AiProviderHealth() }
+
     // Router glues transports + pools. The repo only ever talks to this; it
     // never imports OpenRouterApi or GeminiApi directly, so adding Together /
     // Groq / etc. tomorrow is a 1-file change to AiProvider + appModule.
@@ -345,7 +349,8 @@ val repositoryModule = module {
                     get(qualifier = org.koin.core.qualifier.named("geminiKeys")),
                 com.example.betterme.data.ai.AiProvider.OPENROUTER to
                     get(qualifier = org.koin.core.qualifier.named("openrouterKeys"))
-            )
+            ),
+            healthTracker = get()
         )
     }
 
