@@ -20,7 +20,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.betterme.R
-import com.example.betterme.presentation.challenge.discover.components.CategoryFilterChips
 import com.example.betterme.presentation.challenge.discover.components.CategoryTile
 import com.example.betterme.presentation.challenge.discover.components.DifficultyFilterChips
 import com.example.betterme.presentation.challenge.discover.components.DifficultySectionHeader
@@ -94,13 +93,10 @@ fun ChallengeDiscoverScreen(
                     onSelect = { viewModel.processIntent(ChallengeDiscoverIntent.SelectDifficulty(it)) }
                 )
             }
-            item {
-                CategoryFilterChips(
-                    categories = state.categories,
-                    selectedId = state.selectedCategoryId,
-                    onSelect = { viewModel.processIntent(ChallengeDiscoverIntent.SelectCategory(it)) }
-                )
-            }
+            // The "challenges by habit group" category chip row that used to sit
+            // here was removed per design — category browsing still lives in the
+            // "Theo danh mục" tile grid below, and SelectCategory filtering is
+            // unchanged (the tiles dispatch the same intent).
 
             if (state.featured.isNotEmpty()) {
                 item {
