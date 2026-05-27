@@ -6,6 +6,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.example.betterme.base.BaseMviViewModel
 import com.example.betterme.data.local.datastore.DataStoreManager
 import com.example.betterme.domain.usecase.challenge.ChallengeSeederUseCase
+import com.example.betterme.domain.usecase.challenge.DemoDataSeederUseCase
 import com.example.betterme.presentation.splash.model.NextScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -15,7 +16,8 @@ import kotlinx.coroutines.launch
 class SplashViewModel(
     private val dataStoreManager: DataStoreManager,
     private val firebaseAuth: FirebaseAuth,
-    private val challengeSeederUseCase: ChallengeSeederUseCase
+    private val challengeSeederUseCase: ChallengeSeederUseCase,
+    private val demoDataSeederUseCase: DemoDataSeederUseCase
 ) : BaseMviViewModel<SplashIntent, SplashState, SplashEvent>() {
 
     override fun initState(): SplashState {
@@ -41,6 +43,17 @@ class SplashViewModel(
 
             val isFirstLaunch = dataStoreManager.isFirstTime().first()
             val currentUserId = dataStoreManager.getCurrentUserId().first()
+
+            // Seed demo reward data for the signed-in user (idempotent, once per
+            // install). Runs after the catalog seeder so challenge/badge FKs exist.
+            if (!currentUserId.isNullOrBlank()) {
+                try {
+                    demoDataSeederUseCase(currentUserId)
+                } catch (e: Exception) {
+                    Log.e("SplashVM", "Demo data seed failed", e)
+                }
+            }
+
             val hasSelectedHabits = dataStoreManager.hasSelectedHabits().first()
             val isGuestUser = dataStoreManager.isGuestUser().first()
             val hasGoogleSession = firebaseAuth.currentUser != null

@@ -12,4 +12,6 @@ object DataStoreKey {
     val IS_GUEST = booleanPreferencesKey("is_guest")
     val HAS_SELECTED_HABITS = booleanPreferencesKey("has_selected_habits")
     val CHALLENGES_SEEDED = booleanPreferencesKey("challenges_seeded")
+    /** Per-install guard so demo reward data is seeded for the current user only once. */
+    val DEMO_DATA_SEEDED = booleanPreferencesKey("demo_data_seeded")
 }

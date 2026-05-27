@@ -18,4 +18,6 @@ interface DataStoreManager {
     suspend fun updateUserPhotoUrl(photoUrl: String)
     suspend fun isChallengesSeeded(): Boolean
     suspend fun setChallengesSeeded()
+    suspend fun isDemoDataSeeded(): Boolean
+    suspend fun setDemoDataSeeded()
 }

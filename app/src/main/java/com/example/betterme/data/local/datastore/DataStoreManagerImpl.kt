@@ -122,4 +122,18 @@ class DataStoreManagerImpl(
             preferences[DataStoreKey.CHALLENGES_SEEDED] = true
         }
     }
+
+    override suspend fun isDemoDataSeeded(): Boolean {
+        return try {
+            dataStore.data.map { it[DataStoreKey.DEMO_DATA_SEEDED] ?: false }.first()
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    override suspend fun setDemoDataSeeded() {
+        dataStore.edit { preferences ->
+            preferences[DataStoreKey.DEMO_DATA_SEEDED] = true
+        }
+    }
 }

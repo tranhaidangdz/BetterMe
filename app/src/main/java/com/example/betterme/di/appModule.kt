@@ -421,6 +421,11 @@ val useCaseModule = module {
     factory { GetUserUseCase(get()) }
     factory { SaveUserUseCase(get(), get()) }
     factory { ChallengeSeederUseCase(get(), get(), get(), get(), get()) }
+    factory {
+        com.example.betterme.domain.usecase.challenge.DemoDataSeederUseCase(
+            get(), get(), get(), get(), get(), get(), get(), get()
+        )
+    }
     factory { JoinChallengeUseCase(get(), get(), get()) }
     factory { LeaveChallengeUseCase(get()) }
     factory {
