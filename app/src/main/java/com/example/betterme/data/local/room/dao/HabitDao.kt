@@ -42,16 +42,23 @@ interface HabitDao {
     suspend fun softDeleteHabit(habitId: Int, updatedAt: Long)
 
     // READ
-    @Query("SELECT * FROM habits WHERE user_id = :userId")
+    //
+    // UI-facing reads exclude soft-deleted rows (`is_deleted = 0`) so an
+    // abandoned habit disappears from Home / category lists / AI analysis the
+    // instant it's soft-deleted — without waiting for the remote sync to
+    // confirm + hard-delete. The sync-facing reads below (getHabitById,
+    // getDirtyHabits) deliberately DON'T filter: the upload loop must still see
+    // a deleted row to propagate the deletion to Firestore.
+    @Query("SELECT * FROM habits WHERE user_id = :userId AND is_deleted = 0")
     fun getHabitsByUser(userId: String): Flow<List<HabitEntity>>
 
     @Query("SELECT * FROM habits WHERE id = :habitId")
     suspend fun getHabitById(habitId: Int): HabitEntity?
 
-    @Query("SELECT * FROM habits WHERE category_id = :categoryId AND user_id = :userId")
+    @Query("SELECT * FROM habits WHERE category_id = :categoryId AND user_id = :userId AND is_deleted = 0")
     fun getHabitsByCategoryForUser(categoryId: Int, userId: String): Flow<List<HabitEntity>>
 
-    @Query("SELECT COUNT(*) FROM habits WHERE category_id = :categoryId AND user_id = :userId")
+    @Query("SELECT COUNT(*) FROM habits WHERE category_id = :categoryId AND user_id = :userId AND is_deleted = 0")
     suspend fun getHabitCountByCategoryForUser(categoryId: Int, userId: String): Int
 
     @Query("DELETE FROM habits WHERE user_id = :userId")

@@ -14,11 +14,16 @@ import com.example.betterme.domain.repository.NotificationRepository
 import com.example.betterme.domain.repository.UserCategoryRepository
 import com.example.betterme.domain.repository.UserChallengeRepository
 import com.example.betterme.domain.repository.UserRepository
+import com.example.betterme.domain.habit.HabitActivityRules
 import com.example.betterme.presentation.home.model.CantMiss
 import com.example.betterme.presentation.home.model.HomeProgress
 import com.example.betterme.presentation.theme.BetterMeColors
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import kotlin.random.Random
@@ -39,7 +44,28 @@ class HomeViewModel(
 
     private companion object {
         const val DAY_MS: Long = 24L * 60L * 60L * 1000L
+
+        /**
+         * Poll interval for the day-boundary ticker. 60 s is fine-grained enough
+         * that a habit expires within a minute of local midnight while the app
+         * is open, yet `distinctUntilChanged` means the heavy recompute only runs
+         * when the calendar day actually changes — not every minute.
+         */
+        const val DAY_TICK_MS: Long = 60_000L
     }
+
+    /**
+     * Emits the current start-of-day epoch every [DAY_TICK_MS], deduplicated so a
+     * new value only propagates when the calendar day rolls over. Combined into
+     * the Home flow so expired habits drop off automatically at midnight without
+     * any manual refresh — and without an always-on per-minute recompute.
+     */
+    private fun dayTickerFlow(): Flow<Long> = flow {
+        while (true) {
+            emit(getStartOfDay())
+            delay(DAY_TICK_MS)
+        }
+    }.distinctUntilChanged()
 
     /**
      * Long-running job for the habits/logs/challenges Flow.combine. Tracked here so
@@ -49,6 +75,13 @@ class HomeViewModel(
      * viewModelScope.
      */
     private var observeJob: Job? = null
+
+    /** Carries the 4-way combine result with destructuring support. */
+    private data class HomeCombine(
+        val habits: List<com.example.betterme.data.local.room.entities.HabitEntity>,
+        val activeChallenges: List<com.example.betterme.data.local.room.entities.UserChallengeEntity>,
+        val today: Long
+    )
 
     override fun initState(): HomeState = HomeState()
 
@@ -137,35 +170,38 @@ class HomeViewModel(
             kotlinx.coroutines.flow.combine(
                 habitRepository.getHabits(userId),
                 habitLogRepository.observeAllLogs(),
-                userChallengeRepository.observeByStatus(userId, "ACTIVE")
-            ) { habits, _, activeChallenges ->
-                Triple(habits, Unit, activeChallenges)
-            }.collect { (habits, _, activeChallenges) ->
-                val today = getStartOfDay()
+                userChallengeRepository.observeByStatus(userId, "ACTIVE"),
+                dayTickerFlow()
+            ) { habits, _, activeChallenges, todayTick ->
+                // todayTick is the deduplicated start-of-day — carries the day
+                // boundary into the combine so expiry re-evaluates at midnight.
+                HomeCombine(habits, activeChallenges, todayTick)
+            }.collect { (habits, activeChallenges, today) ->
                 val completedHabitIds = habitLogRepository.getCompletedHabitIdsByDate(today)
 
-                // 4a. Build "Đang thực hiện" — show every habit whose journey is still in
-                //     progress, regardless of whether user already checked in today.
-                //     A habit's journey is COMPLETE when total DONE days >= planned duration.
-                //     Open-ended habits (no end_date) never finish automatically.
+                // 4a. Build "Đang thực hiện" — only habits that are genuinely in
+                //     progress survive [HabitActivityRules.isActive]:
+                //     not deleted, started, not expired (end date past), not complete.
+                //     The DAO already drops soft-deleted rows, but isActive double-
+                //     checks so the rule set has one authoritative home.
                 val cantMissList = habits.mapNotNull { habit ->
-                    val durationDays = if (habit.end_date != null) {
-                        (((habit.end_date - habit.start_date) / DAY_MS) + 1).toInt().coerceAtLeast(1)
-                    } else {
-                        Int.MAX_VALUE
-                    }
                     val doneCount = habitLogRepository.countCompleted(habit.id)
-                    if (doneCount >= durationDays) {
-                        return@mapNotNull null
-                    }
+                    val active = HabitActivityRules.isActive(
+                        startDate = habit.start_date,
+                        endDate = habit.end_date,
+                        doneCount = doneCount,
+                        today = today,
+                        isDeleted = habit.is_deleted
+                    )
+                    if (!active) return@mapNotNull null
 
                     val category = allCategories.find { it.id == habit.category_id }
-                    val habitProgress = if (durationDays == Int.MAX_VALUE) {
-                        val elapsed = (((today - habit.start_date) / DAY_MS) + 1).toInt().coerceAtLeast(1)
-                        ((doneCount.toFloat() / elapsed) * 100).toInt().coerceIn(0, 100)
-                    } else {
-                        ((doneCount.toFloat() / durationDays) * 100).toInt().coerceIn(0, 100)
-                    }
+                    val habitProgress = HabitActivityRules.progressPercent(
+                        startDate = habit.start_date,
+                        endDate = habit.end_date,
+                        doneCount = doneCount,
+                        today = today
+                    )
 
                     CantMiss(
                         habitId = habit.id,
