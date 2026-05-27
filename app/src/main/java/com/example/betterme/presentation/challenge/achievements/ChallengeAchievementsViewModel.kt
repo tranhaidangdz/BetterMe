@@ -38,10 +38,22 @@ class ChallengeAchievementsViewModel(
 
     private fun load() {
         viewModelScope.launch {
+            try {
+                loadInternal()
+            } catch (e: Exception) {
+                // Defense in depth: a repo / Room / mapping failure must degrade
+                // to an empty-but-stable screen, never crash the app mid-demo.
+                android.util.Log.e("AchievementsVM", "load() failed", e)
+                updateState { copy(isLoading = false) }
+            }
+        }
+    }
+
+    private suspend fun loadInternal() {
             val userId = dataStoreManager.getCurrentUserId().first().orEmpty()
             if (userId.isBlank()) {
                 updateState { copy(isLoading = false) }
-                return@launch
+                return
             }
             val user = userRepository.getUserById(userId)
             val badgeCount = userAchievementRepository.countByUser(userId)
@@ -112,7 +124,6 @@ class ChallengeAchievementsViewModel(
                     highlights = highlights
                 )
             }
-        }
     }
 
     private fun parseColor(hex: String): Color = try {

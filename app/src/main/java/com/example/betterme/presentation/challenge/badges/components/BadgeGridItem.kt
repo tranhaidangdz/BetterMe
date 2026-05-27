@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.betterme.presentation.challenge.model.BadgeUiModel
+import com.example.betterme.presentation.challenge.shared.isValidDrawableRes
 import com.example.betterme.presentation.theme.BetterMeColors
 import com.example.betterme.presentation.theme.BetterMeTypography
 
@@ -75,7 +76,10 @@ fun BadgeGridItem(
                             .alpha(if (model.isEarned) 1f else 0.45f)
                     )
                 }
-                model.iconRes != 0 -> {
+                // Guard the DB-persisted R.drawable id: a stale/invalid id (R
+                // values shift across builds) would crash painterResource. Only
+                // render when it resolves in this build; otherwise drop to emoji.
+                isValidDrawableRes(model.iconRes) -> {
                     Image(
                         painter = painterResource(model.iconRes),
                         contentDescription = model.name,

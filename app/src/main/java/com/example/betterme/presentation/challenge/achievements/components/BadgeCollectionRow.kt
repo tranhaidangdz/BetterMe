@@ -19,6 +19,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.betterme.presentation.challenge.model.BadgeUiModel
+import com.example.betterme.presentation.challenge.shared.isValidDrawableRes
 
 /**
  * Compact row of up to 4 earned badges on the Achievements profile screen.
@@ -38,7 +39,10 @@ fun BadgeCollectionRow(
                 modifier = Modifier.size(56.dp),
                 contentAlignment = Alignment.Center
             ) {
-                if (badge.iconRes != 0) {
+                // Guard against stale `R.drawable` IDs persisted in Room: a
+                // non-zero id that no longer resolves in this build would crash
+                // painterResource. Fall back to the emoji when invalid.
+                if (isValidDrawableRes(badge.iconRes)) {
                     Image(
                         painter = painterResource(badge.iconRes),
                         contentDescription = badge.name,
