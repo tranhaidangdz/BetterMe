@@ -58,7 +58,7 @@ import com.example.betterme.data.local.room.migrations.ALL_MIGRATIONS
         AiCacheEntity::class,
         UserSettingsEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

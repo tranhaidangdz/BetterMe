@@ -3,10 +3,13 @@ package com.example.betterme.presentation.signin
 import android.app.Activity
 import android.util.Log
 import androidx.lifecycle.viewModelScope
+import androidx.work.ExistingWorkPolicy
+import androidx.work.WorkManager
 import com.google.firebase.auth.FirebaseAuth
 import com.example.betterme.base.BaseMviViewModel
 import com.example.betterme.data.local.datastore.DataStoreManager
 import com.example.betterme.data.provider.GoogleAuthClient
+import com.example.betterme.data.worker.SyncWorker
 import com.example.betterme.domain.model.User
 import com.example.betterme.domain.usecase.user.GetUserUseCase
 import com.example.betterme.domain.usecase.user.SaveUserUseCase
@@ -22,6 +25,7 @@ class SignInViewModel(
     private val getUserUseCase: GetUserUseCase,
     private val dataStoreManager: DataStoreManager,
     private val userRepository: UserRepository,
+    private val workManager: WorkManager,
 ) : BaseMviViewModel<SignInIntent, SignInState, SignInEvent>() {
     override fun initState(): SignInState = SignInState()
 
@@ -66,10 +70,12 @@ class SignInViewModel(
                             email = currentUser.email.orEmpty()
                         )
                         saveUserUseCase(newUser)
+                        triggerSyncAfterLogin()
                         sendEvent(SignInEvent.NavigateToHabitSelection)
                     } else {
                         // User đã tồn tại → lưu vào DataStore → navigate tới Home
                         dataStoreManager.saveUserInfo(existingUser)
+                        triggerSyncAfterLogin()
                         sendEvent(SignInEvent.NavigateToHome)
                     }
                 }.onFailure {
@@ -84,6 +90,30 @@ class SignInViewModel(
             } finally {
                 updateState { copy(isLoading = false) }
             }
+        }
+    }
+
+    /**
+     * Kick the sync layer the moment the user enters the app post-login. The
+     * KoinApp.scheduleSync() one-shot already ran at process launch (before the
+     * uid was known), so without this call the first pull/push would have to
+     * wait up to 30 minutes for the periodic SyncWorker. REPLACE policy
+     * preempts any in-flight launch one-shot — the now-signed-in pass supersedes
+     * it. WorkManager enforces the network constraint, so if the device is
+     * offline the worker queues for connectivity-resume and we fall back to
+     * Firestore's local cache in the meantime.
+     */
+    private fun triggerSyncAfterLogin() {
+        try {
+            workManager.enqueueUniqueWork(
+                SyncWorker.ONE_SHOT_UNIQUE_NAME,
+                ExistingWorkPolicy.REPLACE,
+                SyncWorker.oneShotRequest()
+            )
+        } catch (e: Exception) {
+            // Failing to enqueue a worker must never block sign-in; the periodic
+            // worker will still catch up within 30 minutes.
+            Log.w("SignIn", "Failed to enqueue post-login sync", e)
         }
     }
 

@@ -77,6 +77,8 @@ import com.example.betterme.data.sync.HabitLogSynchronizer
 import com.example.betterme.data.sync.HabitSynchronizer
 import com.example.betterme.data.sync.SyncCoordinator
 import com.example.betterme.data.sync.SyncStatusRepository
+import com.example.betterme.data.sync.UserAchievementSynchronizer
+import com.example.betterme.data.sync.UserCategorySynchronizer
 import com.example.betterme.data.sync.UserChallengeSynchronizer
 import com.example.betterme.data.sync.UserProfileSynchronizer
 import com.example.betterme.data.sync.UserSettingsSynchronizer
@@ -194,22 +196,29 @@ val appModule = module {
     single { UserSettingsSynchronizer(get(), get()) }
     single { HabitSynchronizer(get(), get()) }
     single { HabitLogSynchronizer(get(), get()) }
+    single { UserCategorySynchronizer(get(), get()) }
+    single { UserAchievementSynchronizer(get(), get()) }
     single {
         SyncCoordinator(
             dataStoreManager = get(),
             connectivity = get(),
             syncStatusRepository = get(),
             synchronizers = listOf(
-                // Order matters slightly: settings + profile first so subsequent
-                // pulls land on a row that knows the right onboarding state,
+                // Order: identity-shaping rows first (profile, settings, category
+                // selections — these influence what the rest of the app shows),
                 // then user-private content (habits → habit_logs, then user
-                // challenges → challenge_logs).
+                // challenges → challenge_logs), finally derived data (badges
+                // depend on challenge completions; AI chat is independent but
+                // bandwidth-heavy so it goes last to keep the critical-path
+                // user-visible state landing first).
                 get<UserProfileSynchronizer>(),
                 get<UserSettingsSynchronizer>(),
+                get<UserCategorySynchronizer>(),
                 get<HabitSynchronizer>(),
                 get<HabitLogSynchronizer>(),
                 get<UserChallengeSynchronizer>(),
                 get<ChallengeLogSynchronizer>(),
+                get<UserAchievementSynchronizer>(),
                 get<AIChatSynchronizer>()
             )
         )
@@ -328,6 +337,34 @@ val repositoryModule = module {
             "Gemini key pool: count=${raw.size} keys=[$masked] " +
                 "buildConfig.len=${BuildConfig.GEMINI_API_KEYS.length}"
         )
+        // Format-validate every key against the standard Google AI Studio shape
+        // `AIza[A-Za-z0-9_-]{35}` (39 chars total, leading "AIza" prefix).  A
+        // mismatch here means Gemini will 401/INVALID_KEY on the first call
+        // using that slot — surface it now in the startup log so it's
+        // diagnosable from `adb logcat -s AiStartup` without an actual request
+        // being made.  The router still rotates past malformed keys at runtime,
+        // but the warning saves the "why is my AI silent?" debug round-trip.
+        val geminiKeyShape = Regex("^AIza[0-9A-Za-z_-]{35}$")
+        raw.forEachIndexed { idx, key ->
+            if (!geminiKeyShape.matches(key)) {
+                android.util.Log.w(
+                    "AiStartup",
+                    "Gemini key #${idx + 1} (${com.example.betterme.data.ai.ApiKeyPool.mask(key)}, " +
+                        "len=${key.length}) does NOT match the expected Google " +
+                        "AI Studio format (AIza + 35 alphanum/_/- chars). " +
+                        "Gemini will reject this key with 401. " +
+                        "Replace it with one generated at https://aistudio.google.com/apikey."
+                )
+            }
+        }
+        if (raw.isEmpty()) {
+            android.util.Log.w(
+                "AiStartup",
+                "No Gemini API keys configured. Add GEMINI_API_KEY=... (or " +
+                    "GEMINI_API_KEYS=key1,key2) to local.properties and rebuild. " +
+                    "AI features will surface AiErrorCategory.INVALID_KEY until then."
+            )
+        }
         com.example.betterme.data.ai.ApiKeyPool(keys = raw)
     }
 

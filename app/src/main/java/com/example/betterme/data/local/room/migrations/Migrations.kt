@@ -198,6 +198,35 @@ val MIGRATION_13_14 = object : Migration(13, 14) {
     }
 }
 
+/**
+ * v14 → v15 (badges + interest categories enter the sync layer):
+ *  - Adds `updated_at`, `synced_at`, `is_deleted` to `user_achievements` (badges
+ *    earned by the user). Legacy rows backfill `updated_at = achieved_at` so they
+ *    enter the sync layer at a known epoch; `synced_at` stays NULL so the first
+ *    pass after upgrade uploads every existing badge.
+ *  - Adds `updated_at`, `synced_at`, `is_deleted` to `user_categories` (onboarding
+ *    interest picks). Legacy rows backfill `updated_at = created_at`.
+ *
+ * Both tables already had `UNIQUE(user_id, achievement_id)` / `UNIQUE(user_id, category_id)`
+ * indices, which the synchronizers depend on for cross-device dedupe (Firestore doc id
+ * is the stable global id, not the local autoincrement).
+ */
+val MIGRATION_14_15 = object : Migration(14, 15) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // user_achievements — badges.
+        db.execSQL("ALTER TABLE user_achievements ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE user_achievements ADD COLUMN synced_at INTEGER")
+        db.execSQL("ALTER TABLE user_achievements ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("UPDATE user_achievements SET updated_at = achieved_at WHERE updated_at = 0")
+
+        // user_categories — onboarding interest selections.
+        db.execSQL("ALTER TABLE user_categories ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE user_categories ADD COLUMN synced_at INTEGER")
+        db.execSQL("ALTER TABLE user_categories ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("UPDATE user_categories SET updated_at = created_at WHERE updated_at = 0")
+    }
+}
+
 /** Aggregated list passed to the Room builder. Add new migrations to this list as the
  *  schema evolves. */
 val ALL_MIGRATIONS = arrayOf(
@@ -207,5 +236,6 @@ val ALL_MIGRATIONS = arrayOf(
     MIGRATION_10_11,
     MIGRATION_11_12,
     MIGRATION_12_13,
-    MIGRATION_13_14
+    MIGRATION_13_14,
+    MIGRATION_14_15
 )

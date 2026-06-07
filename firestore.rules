@@ -1,0 +1,90 @@
+// BetterMe — Firestore security rules
+//
+// Threat model:
+//   - Every Android client signs in via Firebase Auth (Google ID token). The
+//     `request.auth.uid` exposed to these rules is the same uid Room writes into
+//     `users.id` and `<entity>.user_id`. No server SDK runs on a backend yet, so
+//     enforcement lives entirely in this file.
+//   - Private data (habits, logs, badges, AI history, profile, settings,
+//     interest selections) must be readable + writable only by its owner.
+//   - Leaderboards and shared-progress snapshots are explicitly public-read so
+//     unauthenticated guests opening a share link can read them.
+//
+// Deploy with:
+//   firebase deploy --only firestore:rules
+//
+// Schema-evolution note: every new subcollection added under `users/{uid}/...`
+// is covered automatically by the catch-all match below. Add an explicit block
+// only when access semantics differ from "owner only".
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ---------- users + every private subcollection ----------
+    // Profile lives at /users/{uid}.  All per-user data the sync layer writes
+    // (habits, habit_logs, badges, ai_chats, user_challenges, challenge_logs,
+    // user_categories, user_settings) lives under /users/{uid}/<subcol>/{doc}.
+    // The recursive match enforces owner-only access for the whole subtree in
+    // one block so a future synchronizer that adds a new subcollection inherits
+    // the right policy by default.
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      match /{subcollection}/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // ---------- leaderboards (public read, owner write) ----------
+    // Path shape: /leaderboards/{seasonKey}/{scope}/{entryId}
+    //   scope == "global"      → entryId == userId
+    //   scope == "challenges"  → /challenges/{challengeId}/entries/{userId}
+    // A user writes only their own entry document.  Anyone (even signed-out)
+    // can read so global / per-challenge rankings render for guests too.
+    match /leaderboards/{seasonKey}/global/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+
+    match /leaderboards/{seasonKey}/challenges/{challengeId}/entries/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+
+    // Meta documents (participantCount, topScore) under
+    // /leaderboards/{seasonKey}/challenges/{challengeId} are aggregate counters
+    // bumped by the same owner via Firestore transactions. Allow signed-in
+    // increments; reads are public.  Hardening note: a malicious client could
+    // overwrite topScore — acceptable risk for an academic project; production
+    // would move this to a Cloud Function callable.
+    match /leaderboards/{seasonKey}/challenges/{challengeId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // ---------- shared progress snapshots ----------
+    // /shared_progress/{userId} — owner-controlled, world-readable (anyone with
+    // the share link can open the public profile screen).
+    match /shared_progress/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+
+    // ---------- default deny ----------
+    // Anything not matched above is denied. Adding a new top-level collection
+    // requires an explicit rule above this line.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

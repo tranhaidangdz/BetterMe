@@ -20,5 +20,9 @@ class UserCategoryRepositoryImpl(
     override suspend fun saveSelections(userId: String, categoryIds: Collection<Int>) =
         dao.replaceSelections(userId, categoryIds)
 
-    override suspend fun clearForUser(userId: String) = dao.clearForUser(userId)
+    // Soft-delete every selection so the sync layer can propagate the removal
+    // to Firestore. A hard DELETE would lose the rows before the next push pass
+    // could surface them; the synchronizer is the one that finally erases them
+    // remotely via `is_deleted=true`.
+    override suspend fun clearForUser(userId: String) = dao.softDeleteAll(userId)
 }
