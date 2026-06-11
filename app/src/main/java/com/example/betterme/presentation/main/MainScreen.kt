@@ -369,8 +369,16 @@ fun MainScreen(
             )
         }
 
-        // Bottom Nav Bar — ẩn khi overlay đang mở
-        val anyOverlay = state.categoryDetailId != null
+        // Bottom Nav Bar — ẩn khi overlay đang mở, và cũng ẩn khi đang ở
+        // tab ADD (form Tạo thói quen). Lý do: AddHabitScreen hiển thị một
+        // sticky CTA "Bắt đầu hành trình" pinned ở Alignment.BottomCenter
+        // bằng .navigationBarsPadding(). Nếu BottomNavBar vẫn vẽ (cùng parent
+        // Box, z-order sau), thanh điều hướng phủ lên CTA và che hoàn toàn
+        // nút bấm. AddHabit có TopBar back arrow để thoát, nên việc ẩn
+        // BottomNavBar không làm mất lối điều hướng — đồng nhất với cách
+        // mọi overlay khác (CategoryDetail, HabitDetail, ChallengeDiscover...)
+        // đã xử lý cùng tình huống.
+        val hideBottomBar = state.categoryDetailId != null
             || state.habitDetailId != null
             || state.challengeDetailId != null
             || state.showChallengeDiscover
@@ -384,7 +392,8 @@ fun MainScreen(
             || state.showGlobalLeaderboard
             || state.shareViewerUserId != null
             || state.publicProfileUserId != null
-        if (!anyOverlay) {
+            || state.selectedTab == MainTab.ADD
+        if (!hideBottomBar) {
             BottomNavBar(
                 selectedTab = state.selectedTab,
                 onTabSelected = { viewModel.processIntent(MainIntent.SelectTab(it)) },

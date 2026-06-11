@@ -15,14 +15,22 @@ class HabitRepositoryImpl(
     override suspend fun addHabit(habit: HabitEntity) =
         dao.insertHabit(habit)
 
+    // Every UPDATE through the repository becomes a sync candidate. We bump
+    // updated_at and clear synced_at here so the next SyncCoordinator pass
+    // picks the row up — callers no longer have to remember the .copy() dance.
     override suspend fun updateHabit(habit: HabitEntity) =
-        dao.updateHabit(habit)
+        dao.updateHabit(
+            habit.copy(updated_at = System.currentTimeMillis(), synced_at = null)
+        )
 
+    // Soft-delete so the removal propagates to other devices via sync. The
+    // DAO's softDeleteHabit sets is_deleted=1, bumps updated_at, clears
+    // synced_at — exactly what the next push pass needs.
     override suspend fun deleteHabit(habit: HabitEntity) =
-        dao.deleteHabit(habit)
+        dao.softDeleteHabit(habit.id, System.currentTimeMillis())
 
     override suspend fun deleteHabitById(id: Int) =
-        dao.deleteHabitById(id)
+        dao.softDeleteHabit(id, System.currentTimeMillis())
 
     override fun getHabitsByCategoryForUser(categoryId: Int, userId: String) =
         dao.getHabitsByCategoryForUser(categoryId, userId)

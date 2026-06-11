@@ -51,7 +51,18 @@ import java.util.Locale
  *   - hero header with motivational subtitle
  *   - live preview card mirroring the Home row that will be created
  *   - section cards: name, description, category, schedule, reminder
- *   - sticky bottom CTA outside the scroll viewport
+ *   - primary CTA inline as the final item of the scroll content
+ *
+ * The CTA used to sit pinned to the bottom of the Box via Alignment.BottomCenter
+ * + navigationBarsPadding. That layout could collide with the host's
+ * BottomNavigationBar and required a 100dp filler inside the scroll just to
+ * keep the last section from sitting under the floating CTA's shadow. The CTA
+ * is now part of the scrollable column: user scrolls naturally through the
+ * form and the "Bắt đầu hành trình" button is the last thing they meet — the
+ * standard Material rhythm for a single-page form. The scroll container itself
+ * applies navigationBarsPadding so the button is never covered by the system
+ * nav bar; the host's app-level BottomNavigationBar is already hidden while
+ * the ADD tab is open (see MainScreen.hideBottomBar predicate).
  *
  * ViewModel contract is untouched — same intents, same state, same submit flow.
  * The redesign is pure UI/UX on top of the existing reactive state.
@@ -216,6 +227,13 @@ fun AddHabitScreen(
                     .fillMaxSize()
                     .statusBarsPadding()
                     .verticalScroll(rememberScrollState())
+                    // navigationBarsPadding reserves the system gesture / 3-button
+                    // nav bar inset at the bottom of the scroll viewport so the
+                    // last child (the Bắt đầu hành trình button) is never drawn
+                    // under the OS bar. imePadding pushes the scroll up while the
+                    // keyboard is open so every input field — and the inline CTA
+                    // when the user scrolls there — stays reachable.
+                    .navigationBarsPadding()
                     .imePadding()
             ) {
                 // Shared app top bar — kept consistent with Tasks / Habit Group / Habit
@@ -390,36 +408,39 @@ fun AddHabitScreen(
                         )
                     }
 
-                    // Bottom-bar breathing room so the last card never sits flush against
-                    // the sticky CTA shadow.
-                    Spacer(Modifier.height(100.dp))
+                    // ===== Primary CTA — inline last item =====
+                    // The button used to float at the bottom of the Box. It now
+                    // lives inside the form Column as the final child, so it
+                    // scrolls with the rest of the content. Save first triggers
+                    // the AI Creation Assistant for a quick pre-save review;
+                    // the assistant emits ConfirmedSave on "Vẫn tạo" — handled
+                    // by the LaunchedEffect above which dispatches the real
+                    // Submit. The assistant never blocks: an Error state still
+                    // surfaces "Vẫn tạo" so the user always reaches the
+                    // original submit path. The 14dp spacing applied by the
+                    // outer Arrangement.spacedBy provides the visual gap from
+                    // the Reminder card above — no magic numbers needed.
+                    StartJourneyButton(
+                        accent = accent,
+                        enabled = canSubmit,
+                        isLoading = state.isLoading,
+                        onClick = {
+                            assistantVm.processIntent(
+                                HabitCreationAssistantIntent.Analyze(
+                                    title = state.title.trim(),
+                                    categoryId = state.selectedCategoryId,
+                                    reminderTime = state.reminderTime
+                                )
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Trailing breathing room before the scroll viewport hits
+                    // the navigation-bar inset reserved on the outer Column.
+                    Spacer(Modifier.height(8.dp))
                 }
             }
-
-            // ===== Sticky CTA =====
-            // Save first triggers the AI Creation Assistant for a quick pre-save
-            // review. The assistant emits ConfirmedSave on "Vẫn tạo" — handled
-            // by the LaunchedEffect above which dispatches the real Submit.
-            // The assistant never blocks: an Error state still surfaces "Vẫn
-            // tạo" so the user always reaches the original submit path.
-            StickyCta(
-                accent = accent,
-                enabled = canSubmit,
-                isLoading = state.isLoading,
-                onClick = {
-                    assistantVm.processIntent(
-                        HabitCreationAssistantIntent.Analyze(
-                            title = state.title.trim(),
-                            categoryId = state.selectedCategoryId,
-                            reminderTime = state.reminderTime
-                        )
-                    )
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(20.dp)
-            )
 
             // AI Creation Assistant bottom sheet — modal, mounted at screen
             // scope so it overlays the form and any open pickers cleanly.
@@ -490,8 +511,18 @@ private fun ScheduleField(
     }
 }
 
+/**
+ * Primary CTA for the Add Habit form — "🚀 Bắt đầu hành trình".
+ *
+ * Used to be pinned to the bottom of the Box (hence the previous "StickyCta"
+ * name). It is now placed inline as the final child of the form Column, so
+ * it scrolls with the rest of the content. The composable itself has no
+ * layout side-effects: it is a plain styled button — the caller passes
+ * `modifier = Modifier.fillMaxWidth()` and the parent Column handles
+ * placement, spacing, and bottom insets.
+ */
 @Composable
-private fun StickyCta(
+private fun StartJourneyButton(
     accent: Color,
     enabled: Boolean,
     isLoading: Boolean,

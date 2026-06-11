@@ -45,6 +45,20 @@ interface ChallengeLogDao {
     // ============================================================
 
     /**
+     * Soft-delete a single log row. Preferred over hard delete so the deletion
+     * propagates to other devices via sync (the row stays in Room with
+     * is_deleted=true until the next sync pass uploads the tombstone).
+     */
+    @Query("""
+        UPDATE challenge_logs
+        SET is_deleted = 1,
+            updated_at = :updatedAt,
+            synced_at = NULL
+        WHERE id = :logId
+    """)
+    suspend fun softDelete(logId: Int, updatedAt: Long)
+
+    /**
      * Logs that belong to one of the user's challenges AND have not been pushed since
      * their last local mutation. Joins through `user_challenges` so a remote row owned
      * by a different user can never accidentally be uploaded under this user's tree.

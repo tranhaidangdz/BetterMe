@@ -15,9 +15,19 @@ class ChallengeLogRepositoryImpl(
 
     override suspend fun addLog(log: ChallengeLogEntity) = dao.insert(log)
 
-    override suspend fun updateLog(log: ChallengeLogEntity) = dao.update(log)
+    // Stamp updated_at + clear synced_at so the row enters the dirty set for the
+    // next sync pass. Callers can pass a row with whatever fields they want
+    // edited — we always overwrite the sync columns here so the contract is
+    // "any update via this method becomes a sync candidate."
+    override suspend fun updateLog(log: ChallengeLogEntity) = dao.update(
+        log.copy(updated_at = System.currentTimeMillis(), synced_at = null)
+    )
 
-    override suspend fun deleteLog(log: ChallengeLogEntity) = dao.delete(log)
+    // Soft-delete: tombstone the row so the deletion propagates to other
+    // devices via sync. Hard delete would race with the upload loop and lose
+    // the deletion event before any other device sees it.
+    override suspend fun deleteLog(log: ChallengeLogEntity) =
+        dao.softDelete(log.id, System.currentTimeMillis())
 
     override suspend fun countDoneLogs(userChallengeId: Int) = dao.countDoneLogs(userChallengeId)
 

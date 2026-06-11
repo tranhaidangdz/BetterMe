@@ -189,13 +189,22 @@ val appModule = module {
     // ============================================================
     single { ConnectivityObserver(get()) }
     single { SyncStatusRepository(get()) }
+    // Per-user, per-entity "last successful pull" cursor for delta queries on
+    // HabitLog / ChallengeLog / AIChat. Scoped by uid so account-switching
+    // does not leak the previous user's pull state.
+    single { com.example.betterme.data.sync.SyncPullStateStore(get()) }
     single { UserProfileSynchronizer(get(), get()) }
     single { UserChallengeSynchronizer(get(), get()) }
-    single { ChallengeLogSynchronizer(get(), get(), get()) }
+    // ChallengeLogSynchronizer: bidirectional, needs ChallengeLogDao,
+    // UserChallengeDao (for parent FK resolution), Firestore, and the pull
+    // cursor.
+    single { ChallengeLogSynchronizer(get(), get(), get(), get()) }
     single { AIChatSynchronizer(get(), get()) }
     single { UserSettingsSynchronizer(get(), get()) }
     single { HabitSynchronizer(get(), get()) }
-    single { HabitLogSynchronizer(get(), get()) }
+    // HabitLogSynchronizer: bidirectional, needs HabitLogDao, HabitDao
+    // (for parent FK validation on pull), Firestore, and the pull cursor.
+    single { HabitLogSynchronizer(get(), get(), get(), get()) }
     single { UserCategorySynchronizer(get(), get()) }
     single { UserAchievementSynchronizer(get(), get()) }
     single {
